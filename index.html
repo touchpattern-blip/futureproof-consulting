@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Futureproof AV — Technical Direction & AV Consulting</title>
+<meta name="description" content="Technical Direction for experiences that actually work. 25 years in immersive installations, theatrical venues, and live production. CTS-I certified. Los Angeles.">
+<meta property="og:title" content="Futureproof AV — Technical Direction & AV Consulting">
+<meta property="og:description" content="25 years in immersive installations, theatrical venues, and live production. Now available as a consulting Technical Director.">
+<meta property="og:type" content="website">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-raised: #111118;
+    --bg-card: #16161f;
+    --text: #e8e4df;
+    --text-dim: rgba(232, 228, 223, 0.55);
+    --accent: rgb(180, 160, 130);
+    --accent-dim: rgba(180, 160, 130, 0.3);
+    --accent-glow: rgba(180, 160, 130, 0.08);
+    --border: rgba(180, 160, 130, 0.12);
+    --mono: 'Space Mono', 'Courier New', monospace;
+    --sans: 'Inter', -apple-system, system-ui, sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #field {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* --- CONTENT LAYER (above canvas) --- */
+  .hero, section, .divider, footer {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* --- HERO --- */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4rem 2rem;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 2rem;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out 0.3s forwards;
+  }
+
+  .hero h1 {
+    font-family: var(--sans);
+    font-weight: 300;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out 0.6s forwards;
+  }
+
+  .hero-sub {
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    color: var(--text-dim);
+    max-width: 640px;
+    margin-bottom: 2.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out 0.9s forwards;
+  }
+
+  .hero-cta {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 0.9rem 2rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out 1.2s forwards;
+  }
+
+  .hero-cta:hover {
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .hero-creds {
+    margin-top: 3.5rem;
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out 1.5s forwards;
+  }
+
+  .hero-cred {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--accent-dim);
+    text-transform: uppercase;
+  }
+
+  .hero-cred strong {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  /* --- SECTIONS --- */
+  section {
+    padding: 6rem 2rem;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.8rem;
+  }
+
+  .section-title {
+    font-family: var(--sans);
+    font-weight: 300;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    margin-bottom: 1rem;
+  }
+
+  .section-intro {
+    color: var(--text-dim);
+    max-width: 640px;
+    margin-bottom: 3rem;
+    font-size: 0.95rem;
+  }
+
+  /* --- DIVIDER --- */
+  .divider {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .divider hr {
+    border: none;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* --- SERVICES --- */
+  .services-grid {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .services-tier-1 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .services-tier-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .service-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    transition: border-color 0.3s ease, background 0.3s ease;
+  }
+
+  .service-card:hover {
+    border-color: var(--accent-dim);
+    background: var(--bg-raised);
+  }
+
+  .service-card.tier-1 {
+    padding: 2.5rem;
+  }
+
+  .service-tier-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+
+  .service-card h3 {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 1.1rem;
+    margin-bottom: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .service-card.tier-2 h3 {
+    font-size: 0.95rem;
+  }
+
+  .service-outcome {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 1.2rem;
+  }
+
+  .service-projects {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent-dim);
+    letter-spacing: 0.03em;
+    line-height: 1.8;
+  }
+
+  .service-projects span {
+    display: inline-block;
+    margin-right: 0.3rem;
+  }
+
+  .service-projects span::after {
+    content: ' / ';
+    color: rgba(180, 160, 130, 0.15);
+  }
+
+  .service-projects span:last-child::after {
+    content: '';
+  }
+
+  /* --- PROCESS --- */
+  .process-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2rem;
+    counter-reset: step;
+  }
+
+  .process-step {
+    counter-increment: step;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .process-step::before {
+    content: '0' counter(step);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  .process-step h3 {
+    font-weight: 500;
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .process-step p {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* --- ABOUT --- */
+  .about-content {
+    max-width: 640px;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+  }
+
+  .about-content p {
+    margin-bottom: 1.2rem;
+  }
+
+  .about-content strong {
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .certs-strip {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .cert {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-dim);
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+  }
+
+  /* --- CONTACT --- */
+  .contact-section {
+    text-align: center;
+    padding: 8rem 2rem;
+  }
+
+  .contact-section .section-label {
+    margin-bottom: 1.5rem;
+  }
+
+  .contact-section h2 {
+    font-family: var(--sans);
+    font-weight: 300;
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    margin-bottom: 1rem;
+  }
+
+  .contact-section p {
+    color: var(--text-dim);
+    max-width: 480px;
+    margin: 0 auto 2.5rem;
+    font-size: 0.95rem;
+  }
+
+  .contact-cta {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 0.9rem 2rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .contact-cta:hover {
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .contact-alt {
+    margin-top: 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .contact-alt a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .contact-alt a:hover {
+    color: var(--text);
+  }
+
+  /* --- FOOTER --- */
+  footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  footer p {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* --- ANIMATIONS --- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* --- RESPONSIVE --- */
+  @media (max-width: 600px) {
+    .hero-creds { gap: 1rem; }
+    .services-tier-1 { grid-template-columns: 1fr; }
+    .services-tier-2 { grid-template-columns: 1fr; }
+    .process-grid { grid-template-columns: 1fr; }
+    section { padding: 4rem 1.5rem; }
+    .service-card { padding: 1.5rem; }
+    .service-card.tier-1 { padding: 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="field"></canvas>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-label">Futureproof AV</div>
+  <h1>Technical Direction for Experiences That Actually Work</h1>
+  <p class="hero-sub">25 years in immersive installations, theatrical venues, and live production. Now available as a consulting Technical Director for the projects that can't afford to figure it out on opening night.</p>
+  <a href="#contact" class="hero-cta">Tell me about your project</a>
+  <div class="hero-creds">
+    <span class="hero-cred"><strong>CTS-I</strong> Certified / AVIXA</span>
+    <span class="hero-cred"><strong>25+</strong> Years / AV & Production</span>
+    <span class="hero-cred"><strong>Los Angeles</strong> / Available Remote</span>
+  </div>
+</header>
+
+<div class="divider"><hr></div>
+
+<!-- SERVICES -->
+<section class="reveal">
+  <div class="section-label">Services</div>
+  <h2 class="section-title">What I do</h2>
+  <p class="section-intro">I take technically complex creative visions and make them real. From the initial spec through opening night, I'm the person who sees where the design brief meets the physical world.</p>
+
+  <div class="services-tier-1">
+    <div class="service-card tier-1">
+      <div class="service-tier-label">Primary</div>
+      <h3>Technical Direction for Immersive Installations</h3>
+      <p class="service-outcome">Your immersive installation opens on schedule, runs without technical incidents, and delivers the audience experience you designed. I work with artists, studios, and experiential agencies from concept through opening-night commissioning.</p>
+      <div class="service-projects">
+        <span>Lightning in a Bottle, 10 years</span>
+        <span>Hybycozo, Studio Director</span>
+        <span>Onedome Global, 13 exhibitions</span>
+      </div>
+    </div>
+    <div class="service-card tier-1">
+      <div class="service-tier-label">Primary</div>
+      <h3>Theatrical & Venue AV Consulting</h3>
+      <p class="service-outcome">Your venue gets AV systems designed by someone who understands what actually happens on stage, not just what's in the equipment rack. System design, vendor oversight, commissioning through first production.</p>
+      <div class="service-projects">
+        <span>Rose Brand, Technical Sales/PM</span>
+        <span>Performing arts venues nationally</span>
+        <span>Black box to proscenium</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="services-tier-2">
+    <div class="service-card tier-2">
+      <h3>Commercial AV Design</h3>
+      <p class="service-outcome">System architecture, vendor selection, and integration oversight for restaurants, hospitality, corporate, and retail environments.</p>
+      <div class="service-projects">
+        <span>12 years independent consulting</span>
+        <span>Los Angeles</span>
+      </div>
+    </div>
+    <div class="service-card tier-2">
+      <h3>Smart Home Consulting</h3>
+      <p class="service-outcome">Independent advisory for whole-home AV, automation, lighting control, security, and networking. Recommendations driven by how you live, not vendor margins.</p>
+      <div class="service-projects">
+        <span>12+ years residential</span>
+        <span>Independent advisor</span>
+      </div>
+    </div>
+    <div class="service-card tier-2">
+      <h3>Show Control Systems</h3>
+      <p class="service-outcome">Automation and control logic for productions and installations that depend on timing, interactivity, or synchronized multi-system operation.</p>
+      <div class="service-projects">
+        <span>Insomniac Events</span>
+        <span>PLC programming</span>
+        <span>Projection sync</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"><hr></div>
+
+<!-- HOW I WORK -->
+<section class="reveal">
+  <div class="section-label">Process</div>
+  <h2 class="section-title">How I work</h2>
+  <p class="section-intro">Four steps. No surprises.</p>
+
+  <div class="process-grid">
+    <div class="process-step">
+      <h3>You describe the project</h3>
+      <p>Tell me what you're building. I'll ask a few questions, then I'll be honest: am I the right person, or would someone else serve you better? My reputation is built on honest fit assessment, not closing every engagement.</p>
+    </div>
+    <div class="process-step">
+      <h3>We scope the engagement</h3>
+      <p>You get a specific proposal that shows I understood your project. Level of involvement, timeline, deliverables, and expectations. You know exactly what you're buying before anything is signed.</p>
+    </div>
+    <div class="process-step">
+      <h3>You have a senior technical partner</h3>
+      <p>During the engagement, I own the technical layer. Regular check-ins, vendor coordination, and problem-solving. You focus on the creative and business side.</p>
+    </div>
+    <div class="process-step">
+      <h3>You keep the knowledge</h3>
+      <p>System specs, vendor contacts, runbooks, documentation. The institutional knowledge is yours. It lives in your files, not in my head.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"><hr></div>
+
+<!-- ABOUT -->
+<section class="reveal">
+  <div class="section-label">About</div>
+  <h2 class="section-title">John Ray Rappa</h2>
+  <div class="about-content">
+    <p>I've spent 25 years at the intersection of art, theater, and live production. I've led technical production for <strong>Lightning in a Bottle</strong> for 10 consecutive years, served as <strong>Studio Director at Hybycozo</strong>, and helped bring <strong>13 unique immersive exhibitions to life at Onedome Global</strong>, where over 100,000 visitors passed through.</p>
+    <p>The rare thing isn't any one skill. It's having worked across lighting, sound, projection, fabrication, show control, and smart environments long enough to see how they fit together in ways that specialists in a single domain usually don't.</p>
+    <p>I consult, direct, and design. I don't sell equipment and I don't perform installation labor. That independence means my recommendations are driven by what fits your project, not by what's in the warehouse.</p>
+  </div>
+  <div class="certs-strip">
+    <span class="cert">CTS-I / AVIXA</span>
+    <span class="cert">CTS / AVIXA</span>
+    <span class="cert">MEWP Certified</span>
+    <span class="cert">Forklift / Rough Terrain</span>
+    <span class="cert">Art Institute of CA</span>
+  </div>
+</section>
+
+<div class="divider"><hr></div>
+
+<!-- CONTACT -->
+<section id="contact" class="contact-section reveal">
+  <div class="section-label">Contact</div>
+  <h2>Tell me about your project</h2>
+  <p>Describe what you're building. I'll follow up within 24 hours with an honest assessment of whether I'm the right fit.</p>
+  <a href="mailto:futureproofav@gmail.com?subject=Project%20Inquiry" class="contact-cta">futureproofav@gmail.com</a>
+  <div class="contact-alt">
+    <a href="https://linkedin.com/in/futureproofav" target="_blank" rel="noopener">LinkedIn</a>
+  </div>
+</section>
+
+<footer>
+  <p>Futureproof AV / Los Angeles, CA</p>
+</footer>
+
+<script>
+// --- scroll reveal ---
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+reveals.forEach(el => observer.observe(el));
+
+// --- pulse wave field ---
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+let w, h, nodes, pulses;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+
+function init() {
+  resize();
+  const count = Math.floor((w * h) / 12000);
+  nodes = Array.from({ length: count }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    r: Math.random() * 1.5 + 0.4,
+    baseAlpha: Math.random() * 0.05 + 0.02,
+    lit: 0
+  }));
+  pulses = [];
+  schedulePulse();
+}
+
+function schedulePulse() {
+  const delay = 2200 + Math.random() * 3500;
+  setTimeout(() => {
+    pulses.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      radius: 0,
+      maxRadius: Math.min(w, h) * (0.25 + Math.random() * 0.3),
+      speed: 1.0 + Math.random() * 0.6,
+      life: 1
+    });
+    schedulePulse();
+  }, delay);
+}
+
+const connectionDist = 110;
+
+function draw() {
+  ctx.clearRect(0, 0, w, h);
+
+  for (const n of nodes) {
+    n.lit *= 0.97;
+  }
+
+  for (let p = pulses.length - 1; p >= 0; p--) {
+    const pulse = pulses[p];
+    pulse.radius += pulse.speed;
+    pulse.life = 1 - (pulse.radius / pulse.maxRadius);
+
+    if (pulse.life <= 0) {
+      pulses.splice(p, 1);
+      continue;
+    }
+
+    const ringWidth = 70;
+
+    for (const n of nodes) {
+      const dx = n.x - pulse.x;
+      const dy = n.y - pulse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const distFromRing = Math.abs(dist - pulse.radius);
+
+      if (distFromRing < ringWidth) {
+        const intensity = (1 - distFromRing / ringWidth) * pulse.life;
+        n.lit = Math.max(n.lit, intensity);
+      }
+    }
+
+    ctx.beginPath();
+    ctx.arc(pulse.x, pulse.y, pulse.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(180, 160, 130, ${pulse.life * 0.05})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    const alpha = n.baseAlpha + n.lit * 0.6;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r + n.lit * 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180, 160, 130, ${alpha})`;
+    ctx.fill();
+
+    if (n.lit > 0.12) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r + n.lit * 10, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180, 160, 130, ${n.lit * 0.08})`;
+      ctx.fill();
+    }
+
+    if (n.lit > 0.15) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const m = nodes[j];
+        if (m.lit < 0.15) continue;
+        const dx = n.x - m.x;
+        const dy = n.y - m.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < connectionDist) {
+          const lineAlpha = (1 - d / connectionDist) * Math.min(n.lit, m.lit) * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(n.x, n.y);
+          ctx.lineTo(m.x, m.y);
+          ctx.strokeStyle = `rgba(180, 160, 130, ${lineAlpha})`;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+window.addEventListener('resize', () => {
+  resize();
+  init();
+});
+
+init();
+requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
