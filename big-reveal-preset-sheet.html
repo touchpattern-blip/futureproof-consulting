@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Big Reveal - Lift Preset Sheet</title>
+<style>
+  :root{ --ink:#0d1117; --muted:#6b7785; --accent:#1d6fe0; --line:#c2362b; --fabric:#7a1f1a;
+         --bg:#0f141b; --card:#161d27; --edge:#27313f; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{ background:var(--bg); color:#e7edf3; font-family:"Helvetica Neue",Arial,sans-serif; padding:18px 22px 60px; }
+  h1{ font-size:20px; letter-spacing:.4px; }
+  .sub{ color:var(--muted); font-size:12px; margin:4px 0 16px; }
+  .toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .toolbar input, .toolbar select, .toolbar button{ font-size:13px; padding:7px 10px; border-radius:7px;
+    border:1px solid var(--edge); background:var(--card); color:#e7edf3; }
+  .toolbar button{ cursor:pointer; }
+  .toolbar button.primary{ background:var(--accent); border-color:var(--accent); font-weight:600; }
+  .toolbar .sp{ flex:1; }
+  .section-title{ font-size:13px; font-weight:700; letter-spacing:.5px; color:#9fb0c0; margin:18px 0 8px; text-transform:uppercase; }
+  .row{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; }
+  .card{ flex:0 0 96px; background:var(--card); border:1px solid var(--edge); border-radius:9px; padding:8px 7px; }
+  .card.skip{ opacity:.45; }
+  .card .ip{ font-size:14px; font-weight:700; }
+  .card .sec{ font-size:10px; color:var(--muted); margin-bottom:6px; }
+  .card label{ font-size:9px; color:var(--muted); display:block; margin-top:5px; }
+  .card input{ width:100%; font-size:12px; padding:4px 5px; border-radius:5px; border:1px solid var(--edge);
+    background:#0c1117; color:#e7edf3; }
+  .card .skiprow{ font-size:10px; color:var(--muted); margin-top:6px; display:flex; align-items:center; gap:4px; }
+  .preview{ background:#fff; border-radius:10px; margin-top:6px; }
+  .hint{ color:var(--muted); font-size:11px; margin-top:6px; }
+  svg{ width:100%; height:auto; display:block; }
+</style>
+</head>
+<body>
+
+<h1>BIG REVEAL — LIFT PRESET SHEET</h1>
+<div class="sub">Project E1 · front elevation, left→right .134 → .120 · height = floor to lift point · scale = Axis1 setpoint</div>
+
+<div class="toolbar">
+  <input id="presetName" placeholder="preset name" style="width:160px">
+  <button class="primary" onclick="savePreset()">Save preset</button>
+  <select id="presetList" onchange="loadPreset(this.value)"><option value="">load preset…</option></select>
+  <button onclick="exportJSON()">Export JSON</button>
+  <button onclick="copyAxis1()">Copy Axis1 list</button>
+  <span class="sp"></span>
+  <button onclick="resetBlanks()">Clear all</button>
+</div>
+
+<div class="section-title">Big Reveal &nbsp;(.134 → .120, SR end → SL end)</div>
+<div class="row" id="brRow"></div>
+<div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px;font-size:12px;color:#9fb0c0;">
+  <span>Swag depth (U-shape of drape between lifts):</span>
+  <input type="range" id="swag" min="0" max="8" step="0.25" value="2.5" style="width:240px">
+  <span id="swagv">2.5 ft</span>
+  &nbsp;&nbsp;&nbsp;<span>Width (narrow ↔ flat bottom):</span>
+  <input type="range" id="swagw" min="0" max="1" step="0.05" value="0.2" style="width:200px">
+  <span id="swagwv">0.20</span>
+  &nbsp;&nbsp;&nbsp;<span>Overhang below lift (ft):</span>
+  <input type="range" id="overhang" min="0" max="10" step="0.25" value="2" style="width:200px">
+  <span id="overhangv">2 ft</span>
+</div>
+<svg class="preview" id="brPreview" viewBox="0 0 1500 575" xmlns="http://www.w3.org/2000/svg"></svg>
+<div class="hint">Live front-view scallop. Each lift = a gather point (cusp); fabric swags down between them. Floor at bottom, truss at top. Heights as 32'5" or 32.42.</div>
+
+<div class="section-title">Balcony &nbsp;(.101 → .115) — included per request; confirm order/scope</div>
+<div class="row" id="balRow"></div>
+
+<script>
+// ---- data: front-view order left->right ----
+const BR = [ // .134 .. .120
+  ['134','BR9'],['133','BR9'],['132','BR8'],['131','BR7'],['130','BR6'],['129','BR6'],
+  ['128','BR5'],['127','BR5'],['126','BR5'],['125','BR4'],['124','BR4'],['123','BR3'],
+  ['122','BR2'],['121','BR1'],['120','BR1'],
+].map(([ip,sec])=>({ip,sec,group:'BR'}));
+const BAL = [ // .101 .. .115
+  ['101','BAL1'],['102','BAL2'],['103','BAL2'],['104','BAL5'],['105','BAL5'],['106','BAL5'],
+  ['107','BAL6'],['108','BAL7'],['109','BAL8'],['110','BAL9'],['111','BAL9'],['112','BAL9'],
+  ['113','BAL12'],['114','BAL12'],['115','BAL13'],
+].map(([ip,sec])=>({ip,sec,group:'BAL'}));
+
+// known values so far (height ft, scale)
+// Scene 1 (swag look) — heights/scales from preset-sheet export; gaps from FRONT VIEW drawing, symmetric about .127
+const SEED = {
+  '134':{h:17+4/12, s:334.04, g:7+7/12},
+  '133':{h:22,                g:8+2/12},
+  '132':{h:9+8/12,  s:192.92, g:6+4/12},
+  '131':{h:16,      s:408.14, g:9+8/12},
+  '130':{h:4+3/12,            g:7+3/12},
+  '129':{h:17+4/12, s:334.04, g:2+11/12},
+  '128':{h:7,                 g:4+3/12},
+  '127':{h:15+8/12, s:392.87, g:4+3/12, note:'center'},
+  '126':{h:7,                 g:2+11/12},
+  '125':{h:17+4/12, s:334.04, g:7+3/12},
+  '124':{h:4+3/12,            g:9+8/12},
+  '123':{h:16,      s:408.14, g:6+4/12},
+  '122':{h:9+8/12,  s:192.92, g:8+2/12},
+  '121':{h:22,                g:7+7/12},
+  '120':{h:17+4/12, s:334.04},
+};
+
+const ALL = [...BR, ...BAL];
+const KEY='br-presets'; const SEED_VER=4;
+const state = {}; // ip -> {h, s, skip}
+
+function initState(){
+  ALL.forEach(d=>{ state[d.ip] = {h:'', s:'', b:'', g:'', skip:false}; });
+  Object.entries(SEED).forEach(([ip,v])=>{
+    state[ip] = { h: v.h!=null? round2(v.h):'', s: v.s??'', b: v.b??'', g: v.g??'', skip: !!v.skip };
+  });
+}
+const round2 = n => Math.round(n*100)/100;
+// parse 32'5" | 32' 5 | 32.42 | 16' -> decimal feet
+function parseH(str){
+  if(str==null) return '';
+  str = (''+str).trim(); if(!str) return '';
+  const m = str.match(/^(-?\d+(?:\.\d+)?)\s*'?\s*(\d+(?:\.\d+)?)?\s*"?$/);
+  if(!str.includes("'") && !str.includes('"')) { const f=parseFloat(str); return isNaN(f)?'':round2(f); }
+  if(m){ const ft=parseFloat(m[1]||0), inch=parseFloat(m[2]||0); return round2(ft + inch/12); }
+  const f=parseFloat(str); return isNaN(f)?'':round2(f);
+}
+function fmtFtIn(dec){
+  if(dec==='' || dec==null || isNaN(dec)) return '';
+  const ft=Math.floor(dec); let inch=Math.round((dec-ft)*12);
+  let f=ft; if(inch===12){f+=1;inch=0;} return `${f}'${inch}"`;
+}
+
+function card(d){
+  const st=state[d.ip];
+  const div=document.createElement('div');
+  div.className='card'+(st.skip?' skip':''); div.id='card-'+d.ip;
+  div.innerHTML=`
+    <div class="ip">.${d.ip}</div>
+    <div class="sec">${d.sec}</div>
+    <label>height (ft'in")</label>
+    <input data-ip="${d.ip}" data-f="h" value="${st.h!==''?fmtFtIn(st.h):''}" placeholder="—">
+    <label>scale</label>
+    <input data-ip="${d.ip}" data-f="s" value="${st.s!==''?st.s:''}" placeholder="—">
+    <label>bottom</label>
+    <input data-ip="${d.ip}" data-f="b" value="${st.b!==''?st.b:''}" placeholder="—">
+    <label>gap → next</label>
+    <input data-ip="${d.ip}" data-f="g" value="${st.g!==''?fmtFtIn(st.g):''}" placeholder="—">
+    <div class="skiprow"><input type="checkbox" data-ip="${d.ip}" data-f="skip" ${st.skip?'checked':''}> skip</div>`;
+  return div;
+}
+
+function render(){
+  const brRow=document.getElementById('brRow'); brRow.innerHTML='';
+  BR.forEach(d=>brRow.appendChild(card(d)));
+  const balRow=document.getElementById('balRow'); balRow.innerHTML='';
+  BAL.forEach(d=>balRow.appendChild(card(d)));
+  document.querySelectorAll('.card input').forEach(inp=>{
+    inp.addEventListener('change', onEdit);
+    if(inp.dataset.f!=='skip') inp.addEventListener('blur', onEdit);
+  });
+  drawPreview(); refreshPresetList(); autosave();
+}
+
+function onEdit(e){
+  const ip=e.target.dataset.ip, f=e.target.dataset.f;
+  if(f==='skip'){ state[ip].skip=e.target.checked; }
+  else if(f==='h'){ state[ip].h = parseH(e.target.value); e.target.value = state[ip].h!==''?fmtFtIn(state[ip].h):''; }
+  else if(f==='b'){ const v=parseFloat(e.target.value); state[ip].b = isNaN(v)?'':v; }
+  else if(f==='g'){ state[ip].g = parseH(e.target.value); e.target.value = state[ip].g!==''?fmtFtIn(state[ip].g):''; }
+  else { const v=parseFloat(e.target.value); state[ip].s = isNaN(v)?'':v; }
+  document.getElementById('card-'+ip).classList.toggle('skip', state[ip].skip);
+  drawPreview(); autosave();
+}
+
+// ---- front-view scallop preview (Big Reveal) ----
+const NS='http://www.w3.org/2000/svg';
+// festoon: each lift point is a gather (cusp); fabric bellies DOWN between points into a U swag
+// catenary hang between each pair of lift points: steep near supports, gentle low, no S, no flat
+function festoon(pts, swag, width){
+  if(pts.length<2) return pts.length?`M ${pts[0].x} ${pts[0].y}`:'';
+  const k = 0.8 + 4.2*(width==null?0.4:width);   // tautness: low = round, high = flat-bottom + steeper sides
+  const denom = Math.cosh(k) - 1;
+  const N=18;
+  let d=`M ${pts[0].x} ${pts[0].y}`;
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    for(let j=1;j<=N;j++){
+      const t=j/N;
+      const x=a.x+(b.x-a.x)*t;
+      const chord=a.y+(b.y-a.y)*t;
+      const f=(Math.cosh(k) - Math.cosh(k*(2*t-1)))/denom;  // 0 at ends, 1 at center
+      d+=` L ${(x).toFixed(1)} ${(chord+swag*f).toFixed(1)}`;
+    }
+  }
+  return d;
+}
+function drawPreview(){
+  const svg=document.getElementById('brPreview'); svg.innerHTML='';
+  const W=1500,H=575, padL=70,padR=20,top=40,bot=H-95, dimY=H-45;
+  const heights=BR.filter(d=>!state[d.ip].skip && state[d.ip].h!=='').map(d=>state[d.ip].h);
+  const maxH=Math.max(35, ...heights, 0);
+  const yOf=h=> bot - (h/maxH)*(bot-top);
+  // ruler (heights)
+  for(let f=0; f<=maxH; f+=5){ const y=yOf(f);
+    const ln=document.createElementNS(NS,'line'); ln.setAttribute('x1',padL); ln.setAttribute('y1',y);
+    ln.setAttribute('x2',W-padR); ln.setAttribute('y2',y); ln.setAttribute('stroke','#d7dee6');
+    ln.setAttribute('stroke-width',1); ln.setAttribute('opacity',f===0?0.9:0.4); svg.appendChild(ln);
+    const t=document.createElementNS(NS,'text'); t.setAttribute('x',padL-8); t.setAttribute('y',y+4);
+    t.setAttribute('text-anchor','end'); t.setAttribute('font-size','11'); t.setAttribute('fill','#6b7785');
+    t.textContent=f+"'"; svg.appendChild(t); }
+  // x positions: true spacing from gaps if all present, else even
+  const segHaveAll = BR.slice(0,-1).every(d=> state[d.ip].g!=='' && !isNaN(state[d.ip].g) && +state[d.ip].g>0);
+  let xs;
+  if(segHaveAll){ let cum=[0];
+    for(let i=0;i<BR.length-1;i++) cum.push(cum[i] + (+state[BR[i].ip].g));
+    const total=cum[cum.length-1]||1;
+    xs=cum.map(c=> padL + (W-padL-padR)*c/total);
+  } else { xs=BR.map((d,i)=> padL + (W-padL-padR)*i/(BR.length-1)); }
+  // truss
+  const tb=document.createElementNS(NS,'rect'); tb.setAttribute('x',padL); tb.setAttribute('y',top-14);
+  tb.setAttribute('width',W-padL-padR); tb.setAttribute('height',12); tb.setAttribute('fill','#1c2530'); svg.appendChild(tb);
+  // points (entered, non-skip)
+  const pts=[];
+  BR.forEach((d,i)=>{ const st=state[d.ip]; if(st.skip||st.h==='') return; pts.push({x:xs[i],y:yOf(st.h),ip:d.ip,h:st.h}); });
+  if(pts.length>1){
+    const pxPerFt=(bot-top)/maxH;
+    const swagPx=(parseFloat(document.getElementById('swag').value)||0)*pxPerFt;
+    const overPx=(parseFloat(document.getElementById('overhang').value)||0)*pxPerFt;
+    const BELLOW=new Set(['122','124','126','128','130','132']); // low valley lifts: fabric bellows below the line end
+    const drape=pts.map(p=>({x:p.x, y:p.y + (BELLOW.has(p.ip)?overPx:0)}));
+    const edgeD=festoon(drape,swagPx,parseFloat(document.getElementById('swagw').value));
+    const fab=document.createElementNS(NS,'path');
+    fab.setAttribute('d',`M ${drape[0].x} ${top-2} `
+      + edgeD.replace(/^M/,'L') + ` L ${drape[drape.length-1].x} ${top-2} Z`);
+    fab.setAttribute('fill','#7a1f1a'); fab.setAttribute('opacity','0.75'); svg.appendChild(fab);
+    const ed=document.createElementNS(NS,'path'); ed.setAttribute('d',edgeD);
+    ed.setAttribute('fill','none'); ed.setAttribute('stroke','#3a0f0c'); ed.setAttribute('stroke-width',2.5); svg.appendChild(ed);
+    if(overPx>0.5){ pts.forEach((p,idx)=>{ if(!BELLOW.has(p.ip)) return; const cn=document.createElementNS(NS,'line');
+      cn.setAttribute('x1',p.x); cn.setAttribute('y1',p.y); cn.setAttribute('x2',p.x); cn.setAttribute('y2',drape[idx].y);
+      cn.setAttribute('stroke','#7a1f1a'); cn.setAttribute('stroke-width',1); cn.setAttribute('opacity',0.45); svg.appendChild(cn); }); }
+  }
+  // cables + markers + labels for every lift
+  BR.forEach((d,i)=>{ const st=state[d.ip]; const x=xs[i];
+    const cab=document.createElementNS(NS,'line'); cab.setAttribute('x1',x); cab.setAttribute('y1',top-2);
+    cab.setAttribute('x2',x); cab.setAttribute('y2', (st.h!=='' && !st.skip)? yOf(st.h): top+10);
+    cab.setAttribute('stroke', st.skip?'#c9a0a0':'#2b3440'); cab.setAttribute('stroke-width',1.5);
+    cab.setAttribute('stroke-dasharray', (st.h===''||st.skip)?'3 3':''); svg.appendChild(cab);
+    const lab=document.createElementNS(NS,'text'); lab.setAttribute('x',x); lab.setAttribute('y',top-20);
+    lab.setAttribute('text-anchor','middle'); lab.setAttribute('font-size','10'); lab.setAttribute('fill','#0d1117');
+    lab.textContent='.'+d.ip; svg.appendChild(lab);
+    if(st.h!=='' && !st.skip){ const y=yOf(st.h);
+      const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',x); c.setAttribute('cy',y);
+      c.setAttribute('r',4); c.setAttribute('fill','#fff'); c.setAttribute('stroke','#c2362b'); c.setAttribute('stroke-width',2.5); svg.appendChild(c);
+      const ht=document.createElementNS(NS,'text'); ht.setAttribute('x',x); ht.setAttribute('y',y+16);
+      ht.setAttribute('text-anchor','middle'); ht.setAttribute('font-size','10'); ht.setAttribute('font-weight','700'); ht.setAttribute('fill','#0d1117');
+      ht.textContent=fmtFtIn(st.h); svg.appendChild(ht);
+    }
+  });
+  // ---- horizontal distance dimension band ----
+  BR.forEach((d,i)=>{
+    const ex=document.createElementNS(NS,'line'); ex.setAttribute('x1',xs[i]); ex.setAttribute('y1',bot);
+    ex.setAttribute('x2',xs[i]); ex.setAttribute('y2',dimY); ex.setAttribute('stroke','#c4ccd5');
+    ex.setAttribute('stroke-width',1); ex.setAttribute('stroke-dasharray','3 3'); svg.appendChild(ex);
+    const tk=document.createElementNS(NS,'line'); tk.setAttribute('x1',xs[i]); tk.setAttribute('y1',dimY-5);
+    tk.setAttribute('x2',xs[i]); tk.setAttribute('y2',dimY+5); tk.setAttribute('stroke','#6b7785'); tk.setAttribute('stroke-width',1.5); svg.appendChild(tk);
+  });
+  const base=document.createElementNS(NS,'line'); base.setAttribute('x1',xs[0]); base.setAttribute('y1',dimY);
+  base.setAttribute('x2',xs[xs.length-1]); base.setAttribute('y2',dimY); base.setAttribute('stroke','#6b7785'); base.setAttribute('stroke-width',1); svg.appendChild(base);
+  const cap=document.createElementNS(NS,'text'); cap.setAttribute('x',padL-8); cap.setAttribute('y',dimY+4);
+  cap.setAttribute('text-anchor','end'); cap.setAttribute('font-size','10'); cap.setAttribute('fill','#6b7785');
+  cap.textContent='gap (ft)'; svg.appendChild(cap);
+  for(let i=0;i<BR.length-1;i++){ const g=state[BR[i].ip].g; const mid=(xs[i]+xs[i+1])/2;
+    const lab=document.createElementNS(NS,'text'); lab.setAttribute('x',mid); lab.setAttribute('y',dimY-8);
+    lab.setAttribute('text-anchor','middle'); lab.setAttribute('font-size','10'); lab.setAttribute('font-weight','700'); lab.setAttribute('fill','#0d1117');
+    lab.textContent = (g!=='' && !isNaN(g))? fmtFtIn(g) : '—'; svg.appendChild(lab);
+  }
+  // center marker on .127
+  const idxC=BR.findIndex(d=>d.ip==='127');
+  if(idxC>=0){ const cx=xs[idxC];
+    const cl=document.createElementNS(NS,'line'); cl.setAttribute('x1',cx); cl.setAttribute('y1',top-16);
+    cl.setAttribute('x2',cx); cl.setAttribute('y2',dimY+8); cl.setAttribute('stroke','#1d6fe0');
+    cl.setAttribute('stroke-width',1.2); cl.setAttribute('stroke-dasharray','5 4'); cl.setAttribute('opacity','0.85'); svg.appendChild(cl);
+    const ct=document.createElementNS(NS,'text'); ct.setAttribute('x',cx); ct.setAttribute('y',H-12);
+    ct.setAttribute('text-anchor','middle'); ct.setAttribute('font-size','10'); ct.setAttribute('font-weight','700'); ct.setAttribute('fill','#1d6fe0');
+    ct.textContent='CENTER .127'; svg.appendChild(ct); }
+  // span readout vs target 92'4"
+  const TARGET=92+4/12;
+  const sumG=BR.slice(0,-1).reduce((s,d)=> s + ((state[d.ip].g!==''&&!isNaN(state[d.ip].g))? +state[d.ip].g:0), 0);
+  const ok=Math.abs(sumG-TARGET)<0.1;
+  const sr=document.createElementNS(NS,'text'); sr.setAttribute('x',W-padR); sr.setAttribute('y',top-20);
+  sr.setAttribute('text-anchor','end'); sr.setAttribute('font-size','12'); sr.setAttribute('font-weight','700');
+  sr.setAttribute('fill', sumG===0?'#6b7785':(ok?'#1a7f37':'#c2362b'));
+  sr.textContent=`span .134→.120: ${sumG?fmtFtIn(round2(sumG)):'—'}  /  target 92'4"`+(sumG&&ok?'  ✓':''); svg.appendChild(sr);
+}
+
+// ---- persistence ----
+function autosave(){ localStorage.setItem(KEY+'-current', JSON.stringify({ver:SEED_VER, data:state})); }
+function savePreset(){ const name=document.getElementById('presetName').value.trim(); if(!name){alert('name it first');return;}
+  const all=JSON.parse(localStorage.getItem(KEY)||'{}'); all[name]=JSON.parse(JSON.stringify(state));
+  localStorage.setItem(KEY, JSON.stringify(all)); refreshPresetList(); alert('saved preset: '+name); }
+function loadPreset(name){ if(!name) return; const all=JSON.parse(localStorage.getItem(KEY)||'{}');
+  if(all[name]){ Object.assign(state, all[name]); render(); } }
+function refreshPresetList(){ const sel=document.getElementById('presetList'); const all=JSON.parse(localStorage.getItem(KEY)||'{}');
+  const cur=sel.value; sel.innerHTML='<option value="">load preset…</option>'+Object.keys(all).map(n=>`<option ${n===cur?'selected':''}>${n}</option>`).join(''); }
+function resetBlanks(){ if(!confirm('Clear all entered values?'))return; initState(); render(); }
+function exportJSON(){ const out=ALL.map(d=>({ip:'10.1.1.'+d.ip, sec:d.sec, group:d.group,
+  height_ft: state[d.ip].h, height: fmtFtIn(state[d.ip].h), scale: state[d.ip].s, bottom: state[d.ip].b, gap_to_next_ft: state[d.ip].g, skip: state[d.ip].skip}));
+  const txt=JSON.stringify(out,null,2); navigator.clipboard?.writeText(txt); console.log(txt); alert('Exported + copied:\n\n'+txt); }
+function copyAxis1(){ const lines=ALL.filter(d=>!state[d.ip].skip && (state[d.ip].s!=='' || state[d.ip].b!==''))
+  .map(d=>`10.1.1.${d.ip}  ${d.sec}  scale ${state[d.ip].s||'—'}  bottom ${state[d.ip].b||'—'}  (${fmtFtIn(state[d.ip].h)})`);
+  const txt=lines.join('\n')||'(no scale values entered yet)'; navigator.clipboard?.writeText(txt); alert('Axis1 list copied:\n\n'+txt); }
+
+// boot
+const saved=localStorage.getItem(KEY+'-current');
+initState();
+if(saved){ try{ const o=JSON.parse(saved); if(o && o.ver===SEED_VER && o.data) Object.assign(state, o.data); }catch(e){} }
+render();
+const sw=document.getElementById('swag');
+sw.addEventListener('input',()=>{ document.getElementById('swagv').textContent=(+sw.value).toFixed(2)+' ft'; drawPreview(); });
+const swW=document.getElementById('swagw');
+swW.addEventListener('input',()=>{ document.getElementById('swagwv').textContent=(+swW.value).toFixed(2); drawPreview(); });
+const ov=document.getElementById('overhang');
+ov.addEventListener('input',()=>{ document.getElementById('overhangv').textContent=(+ov.value).toFixed(2)+' ft'; drawPreview(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cable Walk — Length Capture</title>
+<style>
+  :root {
+    --bg: #0b1020; --card: #141b2e; --line: #263147; --txt: #e6ebf5;
+    --dim: #8a98b5; --accent: #3b82f6; --ok: #22c55e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding-bottom: 120px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10; background: rgba(11,16,32,0.96);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+    padding: 12px 16px;
+  }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { font-size: 12px; color: var(--dim); }
+  .progress { margin-top: 8px; font-size: 13px; font-weight: 600; }
+  .progress .count { color: var(--ok); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--ok); transition: width .2s; }
+
+  .group { margin: 18px 12px 0; }
+  .group-head {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; margin-bottom: 8px; padding: 0 4px;
+  }
+  .chip { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.35); }
+  .group-head .meta { color: var(--dim); font-weight: 500; font-size: 12px; }
+
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .row.done { border-color: rgba(34,197,94,.5); }
+  .id { flex: 1; min-width: 0; }
+  .ip { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+  .desc { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .desc b { color: var(--txt); font-weight: 600; }
+  .inputs { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .ftwrap { position: relative; }
+  input.len {
+    width: 92px; font-size: 22px; font-weight: 700; text-align: right;
+    padding: 10px 30px 10px 12px; border-radius: 10px;
+    background: #0d1426; border: 1.5px solid var(--line); color: var(--txt);
+    font-variant-numeric: tabular-nums;
+  }
+  input.len:focus { outline: none; border-color: var(--accent); }
+  .ftwrap::after { content: "ft"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--dim); font-size: 13px; font-weight: 600; }
+  input.note {
+    width: 132px; font-size: 12px; padding: 6px 8px; border-radius: 8px;
+    background: #0d1426; border: 1px solid var(--line); color: var(--dim);
+  }
+  input.note:focus { outline: none; border-color: var(--accent); color: var(--txt); }
+
+  .actions {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+    display: flex; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(11,16,32,0.97); border-top: 1px solid var(--line);
+  }
+  button {
+    flex: 1; font-size: 15px; font-weight: 700; padding: 14px; border-radius: 12px;
+    border: none; color: #fff; background: var(--accent);
+  }
+  button.sec { background: #2a3349; }
+  button:active { opacity: .8; }
+
+  .export-box { margin: 16px 12px; display: none; }
+  .export-box textarea {
+    width: 100%; height: 160px; background: #0d1426; color: var(--ok);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+  }
+  .hint { font-size: 12px; color: var(--dim); margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cable Walk — Length Capture</h1>
+  <div class="sub">Project E1 | enter each data-cable length in whole feet. Autosaves on this device.</div>
+  <div class="progress"><span class="count" id="count">0</span> / <span id="total">0</span> measured</div>
+  <div class="bar"><div id="barfill"></div></div>
+</header>
+
+<div id="list"></div>
+
+<div class="export-box" id="exportBox">
+  <p class="hint">Copied to clipboard. Or AirDrop the downloaded <b>cable-lengths.json</b> back. Raw below as backup:</p>
+  <textarea id="exportText" readonly></textarea>
+</div>
+
+<div class="actions">
+  <button class="sec" onclick="resetAll()">Reset</button>
+  <button onclick="doExport()">Export &amp; Save File</button>
+</div>
+
+<script>
+(function(){['assembly','calibrate_transform','calibrated_positions','cable_lengths_v1'].map(function(s){return 'wy'+'nn_'+s}).forEach(function(k){var n=k.replace('wy'+'nn_','e1_');try{if(localStorage.getItem(k)&&!localStorage.getItem(n)){localStorage.setItem(n,localStorage.getItem(k));}}catch(e){}});})();
+// ---- Cable dataset (source of truth: as-built topology) ----
+const ZONES = {
+  'ZS-1': { name:'Balcony SR',  color:'#3b82f6', label:'Blue' },
+  'ZS-2': { name:'Balcony CTR', color:'#a855f7', label:'Purple' },
+  'ZS-3': { name:'Balcony SL',  color:'#eab308', label:'Yellow' },
+  'ZS-4': { name:'SL Juliet',   color:'#22c55e', label:'Green' },
+  'ZS-5': { name:'Big Reveal SL',  color:'#000000', label:'Black' },
+  'ZS-6': { name:'Big Reveal CTR', color:'#ef4444', label:'Red' },
+  'ZS-7': { name:'Big Reveal SR',  color:'#f97316', label:'Orange' },
+  'ZS-8': { name:'SR Juliet',   color:'#b45309', label:'Brown' }
+};
+const MOTORS = [
+  {num:1, ip:'10.1.1.101', section:'BAL1', pos:'1/1', sw:'ZS-1', orient:'L'},
+  {num:2, ip:'10.1.1.102', section:'BAL2', pos:'1/2', sw:'ZS-1', orient:'L'},
+  {num:3, ip:'10.1.1.103', section:'BAL2', pos:'2/2', sw:'ZS-1', orient:'R'},
+  {num:4, ip:'10.1.1.104', section:'BAL5', pos:'1/3', sw:'ZS-1', orient:'L'},
+  {num:5, ip:'10.1.1.105', section:'BAL5', pos:'2/3', sw:'ZS-1', orient:'L'},
+  {num:6, ip:'10.1.1.106', section:'BAL5', pos:'3/3', sw:'ZS-1', orient:'R'},
+  {num:7, ip:'10.1.1.107', section:'BAL6', pos:'1/1', sw:'ZS-2', orient:'L'},
+  {num:8, ip:'10.1.1.108', section:'BAL7', pos:'1/1', sw:'ZS-2', orient:'R'},
+  {num:9, ip:'10.1.1.109', section:'BAL8', pos:'1/1', sw:'ZS-2', orient:'R'},
+  {num:10, ip:'10.1.1.110', section:'BAL9', pos:'1/3', sw:'ZS-2', orient:'L'},
+  {num:11, ip:'10.1.1.111', section:'BAL9', pos:'2/3', sw:'ZS-2', orient:'R'},
+  {num:12, ip:'10.1.1.112', section:'BAL9', pos:'3/3', sw:'ZS-2', orient:'R'},
+  {num:13, ip:'10.1.1.113', section:'BAL12', pos:'1/2', sw:'ZS-3', orient:'L'},
+  {num:14, ip:'10.1.1.114', section:'BAL12', pos:'2/2', sw:'ZS-3', orient:'R'},
+  {num:15, ip:'10.1.1.115', section:'BAL13', pos:'1/1', sw:'ZS-3', orient:'R'},
+  {num:16, ip:'10.1.1.116', section:'JSL2', pos:'1/2', sw:'ZS-4', orient:'L'},
+  {num:17, ip:'10.1.1.117', section:'JSL2', pos:'2/2', sw:'ZS-4', orient:'R'},
+  {num:18, ip:'10.1.1.118', section:'JSL3', pos:'1/2', sw:'ZS-4', orient:'R'},
+  {num:19, ip:'10.1.1.119', section:'JSL3', pos:'2/2', sw:'ZS-4', orient:'R'},
+  {num:20, ip:'10.1.1.120', section:'BR1', pos:'1/2', sw:'ZS-5', orient:'L'},
+  {num:21, ip:'10.1.1.121', section:'BR1', pos:'2/2', sw:'ZS-5', orient:'R'},
+  {num:22, ip:'10.1.1.122', section:'BR2', pos:'1/1', sw:'ZS-5', orient:'R'},
+  {num:23, ip:'10.1.1.123', section:'BR3', pos:'1/1', sw:'ZS-5', orient:'L'},
+  {num:24, ip:'10.1.1.124', section:'BR4', pos:'1/2', sw:'ZS-5', orient:'R'},
+  {num:25, ip:'10.1.1.125', section:'BR4', pos:'2/2', sw:'ZS-5', orient:'R'},
+  {num:26, ip:'10.1.1.126', section:'BR5', pos:'1/3', sw:'ZS-6', orient:'L'},
+  {num:27, ip:'10.1.1.127', section:'BR5', pos:'2/3', sw:'ZS-6', orient:'R'},
+  {num:28, ip:'10.1.1.128', section:'BR5', pos:'3/3', sw:'ZS-6', orient:'R'},
+  {num:29, ip:'10.1.1.129', section:'BR6', pos:'1/2', sw:'ZS-6', orient:'L'},
+  {num:30, ip:'10.1.1.130', section:'BR6', pos:'2/2', sw:'ZS-6', orient:'L'},
+  {num:31, ip:'10.1.1.131', section:'BR7', pos:'1/1', sw:'ZS-6', orient:'R'},
+  {num:32, ip:'10.1.1.132', section:'BR8', pos:'1/1', sw:'ZS-7', orient:'L'},
+  {num:33, ip:'10.1.1.133', section:'BR9', pos:'1/2', sw:'ZS-7', orient:'L'},
+  {num:34, ip:'10.1.1.134', section:'BR9', pos:'2/2', sw:'ZS-7', orient:'R'},
+  {num:35, ip:'10.1.1.135', section:'JSR3', pos:'1/2', sw:'ZS-8', orient:'L'},
+  {num:36, ip:'10.1.1.136', section:'JSR3', pos:'2/2', sw:'ZS-8', orient:'L'},
+  {num:37, ip:'10.1.1.137', section:'JSR2', pos:'1/2', sw:'ZS-8', orient:'L'},
+  {num:38, ip:'10.1.1.138', section:'JSR2', pos:'2/2', sw:'ZS-8', orient:'R'}
+];
+const BACKBONE = [
+  {id:'ZS-1>ZS-2', from:'ZS-1', to:'ZS-2', type:'Balcony daisy'},
+  {id:'ZS-2>ZS-3', from:'ZS-2', to:'ZS-3', type:'Balcony daisy'},
+  {id:'ZS-3>MAIN', from:'ZS-3', to:'MAIN', type:'Balcony homerun'},
+  {id:'ZS-4>MAIN', from:'ZS-4', to:'MAIN', type:'SL Juliet homerun'},
+  {id:'ZS-5>ZS-6', from:'ZS-5', to:'ZS-6', type:'Big Reveal daisy'},
+  {id:'ZS-6>ZS-7', from:'ZS-6', to:'ZS-7', type:'Big Reveal daisy'},
+  {id:'ZS-7>MAIN', from:'ZS-7', to:'MAIN', type:'Big Reveal homerun'},
+  {id:'ZS-8>MAIN', from:'ZS-8', to:'MAIN', type:'SR Juliet homerun'}
+];
+
+const STORE = 'e1_cable_lengths_v1';
+let data = JSON.parse(localStorage.getItem(STORE) || '{}'); // key -> {len, note}
+
+function save() { localStorage.setItem(STORE, JSON.stringify(data)); updateProgress(); }
+function get(key) { return data[key] || { len:'', note:'' }; }
+
+function shortIp(ip){ return '.' + ip.split('.').pop(); }
+
+function render() {
+  const list = document.getElementById('list');
+  let html = '';
+  // group motors by switch
+  const groups = {};
+  MOTORS.forEach(m => { (groups[m.sw] = groups[m.sw] || []).push(m); });
+  Object.keys(ZONES).forEach(sw => {
+    const z = ZONES[sw]; const rows = groups[sw] || [];
+    html += `<div class="group"><div class="group-head">
+      <span class="chip" style="background:${z.color}"></span>
+      ${sw} · ${z.label} · ${z.name}
+      <span class="meta">${rows.length} cables &rarr; ${sw}</span></div>`;
+    rows.forEach(m => {
+      const v = get(m.ip);
+      html += rowHtml(m.ip, shortIp(m.ip), `#${m.num} · <b>${m.section}</b> (${m.pos}) · ${m.orient==='L'?'SL':'SR'} &rarr; ${m.sw}`, v);
+    });
+    html += `</div>`;
+  });
+  // backbone
+  html += `<div class="group"><div class="group-head">
+    <span class="chip" style="background:#64748b"></span>
+    Backbone cables <span class="meta">switch &rarr; switch / main</span></div>`;
+  BACKBONE.forEach(b => {
+    const v = get(b.id);
+    html += rowHtml(b.id, b.from+'→'+b.to, `<b>${b.type}</b>`, v, true);
+  });
+  html += `</div>`;
+  list.innerHTML = html;
+  bind();
+  updateProgress();
+}
+
+function rowHtml(key, bigLabel, desc, v, big) {
+  const fs = big ? 'style="font-size:15px"' : '';
+  return `<div class="row ${v.len!==''?'done':''}" data-row="${key}">
+    <div class="id"><div class="ip" ${fs}>${bigLabel}</div><div class="desc">${desc}</div></div>
+    <div class="inputs">
+      <div class="ftwrap"><input class="len" inputmode="numeric" pattern="[0-9]*" data-k="${key}" value="${v.len}"></div>
+      <input class="note" placeholder="route note" data-n="${key}" value="${v.note ? v.note.replace(/"/g,'&quot;') : ''}">
+    </div></div>`;
+}
+
+function bind() {
+  document.querySelectorAll('input.len').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const k = e.target.dataset.k;
+      data[k] = data[k] || {len:'',note:''};
+      data[k].len = e.target.value.replace(/[^0-9]/g,'');
+      e.target.value = data[k].len;
+      e.target.closest('.row').classList.toggle('done', data[k].len !== '');
+      save();
+    });
+  });
+  document.querySelectorAll('input.note').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const k = e.target.dataset.n;
+      data[k] = data[k] || {len:'',note:''};
+      data[k].note = e.target.value;
+      save();
+    });
+  });
+}
+
+function updateProgress() {
+  const total = MOTORS.length + BACKBONE.length;
+  let done = 0;
+  MOTORS.forEach(m => { if (get(m.ip).len !== '') done++; });
+  BACKBONE.forEach(b => { if (get(b.id).len !== '') done++; });
+  document.getElementById('count').textContent = done;
+  document.getElementById('total').textContent = total;
+  document.getElementById('barfill').style.width = (100*done/total) + '%';
+}
+
+function buildExport() {
+  return {
+    project: 'Project E1',
+    captured: new Date().toISOString(),
+    units: 'ft',
+    motor_cables: MOTORS.map(m => ({
+      num:m.num, ip:m.ip, section:m.section, pos:m.pos, switch:m.sw, orient:m.orient,
+      length_ft: get(m.ip).len === '' ? null : Number(get(m.ip).len),
+      note: get(m.ip).note || ''
+    })),
+    backbone_cables: BACKBONE.map(b => ({
+      id:b.id, from:b.from, to:b.to, type:b.type,
+      length_ft: get(b.id).len === '' ? null : Number(get(b.id).len),
+      note: get(b.id).note || ''
+    }))
+  };
+}
+
+function doExport() {
+  const json = JSON.stringify(buildExport(), null, 2);
+  // show + copy
+  document.getElementById('exportBox').style.display = 'block';
+  document.getElementById('exportText').value = json;
+  if (navigator.clipboard) navigator.clipboard.writeText(json).catch(()=>{});
+  // download file (AirDrop target)
+  const blob = new Blob([json], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cable-lengths.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  document.getElementById('exportBox').scrollIntoView({behavior:'smooth'});
+}
+
+function resetAll() {
+  if (!confirm('Clear all entered lengths on this device?')) return;
+  data = {}; localStorage.removeItem(STORE); render();
+}
+
+render();
+</script>
+</body>
+</html>

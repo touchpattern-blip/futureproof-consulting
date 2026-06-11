@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Futureproof AV - Drape Calc</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --dim: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --orange: #db6d28;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 0 0 80px 0;
+  -webkit-font-smoothing: antialiased;
+}
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.header h1 { font-size: 17px; font-weight: 600; }
+.header .sub { font-size: 12px; color: var(--dim); }
+
+/* Tabs */
+.tabs {
+  position: sticky; top: 49px; z-index: 99;
+  display: flex; gap: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tab {
+  flex: 1; min-width: 0;
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  border: none; background: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Panels */
+.panel { display: none; padding: 16px; }
+.panel.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.card-head {
+  padding: 12px 14px;
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-head h3 { font-size: 14px; font-weight: 600; }
+.card-head .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--border);
+  color: var(--dim);
+}
+.card-body { padding: 0 14px 14px; display: none; }
+.card.open .card-body { display: block; }
+.card.open .card-head .chevron { transform: rotate(90deg); }
+.chevron { color: var(--dim); transition: transform 0.15s; font-size: 12px; }
+
+/* Tables */
+.spec-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.spec-table td { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.spec-table td:first-child { color: var(--dim); width: 45%; }
+.spec-table td:last-child { font-weight: 500; text-align: right; }
+.spec-table tr:last-child td { border-bottom: none; }
+
+/* Form inputs */
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 15px;
+  -webkit-appearance: none;
+}
+.form-group select { padding-right: 30px; }
+.form-row { display: flex; gap: 10px; }
+.form-row .form-group { flex: 1; }
+
+/* Results */
+.result-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+.result-row {
+  display: flex; justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.result-row:last-child { border-bottom: none; }
+.result-row .label { color: var(--dim); }
+.result-row .value { font-weight: 600; }
+.result-row.highlight .value { color: var(--accent); font-size: 16px; }
+.result-row.pass .value { color: var(--green); }
+.result-row.warn .value { color: var(--yellow); }
+.result-row.fail .value { color: var(--red); }
+
+.section-label {
+  font-size: 12px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 18px 0 8px;
+  font-weight: 600;
+}
+.section-label:first-child { margin-top: 0; }
+
+/* Notes */
+.note {
+  font-size: 12px;
+  color: var(--dim);
+  background: var(--bg);
+  border-left: 2px solid var(--yellow);
+  padding: 8px 10px;
+  margin-top: 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Quick ref pills */
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pill {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--border);
+  color: var(--text);
+}
+.pill.ifr { background: #1a3a1a; color: var(--green); }
+.pill.fr { background: #3a2a1a; color: var(--orange); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Drape Calc</h1>
+    <div class="sub">Futureproof AV</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('calc')">Calculator</button>
+  <button class="tab" onclick="showTab('fabrics')">Fabrics</button>
+  <button class="tab" onclick="showTab('track')">Track</button>
+  <button class="tab" onclick="showTab('ref')">Reference</button>
+</div>
+
+<!-- CALCULATOR -->
+<div id="calc" class="panel active">
+  <div class="section-label">Job Parameters</div>
+
+  <div class="form-group">
+    <label>Fabric</label>
+    <select id="fabricSelect" onchange="onFabricChange()">
+      <option value="custom">Custom...</option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Run Length (ft)</label>
+      <input type="number" id="runLength" value="77" inputmode="decimal" onchange="calc()">
+    </div>
+    <div class="form-group">
+      <label>Finished Height (ft)</label>
+      <input type="number" id="finHeight" value="7" inputmode="decimal" onchange="calc()">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Fullness %</label>
+      <input type="number" id="fullness" value="80" inputmode="decimal" onchange="calc()">
+    </div>
+    <div class="form-group">
+      <label>Roll Width (in)</label>
+      <input type="number" id="rollWidth" value="54" inputmode="decimal" onchange="calc()">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Fabric Weight (oz/LY)</label>
+      <input type="number" id="fabricWeight" value="32" inputmode="decimal" onchange="calc()">
+    </div>
+    <div class="form-group">
+      <label>Track Capacity (lbs/LF)</label>
+      <input type="number" id="trackCap" value="15" inputmode="decimal" onchange="calc()">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Track System</label>
+    <select id="trackSelect" onchange="onTrackChange()">
+      <option value="custom">Custom...</option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Carrier Spacing (in)</label>
+      <input type="number" id="carrierSpacing" value="12" inputmode="decimal" onchange="calc()">
+    </div>
+    <div class="form-group">
+      <label>Carrier Width (in)</label>
+      <input type="number" id="carrierWidth" value="1.8" inputmode="decimal" step="0.1" onchange="calc()">
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="result-box" id="results" style="display:none">
+
+    <div class="section-label">Fabric</div>
+    <div class="result-row highlight">
+      <span class="label">Total Yardage</span>
+      <span class="value" id="rYardage">--</span>
+    </div>
+    <div class="result-row">
+      <span class="label">Fabric Width Required</span>
+      <span class="value" id="rFabricWidth">--</span>
+    </div>
+    <div class="result-row">
+      <span class="label">Widths per Panel</span>
+      <span class="value" id="rWidths">--</span>
+    </div>
+
+    <div class="section-label">Load</div>
+    <div class="result-row">
+      <span class="label">Fabric Load</span>
+      <span class="value" id="rFabricLoad">--</span>
+    </div>
+    <div class="result-row">
+      <span class="label">Hardware Load</span>
+      <span class="value" id="rHwLoad">--</span>
+    </div>
+    <div class="result-row">
+      <span class="label">Total Load</span>
+      <span class="value" id="rTotalLoad">--</span>
+    </div>
+    <div class="result-row" id="rCapRow">
+      <span class="label">Capacity Used</span>
+      <span class="value" id="rCapPct">--</span>
+    </div>
+    <div class="result-row highlight">
+      <span class="label">Total Curtain Weight</span>
+      <span class="value" id="rTotalWeight">--</span>
+    </div>
+
+    <div class="section-label">Stack</div>
+    <div class="result-row">
+      <span class="label">Carrier Stations</span>
+      <span class="value" id="rStations">--</span>
+    </div>
+    <div class="result-row highlight">
+      <span class="label">Stack Width</span>
+      <span class="value" id="rStackWidth">--</span>
+    </div>
+    <div class="result-row">
+      <span class="label">Stack Depth</span>
+      <span class="value" id="rStackDepth">--</span>
+    </div>
+
+    <div class="section-label">Draw Limits</div>
+    <div class="result-row" id="rDrawRow">
+      <span class="label">Cord-Op Max</span>
+      <span class="value" id="rDrawLimit">--</span>
+    </div>
+
+    <div class="note" id="rNotes" style="display:none"></div>
+  </div>
+</div>
+
+<!-- FABRICS -->
+<div id="fabrics" class="panel"></div>
+
+<!-- TRACK -->
+<div id="track" class="panel"></div>
+
+<!-- REFERENCE -->
+<div id="ref" class="panel">
+  <div class="section-label">Fullness Guide</div>
+  <div class="card open">
+    <div class="card-body" style="display:block">
+      <table class="spec-table">
+        <tr><td>Flat / Taut</td><td>0%</td></tr>
+        <tr><td>Light Gather</td><td>25-50%</td></tr>
+        <tr><td>Standard Pleat</td><td>50%</td></tr>
+        <tr><td>Full Shirr</td><td>75-100%</td></tr>
+        <tr><td>Heavy Shirr</td><td>100-150%</td></tr>
+      </table>
+      <div class="note">Fullness % = extra fabric beyond flat run. 80% on a 77' run = 138.6' of fabric.</div>
+    </div>
+  </div>
+
+  <div class="section-label">Pleat Styles</div>
+  <div class="card open">
+    <div class="card-body" style="display:block">
+      <table class="spec-table">
+        <tr><td>Flat</td><td>No fullness, grommeted or tied</td></tr>
+        <tr><td>Box Pleat</td><td>50% fullness, formal look</td></tr>
+        <tr><td>Pinch Pleat</td><td>50-100%, classic theatrical</td></tr>
+        <tr><td>Shirring</td><td>75-100%, sewn to webbing</td></tr>
+        <tr><td>Tab/Tie</td><td>Varies, scenic use</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-label">Fire Rating Quick Ref</div>
+  <div class="card open">
+    <div class="card-body" style="display:block">
+      <table class="spec-table">
+        <tr><td>NFPA 701</td><td>National standard, most venues</td></tr>
+        <tr><td>CA Title 19</td><td>California State Fire Marshal</td></tr>
+        <tr><td>Boston Fire Code</td><td>Strictest municipal code</td></tr>
+        <tr><td>CAN/ULC-S109</td><td>Canadian standard</td></tr>
+        <tr><td>BS 5867</td><td>UK standard</td></tr>
+      </table>
+      <div class="note">IFR (Inherently Flame Retardant) = permanent, won't wash out. FR (Flame Retardant) = topical treatment, must be re-applied after cleaning.</div>
+    </div>
+  </div>
+
+  <div class="section-label">Weight Conversions</div>
+  <div class="card open">
+    <div class="card-body" style="display:block">
+      <table class="spec-table">
+        <tr><td>oz/LY to oz/SY</td><td>Divide by (width/36)</td></tr>
+        <tr><td>oz/LY to lbs/LF</td><td>oz/LY x (H_ft / 36) / 16</td></tr>
+        <tr><td>54" roll: 1 LY</td><td>= 1.5 SY</td></tr>
+        <tr><td>62" roll: 1 LY</td><td>= 1.72 SY</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-label">Common Dims</div>
+  <div class="card open">
+    <div class="card-body" style="display:block">
+      <table class="spec-table">
+        <tr><td>Proscenium Grand</td><td>16-22' H</td></tr>
+        <tr><td>Proscenium Main</td><td>28-40' H</td></tr>
+        <tr><td>Legs (side mask)</td><td>Match border height</td></tr>
+        <tr><td>Borders (top mask)</td><td>3-6' drop typical</td></tr>
+        <tr><td>Cyclorama</td><td>Full stage H + 2-4'</td></tr>
+        <tr><td>Traveler</td><td>Match proscenium opening</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const FABRICS = [
+  { name:'32oz Imperial Velour', brand:'Rose Brand', weight:32, rollWidth:54, sqYdWeight:21, composition:'100% IFR Polyester', fire:'NFPA 701, CA Title 19', ifr:true, notes:'Premium heavyweight theatrical velour. Gold standard for main drapes and travelers.' },
+  { name:'25oz Encore Velour', brand:'Rose Brand', weight:25, rollWidth:54, sqYdWeight:16.5, composition:'100% IFR Polyester', fire:'NFPA 701, CA Title 19', ifr:true, notes:'Mid-weight velour. Good for legs, borders, backdrops where 32oz is overkill.' },
+  { name:'21oz Commando Cloth', brand:'Rose Brand', weight:21, rollWidth:54, sqYdWeight:14, composition:'100% Cotton', fire:'NFPA 701 (FR treated)', ifr:false, notes:'Heavy opaque cotton. Light block without velour cost. Must be FR treated.' },
+  { name:'16oz Duvetyne', brand:'Rose Brand', weight:16, rollWidth:54, sqYdWeight:10.7, composition:'100% Cotton', fire:'NFPA 701 (FR treated)', ifr:false, notes:'Standard black masking fabric. Legs, borders, kabuki drops. Workhorse.' },
+  { name:'12oz Muslin (Bleached)', brand:'Rose Brand', weight:12, rollWidth:118, sqYdWeight:4.4, composition:'100% Cotton', fire:'NFPA 701 (FR treated)', ifr:false, notes:'Paint/dye backdrop. Seamless widths to 39\'. Light diffusion.' },
+  { name:'Sharkstooth Scrim', brand:'Rose Brand', weight:6, rollWidth:118, sqYdWeight:2.2, composition:'100% Cotton', fire:'NFPA 701 (FR treated)', ifr:false, notes:'Reveal/conceal effect. Seamless to 35\'. Lit from front = opaque, lit from behind = transparent.' },
+  { name:'Poly Muslin (IFR)', brand:'Rose Brand', weight:8, rollWidth:200, sqYdWeight:2.9, composition:'100% IFR Polyester', fire:'NFPA 701, CA Title 19', ifr:true, notes:'Seamless to 55\'. Cyc/backdrop. No FR retreatment needed.' },
+  { name:'SuperSatin', brand:'Rose Brand', weight:10, rollWidth:62, sqYdWeight:5.8, composition:'100% IFR Polyester', fire:'NFPA 701, CA Title 19', ifr:true, notes:'Silky reflective drape. Event/gala use. Decorative, not full blackout.' },
+  { name:'IFR Banjo Cloth', brand:'Rose Brand', weight:7, rollWidth:118, sqYdWeight:2.5, composition:'100% IFR Polyester', fire:'NFPA 701, CA Title 19', ifr:true, notes:'Textured weave for backdrops, scrims. Seamless widths.' },
+];
+
+const TRACKS = [
+  { name:'ADC Rig-i-Flex 1400', type:'I-beam', capacity:15, profile:'2.5" H', material:'Aluminum', cordMax1way:40, cordMaxBipart:60, clampModel:'ADC 1423', clampHeight:1, carrierModel:'ADC single carrier', carrierSwivel:1.125, notes:'Heavy-duty theatrical standard. Curved sections available. Ceiling or wall mount.' },
+  { name:'ADC Rig-i-Flex 140', type:'I-beam', capacity:10, profile:'1.75" H', material:'Aluminum', cordMax1way:30, cordMaxBipart:50, clampModel:'ADC 143', clampHeight:0.75, carrierModel:'ADC 140 carrier', carrierSwivel:1, notes:'Light/medium duty. Good for legs, borders, shorter runs.' },
+  { name:'ADC S-141 (SECOA type)', type:'I-beam', capacity:12, profile:'2" H', material:'Steel', cordMax1way:35, cordMaxBipart:55, clampModel:'Varies', clampHeight:1, carrierModel:'S-141 carrier', carrierSwivel:1, notes:'Steel I-beam. Heavier than aluminum but higher load per dollar.' },
+  { name:'ADC 170 Track', type:'Box', capacity:8, profile:'1.5" H', material:'Aluminum', cordMax1way:20, cordMaxBipart:40, clampModel:'ADC 173', clampHeight:0.75, carrierModel:'ADC 170 carrier', carrierSwivel:0.75, notes:'Light duty box track. Cubicle/divider drapes, light scenic.' },
+  { name:'Unistrut P1000 (rigged)', type:'Channel', capacity:25, profile:'1-5/8" sq', material:'Steel', cordMax1way:0, cordMaxBipart:0, clampModel:'N/A (direct bolt)', clampHeight:0, carrierModel:'Beam clamp + ring', carrierSwivel:1.5, notes:'Not a curtain track -- structural channel used as pipe alternative. Manual pull only.' },
+];
+
+// Populate selects
+function populateSelects() {
+  const fs = document.getElementById('fabricSelect');
+  FABRICS.forEach((f,i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = f.name + ' (' + f.weight + 'oz, ' + f.rollWidth + '")';
+    fs.appendChild(o);
+  });
+  fs.value = '0'; onFabricChange();
+
+  const ts = document.getElementById('trackSelect');
+  TRACKS.forEach((t,i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = t.name + ' (' + t.capacity + ' lbs/LF)';
+    ts.appendChild(o);
+  });
+  ts.value = '0'; onTrackChange();
+}
+
+function onFabricChange() {
+  const idx = document.getElementById('fabricSelect').value;
+  if (idx === 'custom') return;
+  const f = FABRICS[idx];
+  document.getElementById('fabricWeight').value = f.weight;
+  document.getElementById('rollWidth').value = f.rollWidth;
+  calc();
+}
+
+function onTrackChange() {
+  const idx = document.getElementById('trackSelect').value;
+  if (idx === 'custom') return;
+  const t = TRACKS[idx];
+  document.getElementById('trackCap').value = t.capacity;
+  calc();
+}
+
+function calc() {
+  const run = parseFloat(document.getElementById('runLength').value) || 0;
+  const height = parseFloat(document.getElementById('finHeight').value) || 0;
+  const full = parseFloat(document.getElementById('fullness').value) || 0;
+  const rollW = parseFloat(document.getElementById('rollWidth').value) || 54;
+  const fabWt = parseFloat(document.getElementById('fabricWeight').value) || 0;
+  const trackCap = parseFloat(document.getElementById('trackCap').value) || 15;
+  const cSpace = parseFloat(document.getElementById('carrierSpacing').value) || 12;
+  const cWidth = parseFloat(document.getElementById('carrierWidth').value) || 1.8;
+
+  if (!run || !height) { document.getElementById('results').style.display = 'none'; return; }
+
+  const fullFactor = 1 + full / 100;
+  const totalFabricFt = run * fullFactor;
+  const rollWidthFt = rollW / 12;
+  const widthsPerPanel = Math.ceil(height / rollWidthFt);
+  const totalYardage = (totalFabricFt * widthsPerPanel) / 3;
+
+  // Load: oz/LY to lbs/LF
+  // 1 LY of fabric at rollWidth covers rollWidthFt of height
+  // For the hung curtain: weight per linear foot along the track
+  const fabricLbsPerLY = fabWt / 16;
+  const fabricLbsPerLF = fabricLbsPerLY * widthsPerPanel * fullFactor / (rollW / 12);
+  // Simplified: weight = (oz/LY * fullness * widths) / (rollWidth_ft * 16)
+  const hwLoad = 0.4;
+  const totalLoadLF = fabricLbsPerLF + hwLoad;
+  const capPct = (totalLoadLF / trackCap) * 100;
+  const totalWeight = totalLoadLF * run;
+
+  // Stack
+  const stations = Math.ceil(run * 12 / cSpace);
+  const stackWidthFt = (stations * cWidth / 12);
+  const stackDepth = full > 50 ? '8-12"' : full > 25 ? '4-8"' : '2-4"';
+
+  // Draw limits
+  const trackIdx = document.getElementById('trackSelect').value;
+  let drawNote = '';
+  let cordMax = '';
+  if (trackIdx !== 'custom') {
+    const t = TRACKS[trackIdx];
+    if (t.cordMax1way > 0) {
+      cordMax = t.cordMax1way + "' 1-way / " + t.cordMaxBipart + "' bi-part";
+      if (run > t.cordMaxBipart) {
+        drawNote = 'Run exceeds cord-operated limits. Motorization or multi-section draw required.';
+      } else if (run > t.cordMax1way) {
+        drawNote = 'Exceeds 1-way cord limit. Bi-part or motor recommended.';
+      }
+    } else {
+      cordMax = 'Manual pull only';
+    }
+  } else {
+    cordMax = '--';
+  }
+
+  // Display
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('rYardage').textContent = totalYardage.toFixed(1) + ' LY';
+  document.getElementById('rFabricWidth').textContent = totalFabricFt.toFixed(1) + "'";
+  document.getElementById('rWidths').textContent = widthsPerPanel;
+  document.getElementById('rFabricLoad').textContent = fabricLbsPerLF.toFixed(1) + ' lbs/LF';
+  document.getElementById('rHwLoad').textContent = hwLoad + ' lbs/LF';
+  document.getElementById('rTotalLoad').textContent = totalLoadLF.toFixed(1) + ' lbs/LF';
+  document.getElementById('rCapPct').textContent = capPct.toFixed(1) + '%';
+  document.getElementById('rTotalWeight').textContent = '~' + Math.round(totalWeight) + ' lbs';
+  document.getElementById('rStations').textContent = stations;
+  document.getElementById('rStackWidth').textContent = stackWidthFt.toFixed(1) + "'";
+  document.getElementById('rStackDepth').textContent = stackDepth;
+  document.getElementById('rDrawLimit').textContent = cordMax;
+
+  // Capacity color
+  const capRow = document.getElementById('rCapRow');
+  capRow.className = 'result-row ' + (capPct > 80 ? 'fail' : capPct > 60 ? 'warn' : 'pass');
+
+  // Draw color
+  const drawRow = document.getElementById('rDrawRow');
+  drawRow.className = 'result-row ' + (drawNote.includes('Exceeds') || drawNote.includes('exceeds') ? 'warn' : '');
+
+  // Notes
+  const notesEl = document.getElementById('rNotes');
+  const notes = [];
+  if (drawNote) notes.push(drawNote);
+  if (capPct > 80) notes.push('Load is above 80% capacity. Consider upgrading track or reducing fullness.');
+  if (widthsPerPanel > 2) notes.push('Multiple widths (' + widthsPerPanel + ') -- seaming required. Consider wider roll stock.');
+  if (notes.length) {
+    notesEl.style.display = 'block';
+    notesEl.innerHTML = notes.join('<br>');
+  } else {
+    notesEl.style.display = 'none';
+  }
+}
+
+// Build fabric cards
+function buildFabricCards() {
+  const panel = document.getElementById('fabrics');
+  panel.innerHTML = '<div class="section-label">Rose Brand Catalog</div>';
+  FABRICS.forEach(f => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head" onclick="this.parentElement.classList.toggle('open')">
+        <div>
+          <h3>${f.name}</h3>
+          <div class="pill-row">
+            <span class="pill">${f.weight}oz/LY</span>
+            <span class="pill">${f.rollWidth}"</span>
+            <span class="pill ${f.ifr?'ifr':'fr'}">${f.ifr?'IFR':'FR Treated'}</span>
+          </div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="card-body">
+        <table class="spec-table">
+          <tr><td>Weight</td><td>${f.weight} oz/LY (${f.sqYdWeight} oz/SY)</td></tr>
+          <tr><td>Roll Width</td><td>${f.rollWidth}"</td></tr>
+          <tr><td>Composition</td><td>${f.composition}</td></tr>
+          <tr><td>Fire Rating</td><td>${f.fire}</td></tr>
+        </table>
+        <div class="note">${f.notes}</div>
+      </div>`;
+    panel.appendChild(card);
+  });
+}
+
+// Build track cards
+function buildTrackCards() {
+  const panel = document.getElementById('track');
+  panel.innerHTML = '<div class="section-label">Track Systems</div>';
+  TRACKS.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head" onclick="this.parentElement.classList.toggle('open')">
+        <div>
+          <h3>${t.name}</h3>
+          <div class="pill-row">
+            <span class="pill">${t.capacity} lbs/LF</span>
+            <span class="pill">${t.type}</span>
+            <span class="pill">${t.material}</span>
+          </div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="card-body">
+        <table class="spec-table">
+          <tr><td>Profile</td><td>${t.profile}</td></tr>
+          <tr><td>Capacity</td><td>${t.capacity} lbs/LF</td></tr>
+          <tr><td>Clamp</td><td>${t.clampModel} (${t.clampHeight}" drop)</td></tr>
+          <tr><td>Carrier</td><td>${t.carrierModel}</td></tr>
+          <tr><td>Cord-Op 1-Way</td><td>${t.cordMax1way ? t.cordMax1way+"'" : 'N/A'}</td></tr>
+          <tr><td>Cord-Op Bi-Part</td><td>${t.cordMaxBipart ? t.cordMaxBipart+"'" : 'N/A'}</td></tr>
+        </table>
+        <div class="note">${t.notes}</div>
+      </div>`;
+    panel.appendChild(card);
+  });
+
+  // Clearance calculator
+  panel.innerHTML += `
+    <div class="section-label">Vertical Clearance</div>
+    <div class="card open">
+      <div class="card-body" style="display:block">
+        <table class="spec-table">
+          <tr><td>Ceiling clamp drop</td><td>~1"</td></tr>
+          <tr><td>Track channel (1400)</td><td>2.5"</td></tr>
+          <tr><td>Carrier + swivel</td><td>~1.125"</td></tr>
+          <tr><td><strong>Total system height</strong></td><td><strong>~4.625"</strong></td></tr>
+        </table>
+        <div class="note">Add finished drape height to system height for total drop from soffit to hem. Source: ADC CAT-140CEIL-02.</div>
+      </div>
+    </div>`;
+}
+
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+populateSelects();
+buildFabricCards();
+buildTrackCards();
+calc();
+</script>
+</body>
+</html>

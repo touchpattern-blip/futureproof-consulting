@@ -1,0 +1,17 @@
+[
+  { "ip": "10.1.1.101", "sec": "BAL1", "group": "BAL", "height_ft": 14, "height": "14'0\"", "scale": 97.31, "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.102", "sec": "BAL2", "group": "BAL", "height_ft": 10, "height": "10'0\"", "scale": 145.46, "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.103", "sec": "BAL2", "group": "BAL", "height_ft": 11.42, "height": "11'5\"", "scale": 171.06, "bottom": "", "gap_to_next_ft": 10, "skip": false },
+  { "ip": "10.1.1.104", "sec": "BAL5", "group": "BAL", "height_ft": 11, "height": "11'0\"", "scale": "", "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.105", "sec": "BAL5", "group": "BAL", "height_ft": 11, "height": "11'0\"", "scale": "", "bottom": "", "gap_to_next_ft": 6, "skip": false },
+  { "ip": "10.1.1.106", "sec": "BAL5", "group": "BAL", "height_ft": 14.5, "height": "14'6\"", "scale": "", "bottom": "", "gap_to_next_ft": 5.25, "skip": false },
+  { "ip": "10.1.1.107", "sec": "BAL6", "group": "BAL", "height_ft": 11, "height": "11'0\"", "scale": "", "bottom": "", "gap_to_next_ft": 7.17, "skip": false },
+  { "ip": "10.1.1.108", "sec": "BAL7", "group": "BAL", "height_ft": 12.5, "height": "12'6\"", "scale": "", "bottom": "", "gap_to_next_ft": 7.17, "skip": false },
+  { "ip": "10.1.1.109", "sec": "BAL8", "group": "BAL", "height_ft": 11.5, "height": "11'6\"", "scale": "", "bottom": "", "gap_to_next_ft": 5.25, "skip": false },
+  { "ip": "10.1.1.110", "sec": "BAL9", "group": "BAL", "height_ft": 14.5, "height": "14'6\"", "scale": "", "bottom": "", "gap_to_next_ft": 6, "skip": false },
+  { "ip": "10.1.1.111", "sec": "BAL9", "group": "BAL", "height_ft": 11, "height": "11'0\"", "scale": "", "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.112", "sec": "BAL9", "group": "BAL", "height_ft": 11, "height": "11'0\"", "scale": "", "bottom": "", "gap_to_next_ft": 10, "skip": false },
+  { "ip": "10.1.1.113", "sec": "BAL12", "group": "BAL", "height_ft": 11.42, "height": "11'5\"", "scale": 171.06, "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.114", "sec": "BAL12", "group": "BAL", "height_ft": 10, "height": "10'0\"", "scale": 145.46, "bottom": "", "gap_to_next_ft": 5, "skip": false },
+  { "ip": "10.1.1.115", "sec": "BAL13", "group": "BAL", "height_ft": 14, "height": "14'0\"", "scale": 97.31, "bottom": "", "gap_to_next_ft": "", "skip": false }
+]
