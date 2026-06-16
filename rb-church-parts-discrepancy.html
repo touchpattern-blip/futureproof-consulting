@@ -1,0 +1,93 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>RB Church Parts &mdash; Discrepancy</title>
+<style>
+:root{--bg:#0e1116;--card:#161b22;--line:#283040;--txt:#e6edf3;--mut:#8b95a5;--up:#3fb950;--down:#58a6ff;--new:#f2c14e;--zero:#8b95a5;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,Arial,sans-serif;padding:24px;}
+h1{font-size:21px;margin:0 0 2px}
+h2{font-size:15px;margin:24px 0 8px;color:#58a6ff;border-bottom:1px solid var(--line);padding-bottom:4px}
+.sub{color:var(--mut);font-size:12px;margin-bottom:8px;max-width:980px}
+table{border-collapse:collapse;width:100%;max-width:1000px;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:6px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#0b0e13;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+tr.sect td{background:#1d2b3a;color:#58a6ff;font-weight:700;font-size:12px;text-transform:uppercase}
+.part{font-weight:600}.spec{color:var(--mut);font-size:11px;font-weight:400}
+.num{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.exp{font-weight:700;font-size:15px}
+.old{color:var(--mut)}
+.d{font-weight:700;white-space:nowrap}
+.d.up{color:var(--up)}.d.down{color:var(--down)}.d.new{color:var(--new)}.d.zero{color:var(--zero)}
+.note{color:var(--mut);font-size:11.5px;max-width:340px}
+.cards{display:flex;gap:14px;flex-wrap:wrap;max-width:1000px;margin-bottom:6px}
+.find{flex:1;min-width:280px;background:var(--card);border:1px solid var(--line);border-left:4px solid #f2c14e;border-radius:8px;padding:12px 14px}
+.find h3{margin:0 0 6px;font-size:13.5px}
+.find p{margin:0 0 6px;font-size:12.5px;color:#cdd6e0}
+.find .res{font-size:12px;color:var(--up);font-weight:700}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;border:1px solid var(--line);margin-left:6px;vertical-align:middle}
+.tag.over{color:var(--up)}.tag.under{color:var(--down)}.tag.new{color:var(--new)}
+@media print{
+  @page{size:letter;margin:0.5in}
+  body{background:#fff;color:#000;padding:0;font-size:11px}
+  h1{font-size:16px}h2{font-size:13px;color:#000;border-color:#000;page-break-after:avoid}
+  .sub{color:#333}
+  table{background:#fff!important;border:1px solid #000;border-radius:0;max-width:100%}
+  tbody td{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr{page-break-inside:avoid}thead{display:table-header-group}
+  th{background:#000!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr.sect td{background:#ddd!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  th,td{border-bottom:1px solid #999;padding:5px 7px}
+  .part,.exp{color:#000}.old{color:#444}.note{color:#333}
+  .d.up,.d.down,.d.new,.d.zero{color:#000}
+  .cards{display:flex;gap:10px}
+  .find{background:#fff!important;color:#000;border:1px solid #000;border-left:4px solid #000;page-break-inside:avoid}
+  .find h3,.find p{color:#000}.find .res{color:#000}
+  .tag{color:#000!important;border-color:#000}
+  .noprint{display:none!important}
+}
+</style></head><body>
+<h1>RB Church Parts &mdash; Discrepancy <span style="font-weight:400;font-size:13px;color:#8b95a5">v2 bottom-up vs. prepared sheet</span></h1>
+<div class="sub">What the from-scratch per-mount-type count (50 strut / 40 beam / 20 wall = 110 pts) found vs. the earlier prepared sheet. <b>Experiment</b> = new authoritative number. <b>Old</b> = prepared sheet "Need". &nbsp;Meridian 2026-06-16</div>
+
+<h2>Line-by-line delta</h2>
+<table><thead><tr><th>Part / SKU</th><th class="num">Experiment</th><th class="num">Old sheet</th><th class="num">&Delta;</th><th>Why it moved</th></tr></thead>
+<tbody>
+
+<tr class="sect"><td colspan="5">Big divergences</td></tr>
+<tr><td class="part">1/2"-13 hex nut</td><td class="num exp">370</td><td class="num old">0</td><td class="num d up">+370 <span class="tag over">OVER</span></td><td class="note">Old sheet assumed bolt threads straight into strut nut (no loose nuts). Field call: 3&ndash;4 loose nuts per point to trap 1/2" hw anywhere.</td></tr>
+<tr><td class="part">1/2" threaded rod <span class="spec">6"&ndash;2'</span></td><td class="num exp">110</td><td class="num old">0</td><td class="num d up">+110 <span class="tag over">OVER</span></td><td class="note">Old sheet treated rod &amp; bolt as either/or (rod defaulted 0). Field call: carry <b>both</b> rod and bolt at every point.</td></tr>
+<tr><td class="part">Unistrut wall-mount bracket</td><td class="num exp">20</td><td class="num old">&mdash;</td><td class="num d new">NEW <span class="tag new">ADD</span></td><td class="note">Whole wall-mount bucket (20 pts) never existed on the prepared sheet.</td></tr>
+<tr><td class="part">90&deg; angle bracket</td><td class="num exp">20</td><td class="num old">&mdash;</td><td class="num d new">NEW <span class="tag new">ADD</span></td><td class="note">Replaces THREADR at the 20 wall points. Not on old sheet.</td></tr>
+<tr><td class="part">Garvin MFC-1213 <span class="spec">1/2" jaw</span></td><td class="num exp">40</td><td class="num old">25</td><td class="num d up">+15 <span class="tag over">SHORT</span></td><td class="note">Actual beam-clamp points = 40. Old sheet would have shipped 15 short.</td></tr>
+
+<tr class="sect"><td colspan="5">Moderate</td></tr>
+<tr><td class="part">Bridge beam clamp <span class="spec">Wesanco W5709EG</span></td><td class="num exp">100</td><td class="num old">165</td><td class="num d down">&minus;65 <span class="tag under">UNDER</span></td><td class="note">50 strut points &times; 2 = 100. Old sheet padded ~75 bridges &times;2. 140 already ordered &rarr; still covered.</td></tr>
+<tr><td class="part">Strut nut <span class="spec">W2-8WSEG</span></td><td class="num exp">70</td><td class="num old">110</td><td class="num d down">&minus;40 <span class="tag under">UNDER</span></td><td class="note">50 strut + 20 wall = 70. Old sheet padded to 110.</td></tr>
+<tr><td class="part">THREADR <span class="spec">TRAC0002</span></td><td class="num exp">90</td><td class="num old">100</td><td class="num d down">&minus;10 <span class="tag under">UNDER</span></td><td class="note">Strut + beam only (50+40). Wall points use the angle bracket instead.</td></tr>
+<tr><td class="part">1/2" split lock washer</td><td class="num exp">150</td><td class="num old">110</td><td class="num d up">+40 <span class="tag over">OVER</span></td><td class="note">Beam points carry 2 each (capture both joints).</td></tr>
+<tr><td class="part">1/2" flat washer</td><td class="num exp">150</td><td class="num old">110</td><td class="num d up">+40 <span class="tag over">OVER</span></td><td class="note">Same &mdash; 2 per beam point.</td></tr>
+<tr><td class="part">4208BL track clip</td><td class="num exp">110</td><td class="num old">100</td><td class="num d up">+10 <span class="tag over">OVER</span></td><td class="note">1 per point &times; 110 actual points (old base was 100).</td></tr>
+
+<tr class="sect"><td colspan="5">Matched &mdash; no change</td></tr>
+<tr><td class="part">1/2"-13 &times; 1.5" hex bolt</td><td class="num exp">110</td><td class="num old">110</td><td class="num d zero">0</td><td class="note">&mdash;</td></tr>
+<tr><td class="part">5/16" bolt / nut / split / serrated / flat</td><td class="num exp">110 ea</td><td class="num old">110 ea</td><td class="num d zero">0</td><td class="note">Universal track-clip set, same every point.</td></tr>
+</tbody></table>
+
+<h2>The three findings</h2>
+<div class="cards">
+  <div class="find">
+    <h3>1 &middot; 1/2" nuts: 370 vs 0</h3>
+    <p>Model disagreement, not a count error. Old sheet: bolt-into-strut-nut, ~no loose nuts. Field: 3&ndash;4 loose nuts at every point.</p>
+    <p class="res">RESOLVED &rarr; keep all 370 (trap 1/2" hw at any point regardless).</p>
+  </div>
+  <div class="find">
+    <h3>2 &middot; Rod AND bolt, every point</h3>
+    <p>Old sheet carried them as substitutes (bolt 110, rod 0). Both are wanted at each point for field flex on drop height.</p>
+    <p class="res">RESOLVED &rarr; both at 110.</p>
+  </div>
+  <div class="find">
+    <h3>3 &middot; Real order gaps</h3>
+    <p>Wall bucket (20 wall brackets + 20 angle brackets + their strut nuts) was entirely missing. MFC-1213 was 15 short.</p>
+    <p class="res">RESOLVED &rarr; wall bucket added, MFC corrected to 40.</p>
+  </div>
+</div>
+<div class="sub" style="margin-top:10px">Still open (flagged on the count sheet, not in totals): <b>wall anchors (CMU) qty</b> &middot; <b>parked strut channel (50&times; 6')</b>.</div>
+</body></html>
