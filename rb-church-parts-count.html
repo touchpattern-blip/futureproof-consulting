@@ -1,0 +1,172 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>RB Church Parts Count v2</title>
+<style>
+:root{--bg:#0e1116;--card:#161b22;--line:#283040;--txt:#e6edf3;--mut:#8b95a5;--need:#f2c14e;--miss:#ff6b6b;--ok:#3fb950;--accent:#58a6ff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,Arial,sans-serif;padding:24px;}
+h1{font-size:21px;margin:0 0 2px}
+h2{font-size:15px;margin:26px 0 8px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:4px}
+.sub{color:var(--mut);font-size:12px;margin-bottom:8px;max-width:980px}
+table{border-collapse:collapse;width:100%;max-width:1100px;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:6px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#0b0e13;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+tr.sect td{background:#1d2b3a;color:var(--accent);font-weight:700;font-size:12px;text-transform:uppercase}
+.part{font-weight:600;white-space:nowrap}.spec{color:var(--mut);font-size:11px;font-weight:400}
+.desc{color:var(--mut);font-size:11px}
+.num{text-align:center;white-space:nowrap}.need{color:var(--need);font-weight:700;font-size:15px}
+.calc{color:var(--mut);font-size:11px}
+.miss{font-weight:700}.miss.has{color:var(--miss)}.miss.zero{color:var(--ok)}
+input.oh{width:60px;background:#0b0e13;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:5px;text-align:center;font:inherit}
+input.oh:focus{outline:none;border-color:var(--accent)}
+.bar{display:flex;gap:14px;align-items:center;margin:14px 0;flex-wrap:wrap}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:13px}
+.pill b{color:var(--need)}
+button{background:var(--accent);color:#06223f;border:0;border-radius:6px;padding:8px 14px;font-weight:700;cursor:pointer}
+button.sec{background:#21262d;color:var(--txt);border:1px solid var(--line)}
+.cards{display:flex;gap:14px;flex-wrap:wrap;max-width:1100px}
+.kit{flex:1;min-width:280px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.kit h3{margin:0 0 2px;font-size:14px}.kit .pts{color:var(--need);font-size:12px;margin-bottom:8px}
+.kit ul{margin:0;padding-left:16px}.kit li{font-size:12.5px;margin:2px 0}
+.kit li b{color:var(--txt)}.kit li span{color:var(--mut)}
+.flag{color:var(--miss)}
+@media print{
+  @page{size:letter;margin:0.5in}
+  body{background:#fff;color:#000;padding:0;font-size:11px}
+  h1{font-size:16px}h2{font-size:13px;color:#000;border-color:#000;page-break-after:avoid}
+  .sub{color:#333}
+  table{border:1px solid #000;border-radius:0;max-width:100%;page-break-inside:auto}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  th{background:#000!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tr.sect td{background:#ddd!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-top:1px solid #000}
+  th,td{border-bottom:1px solid #999;padding:5px 7px}
+  .need{color:#000}.calc,.desc,.spec{color:#333}
+  input.oh{display:none}
+  td.ohcell::after{content:"";display:block;min-width:54px;min-height:20px;border:1px solid #000}
+  td.ordercell::after{content:"";display:block;min-width:54px;min-height:20px;border:1px solid #000}
+  .miss{display:none}
+  .bar,.noprint{display:none!important}
+  .cards{display:flex;gap:10px}.kit{background:#fff!important;color:#000;border:1px solid #000;page-break-inside:avoid;margin-bottom:8px}
+  .kit h3{color:#000}.kit li,.kit li b{color:#000}.kit .pts{color:#000;font-weight:700}.kit li span{color:#333}
+  .flag{color:#000;font-weight:700}
+}
+</style></head><body>
+<h1>RB Church &mdash; Curtain Track Parts Count <span style="font-weight:400;font-size:13px;color:#8b95a5">v2 / bottom-up by mount type</span></h1>
+<div class="sub">ADC 1400 Rig-I-Flex &nbsp;|&nbsp; <b>110 hang points</b> = 50 strut-span + 40 beam-clamp + 20 wall-mount &nbsp;|&nbsp; counts built per-point from the field, no padding &nbsp;|&nbsp; rod AND bolt carried at every point (field flex); all loose 1/2" nuts kept to trap hardware anywhere &nbsp;|&nbsp; Meridian 2026-06-16</div>
+
+<h2>Assembly recipes &mdash; what each point eats</h2>
+<div class="cards">
+  <div class="kit">
+    <h3>STRUT SPAN</h3><div class="pts">&times; 50 points</div>
+    <ul>
+      <li><b>2&times;</b> Unistrut beam clamp</li>
+      <li><b>1&times;</b> Strut nut</li>
+      <li><b>1&times;</b> 1/2" threaded rod <span>(6"&ndash;2', varies)</span></li>
+      <li><b>1&times;</b> 1/2" &times; 1.5" bolt <span>(short-drop alt)</span></li>
+      <li><b>3&times;</b> 1/2" nut</li>
+      <li><b>1&times;</b> 1/2" split washer</li>
+      <li><b>1&times;</b> 1/2" flat washer</li>
+      <li><b>1&times;</b> THREADR</li>
+      <li><b>1&times;</b> 4208BL track clip</li>
+      <li><b>1&times;</b> 5/16" &times; 1.5" bolt</li>
+      <li><b>1&times;</b> 5/16" nut / split / serrated / flat</li>
+      <li><span class="flag">parked: 1&times; strut channel 6'</span></li>
+    </ul>
+  </div>
+  <div class="kit">
+    <h3>BEAM CLAMP</h3><div class="pts">&times; 40 points</div>
+    <ul>
+      <li><b>1&times;</b> Reversible beam clamp MFC-1213 <span>(1/2" jaw, own attach hw)</span></li>
+      <li><b>1&times;</b> 1/2" threaded rod <span>(6"&ndash;2')</span></li>
+      <li><b>1&times;</b> 1/2" &times; 1.5" bolt <span>(short-drop alt)</span></li>
+      <li><b>4&times;</b> 1/2" nut</li>
+      <li><b>2&times;</b> 1/2" split washer</li>
+      <li><b>2&times;</b> 1/2" flat washer</li>
+      <li><b>1&times;</b> THREADR</li>
+      <li><b>1&times;</b> 4208BL track clip</li>
+      <li><b>1&times;</b> 5/16" &times; 1.5" bolt</li>
+      <li><b>1&times;</b> 5/16" nut / split / serrated / flat</li>
+    </ul>
+  </div>
+  <div class="kit">
+    <h3>WALL MOUNT</h3><div class="pts">&times; 20 points</div>
+    <ul>
+      <li><b>1&times;</b> Unistrut wall-mount bracket</li>
+      <li><b>1&times;</b> Strut nut</li>
+      <li><b>1&times;</b> 90&deg; angle bracket <span>(replaces THREADR)</span></li>
+      <li><b>1&times;</b> 1/2" threaded rod</li>
+      <li><b>1&times;</b> 1/2" &times; 1.5" bolt</li>
+      <li><b>3&times;</b> 1/2" nut</li>
+      <li><b>1&times;</b> 1/2" split washer</li>
+      <li><b>1&times;</b> 1/2" flat washer</li>
+      <li><b>1&times;</b> 4208BL track clip</li>
+      <li><b>1&times;</b> 5/16" &times; 1.5" bolt</li>
+      <li><b>1&times;</b> 5/16" nut / split / serrated / flat</li>
+      <li><span class="flag">verify: wall anchors (CMU) &mdash; qty TBD</span></li>
+    </ul>
+  </div>
+</div>
+
+<div class="bar noprint">
+  <span class="pill">Lines short: <b id="shortn">0</b></span>
+  <button onclick="exp()">Copy as TSV</button>
+  <button class="sec" onclick="zero()">Clear</button>
+  <button class="sec" onclick="window.print()">Print</button>
+</div>
+
+<h2>Order totals &mdash; walk the shelf, fill On&nbsp;Hand &amp; To&nbsp;Order</h2>
+<table><thead><tr><th>Part / SKU</th><th>Calc</th><th>Need</th><th>On Hand</th><th>To Order</th><th class="noprint">Missing</th></tr></thead>
+<tbody>
+
+<tr class="sect"><td colspan="6">1. Point-specific structural</td></tr>
+<tr><td class="part">Unistrut beam clamp</td><td class="calc">50&times;2</td><td class="num need">100</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="100"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">Reversible beam clamp <span class="spec">MFC-1213, 1/2" jaw</span></td><td class="calc">40&times;1</td><td class="num need">40</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="40"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">Unistrut wall-mount bracket</td><td class="calc">20&times;1</td><td class="num need">20</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="20"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">90&deg; angle bracket</td><td class="calc">20&times;1</td><td class="num need">20</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="20"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">Strut nut <span class="spec">W2-8WSEG 1/2-13</span></td><td class="calc">50+20</td><td class="num need">70</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="70"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">2. Drop hardware &mdash; 1/2" (rod AND bolt at every point)</td></tr>
+<tr><td class="part">1/2" threaded rod <span class="spec">6"&ndash;2'</span></td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">1/2"-13 &times; 1.5" hex bolt</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">1/2"-13 hex nut</td><td class="calc">50&times;3 + 40&times;4 + 20&times;3</td><td class="num need">370</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="370"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">1/2" split lock washer</td><td class="calc">50&times;1 + 40&times;2 + 20&times;1</td><td class="num need">150</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="150"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">1/2" flat washer</td><td class="calc">50&times;1 + 40&times;2 + 20&times;1</td><td class="num need">150</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="150"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">3. Track adapter &amp; clip</td></tr>
+<tr><td class="part">THREADR <span class="spec">TRAC0002, 1/2"</span></td><td class="calc">50+40 <span style="color:#8b95a5">(not wall)</span></td><td class="num need">90</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="90"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">4208BL track clip</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">4. Track-to-clip &mdash; 5/16" (same on every point)</td></tr>
+<tr><td class="part">5/16"-18 &times; 1.5" hex bolt</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">5/16"-18 hex nut</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">5/16" split lock washer</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">5/16" serrated washer</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">5/16" flat washer</td><td class="calc">110&times;1</td><td class="num need">110</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="110"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">5. Track, carriers &amp; ends (geometry-driven, not per-point)</td></tr>
+<tr><td class="part">1400 Rig-I-Flex track <span class="spec">16 ft stick</span></td><td class="calc">~317' / 16'</td><td class="num need">22</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="22"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">1492BL 90&deg; curve <span class="spec">24" R</span></td><td class="calc">2/side&times;2</td><td class="num need">4</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="4"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">4201BL single carrier</td><td class="calc">12" OC, 6 panels</td><td class="num need">160</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="160"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">4209BL end stop</td><td class="calc">2/track&times;2 +sp</td><td class="num need">8</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="8"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">4224BL splice plate</td><td class="calc">28 +pad</td><td class="num need">32</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="32"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">6. Parked / verify &mdash; not in this count's totals</td></tr>
+<tr><td class="part">Strut channel <span class="spec">6' (W200EHPG10)</span></td><td class="calc">strut pts, parked</td><td class="num need">(50)</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="0"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">Wall anchors <span class="spec">CMU</span></td><td class="calc">20 pts &times; ?</td><td class="num need">TBD</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="0"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+<tr class="sect"><td colspan="6">7. Cribbing / field-buy (Home Depot, NOT RB order)</td></tr>
+<tr><td class="part">2x12 Douglas Fir, 60" <span class="spec">platform</span></td><td class="calc">6&times;2</td><td class="num need">12</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="12"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">2x12 Douglas Fir ramp, 60"</td><td class="calc">3&times;2</td><td class="num need">6</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="6"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">3/4" plywood deck, 60x33"</td><td class="calc">1&times;2</td><td class="num need">2</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="2"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">2x4 Douglas Fir, 60" <span class="spec">wheel stop</span></td><td class="calc">1&times;2</td><td class="num need">2</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="2"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">3" structural screws <span class="spec">lb</span></td><td class="calc">~2lb&times;2</td><td class="num need">4</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="4"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+<tr><td class="part">Wheel chocks</td><td class="calc">slope zone</td><td class="num need">4</td><td class="num ohcell"><input type="number" min="0" class="oh" data-need="4"></td><td class="ordercell"></td><td class="num miss noprint">&mdash;</td></tr>
+
+</tbody></table>
+<div class="sub noprint">Print &rarr; On Hand / To Order render as blank write-in boxes, header repeats per page, pure B&amp;W.</div>
+<script>
+function recalc(){let short=0;document.querySelectorAll('tbody tr').forEach(tr=>{const inp=tr.querySelector('.oh');if(!inp)return;const need=+inp.dataset.need||0;const oh=inp.value===''?null:+inp.value;const cell=tr.querySelector('.miss');if(!cell)return;let miss=need-(oh||0);if(miss<0)miss=0;if(need===0){cell.textContent='—';cell.className='num miss noprint';return;}cell.textContent=miss;cell.className='num miss noprint '+(miss>0?'has':'zero');if(miss>0)short++;});const s=document.getElementById('shortn');if(s)s.textContent=short;}
+document.addEventListener('input',e=>{if(e.target.classList.contains('oh'))recalc();});
+function zero(){document.querySelectorAll('.oh').forEach(i=>i.value='');recalc();}
+function exp(){let out=['Part\tCalc\tNeed\tOnHand\tToOrder'];document.querySelectorAll('tbody tr').forEach(tr=>{if(tr.classList.contains('sect')){out.push('# '+tr.textContent.trim());return;}const inp=tr.querySelector('.oh');if(!inp)return;const part=tr.querySelector('.part').childNodes[0].textContent.trim();const calc=tr.querySelector('.calc').textContent.trim();const need=tr.querySelector('.need').textContent.trim();const oh=inp.value||'';out.push([part,calc,need,oh,''].join('\t'));});navigator.clipboard.writeText(out.join('\n')).then(()=>alert('Copied TSV ('+out.length+' lines).'));}
+recalc();
+</script></body></html>
