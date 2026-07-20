@@ -328,7 +328,7 @@ function treatmentCard(t,i){
   }
   const title=t.type? `${typeLabel(t.type)}${t.label?" — "+esc(t.label):""}` : "New treatment";
   return `<div class="treat ${missingType?"":""}">
-    <div class="thead"><span class="tnum">${i+1}</span><span class="ttitle">${title}</span><button class="del" data-del="${t.id}">&times;</button></div>
+    <div class="thead"><span class="tnum">${i+1}</span><span class="ttitle">${title}</span><button class="del" data-sketch="${t.id}" title="Sketch" style="font-size:16px">&#9998;${t.sketch&&t.sketch.edges&&t.sketch.edges.length?" "+t.sketch.edges.length:""}</button><button class="del" data-del="${t.id}">&times;</button></div>
     <div class="tbody">
       <div class="grid2">
         <label class="f"><span>Type</span><select data-type="${t.id}">`+TYPES.map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
@@ -469,6 +469,7 @@ function bind(){
   // treatments
   const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{}});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
+  app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
   app.querySelectorAll("[data-label]").forEach(i=>i.oninput=()=>{T(i.dataset.label).label=i.value;save();document.querySelectorAll(`[data-del]`);});
   app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
@@ -530,6 +531,7 @@ function kineticSheet(){
     o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+(t.basis==="match"?"match existing":"new from opening")+")":""}\n`;
     const line=ftxt(t);
     if(line)o+=`    ${line}\n`;
+    if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
   });
   if(S.install.responsibility==="rb"){
     const L=S.install.loadin;
@@ -582,6 +584,159 @@ document.getElementById("printbtn").onclick=()=>{
 };
 document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? Current one is saved in this browser only until overwritten.")){S=fresh();save();render();} };
 
+/* ================= SKETCH PAD v1 (offline draw + Stage-1 snap + dims) ================= */
+(function(){
+  // ---- inject CSS ----
+  const css=`
+  .skwrap{position:fixed;inset:0;z-index:60;background:#f4f6f8;display:none;flex-direction:column;}
+  .skwrap.show{display:flex;}
+  .skstrip{background:#16181b;color:#f2f4f6;font-size:13px;font-weight:700;padding:10px 12px;display:flex;gap:14px;align-items:center;justify-content:space-between;}
+  .skstrip button.back{background:none;border:1.5px solid #3d4248;color:#f2f4f6;border-radius:7px;padding:7px 12px;font-weight:700;font-size:13px;cursor:pointer;}
+  .skstrip .st{opacity:.85;font-weight:600;}
+  .skstage{flex:1;position:relative;overflow:hidden;background:#fff;}
+  .skcanvas{position:absolute;inset:0;touch-action:none;display:block;width:100%;height:100%;background:#fff;}
+  .skrail{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:8px;z-index:3;}
+  .skrail button{width:66px;min-height:50px;border-radius:10px;border:1.5px solid #d9dde2;background:#fff;color:#2a2e33;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .skrail button.on{background:#c8102e;color:#fff;border-color:#c8102e;}
+  .skrail .sep{height:1px;background:#d9dde2;margin:2px 2px;}
+  .skhint{position:absolute;left:12px;bottom:12px;background:rgba(22,24,27,.82);color:#fff;font-size:12px;padding:7px 11px;border-radius:8px;z-index:3;max-width:62%;}
+  .skkeypad{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #d9dde2;padding:12px;z-index:5;display:none;box-shadow:0 -3px 14px rgba(0,0,0,.14);}
+  .skkeypad.show{display:block;}
+  .skkeypad .kh{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:700;margin-bottom:10px;}
+  .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:20px;color:#c8102e;min-width:80px;text-align:right;}
+  .skgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:0 auto;}
+  .skgrid button{min-height:54px;font-size:19px;font-weight:700;border-radius:9px;border:1.5px solid #d9dde2;background:#fff;cursor:pointer;font-family:ui-monospace,monospace;}
+  .skgrid button.set{background:#1a9850;color:#fff;border-color:#1a9850;}
+  .skgrid button.del{background:#f7f9fb;}`;
+  const st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
+
+  // ---- inject DOM ----
+  const wrap=document.createElement("div"); wrap.className="skwrap"; wrap.id="skwrap";
+  wrap.innerHTML=`
+    <div class="skstrip"><div><button class="back" id="skback">&lsaquo; Back</button> <span id="sktitle" style="margin-left:8px"></span></div><span class="st" id="skstat">draw the outline</span></div>
+    <div class="skstage" id="skstage">
+      <canvas class="skcanvas" id="skcanvas"></canvas>
+      <div class="skrail">
+        <button data-tool="pen" class="on" id="tPen">Pen</button>
+        <button data-tool="dim" id="tDim">Dim</button>
+        <button data-tool="erase" id="tErase">Erase</button>
+        <div class="sep"></div>
+        <button id="skUndo">Undo</button>
+        <button id="skClear">Clear</button>
+        <div class="sep"></div>
+        <button id="skSheet">Sheet</button>
+        <button id="skDone" style="background:#0d6efd;color:#fff;border-color:#0d6efd">Done</button>
+      </div>
+      <div class="skhint" id="skhint">Pen: draw each edge. Lines straighten &amp; snap square when you lift. Then tap <b>Dim</b> and tap an edge.</div>
+      <div class="skkeypad" id="skkeypad">
+        <div class="kh"><span id="kplabel">Edge dimension</span><span class="val" id="kpval">_</span></div>
+        <div class="skgrid" id="skgridkeys"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const canvas=document.getElementById("skcanvas"), ctx=canvas.getContext("2d");
+  let SK=null, CURT=null, TOOL="pen", DPR=1;
+  let drawing=false, curRaw=null, activePid=null, penSeen=false;
+  let SEL=null, KPedge=null, KPstr="";
+
+  // ---- geometry ----
+  function bbox(pts){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; pts.forEach(p=>{x1=Math.min(x1,p[0]);y1=Math.min(y1,p[1]);x2=Math.max(x2,p[0]);y2=Math.max(y2,p[1]);}); return {w:x2-x1,h:y2-y1}; }
+  function perp(p,a,b){ const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1; return Math.abs((p[0]-a[0])*dy-(p[1]-a[1])*dx)/L; }
+  function resample(pts,step){ if(pts.length<2)return pts.map(p=>p.slice()); const out=[pts[0].slice()]; let prev=pts[0].slice(),acc=0,i=1;
+    while(i<pts.length){ const cur=pts[i]; const d=Math.hypot(cur[0]-prev[0],cur[1]-prev[1]);
+      if(acc+d>=step&&d>0){ const t=(step-acc)/d; const nx=[prev[0]+t*(cur[0]-prev[0]),prev[1]+t*(cur[1]-prev[1])]; out.push(nx); prev=nx; acc=0; }
+      else{ acc+=d; prev=cur.slice(); i++; } }
+    out.push(pts[pts.length-1].slice()); return out; }
+  function rdp(pts,eps){ if(pts.length<3)return pts.map(p=>p.slice()); let dmax=0,idx=0,a=pts[0],b=pts[pts.length-1];
+    for(let i=1;i<pts.length-1;i++){ const d=perp(pts[i],a,b); if(d>dmax){dmax=d;idx=i;} }
+    if(dmax>eps){ const l=rdp(pts.slice(0,idx+1),eps), r=rdp(pts.slice(idx),eps); return l.slice(0,-1).concat(r); }
+    return [a.slice(),b.slice()]; }
+  function ortho(v){ for(let i=0;i<v.length-1;i++){ const dx=v[i+1][0]-v[i][0],dy=v[i+1][1]-v[i][1]; let ang=Math.atan2(dy,dx)*180/Math.PI; const aa=((ang%180)+180)%180;
+      if(aa<6||aa>174) v[i+1][1]=v[i][1]; else if(Math.abs(aa-90)<6) v[i+1][0]=v[i][0]; } return v; }
+  function integrate(v){ const eps=13; const pts=[]; SK.edges.forEach(e=>{pts.push([e.x1,e.y1]);pts.push([e.x2,e.y2]);});
+    v=v.map(pt=>{ let best=null,bd=eps; pts.forEach(q=>{const d=Math.hypot(pt[0]-q[0],pt[1]-q[1]); if(d<bd){bd=d;best=q;}}); return best?best.slice():pt.slice(); });
+    if(v.length>2){ const d=Math.hypot(v[0][0]-v[v.length-1][0],v[0][1]-v[v.length-1][1]); if(d<18) v[v.length-1]=v[0].slice(); }
+    const ids=[]; for(let i=0;i<v.length-1;i++){ if(v[i][0]===v[i+1][0]&&v[i][1]===v[i+1][1])continue; const id=SK.nextId++; SK.edges.push({id,x1:v[i][0],y1:v[i][1],x2:v[i+1][0],y2:v[i+1][1],dim:null}); ids.push(id); } return ids; }
+  function snap(raw){ if(raw.length<2)return []; const bx=bbox(raw); const diag=Math.hypot(bx.w,bx.h)||1; let v=resample(raw,2); v=rdp(v,Math.max(3.5,0.02*diag)); v=ortho(v); return integrate(v); }
+  function distSeg(p,e){ const dx=e.x2-e.x1,dy=e.y2-e.y1,L2=dx*dx+dy*dy||1; let t=((p[0]-e.x1)*dx+(p[1]-e.y1)*dy)/L2; t=Math.max(0,Math.min(1,t)); const cx=e.x1+t*dx,cy=e.y1+t*dy; return Math.hypot(p[0]-cx,p[1]-cy); }
+  function hitEdge(p){ let best=null,bd=24; SK.edges.forEach(e=>{const d=distSeg(p,e); if(d<bd){bd=d;best=e;}}); return best; }
+
+  // ---- expose for testing ----
+  window._skDraw=function(pts){ if(!SK)return 0; const ids=snap(pts); SK.strokes.push({raw:pts,edgeIds:ids}); save(); render(); return SK.edges.length; };
+  window._skEdges=function(){ return SK?SK.edges.map(e=>({x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,dim:e.dim})):[]; };
+  window._skSetDim=function(i,txt){ if(SK&&SK.edges[i]){ SK.edges[i].dim={inches:parseFeet(txt),text:txt}; save(); render(); } };
+
+  // ---- render ----
+  function xy(e){ const r=canvas.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; }
+  function sizeCanvas(){ const r=canvas.getBoundingClientRect(); DPR=window.devicePixelRatio||1; canvas.width=Math.max(1,Math.round(r.width*DPR)); canvas.height=Math.max(1,Math.round(r.height*DPR)); }
+  function render(){ if(!SK)return; const W=canvas.width,H=canvas.height; ctx.clearRect(0,0,W,H); ctx.lineCap="round"; ctx.lineJoin="round";
+    // ghost ink
+    ctx.strokeStyle="#c9cdd2"; ctx.lineWidth=2*DPR; SK.strokes.forEach(s=>{ ctx.beginPath(); s.raw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); });
+    // edges
+    SK.edges.forEach(e=>{ ctx.beginPath(); ctx.lineWidth=(SEL&&e.id===SEL?4:2.6)*DPR; ctx.strokeStyle=(SEL&&e.id===SEL?"#0d6efd":"#111315"); ctx.moveTo(e.x1*DPR,e.y1*DPR); ctx.lineTo(e.x2*DPR,e.y2*DPR); ctx.stroke(); });
+    // vertices
+    ctx.fillStyle="#111315"; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{ ctx.beginPath(); ctx.arc(p[0]*DPR,p[1]*DPR,3.2*DPR,0,7); ctx.fill(); }); });
+    // dims
+    ctx.font=`${13*DPR}px ui-monospace,monospace`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    SK.edges.forEach(e=>{ if(e.dim){ const mx=(e.x1+e.x2)/2*DPR,my=(e.y1+e.y2)/2*DPR-9*DPR; ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(e.dim.text,mx,my); ctx.fillStyle="#111315"; ctx.fillText(e.dim.text,mx,my); } });
+    const nd=SK.edges.filter(e=>e.dim).length; document.getElementById("skstat").textContent=`${SK.edges.length} edges · ${nd} dims`;
+  }
+  function renderLive(){ render(); if(curRaw&&curRaw.length){ ctx.beginPath(); ctx.lineWidth=2.2*DPR; ctx.strokeStyle="#0d6efd"; curRaw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); } }
+
+  // ---- pointer ----
+  canvas.addEventListener("pointerdown",e=>{ if(!SK)return; if(e.pointerType==="pen")penSeen=true; if(e.pointerType==="touch"&&penSeen)return;
+    const p=xy(e);
+    if(TOOL==="dim"){ const ed=hitEdge(p); if(ed) openKeypad(ed); return; }
+    if(TOOL==="erase"){ const ed=hitEdge(p); if(ed){ SK.edges=SK.edges.filter(x=>x.id!==ed.id); SK.strokes.forEach(s=>s.edgeIds=s.edgeIds.filter(id=>id!==ed.id)); save(); render(); } return; }
+    drawing=true; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; curRaw=[p]; });
+  canvas.addEventListener("pointermove",e=>{ if(!drawing||e.pointerId!==activePid)return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(x=>curRaw.push(xy(x))); renderLive(); });
+  function endStroke(e){ if(!drawing||(e&&e.pointerId!==activePid))return; drawing=false; if(curRaw&&curRaw.length>2){ const ids=snap(curRaw); SK.strokes.push({raw:curRaw,edgeIds:ids}); save(); } curRaw=null; render(); }
+  canvas.addEventListener("pointerup",endStroke); canvas.addEventListener("pointercancel",endStroke); canvas.addEventListener("pointerleave",e=>{ if(drawing)endStroke(e); });
+
+  // ---- keypad ----
+  const KEYS=[["7"],["8"],["9"],["'","act"],["4"],["5"],["6"],["\"","act"],["1"],["2"],["3"],["⌫","del"],["0"],[" ","act"],["CLR","del"],["SET","set"]];
+  const gk=document.getElementById("skgridkeys");
+  KEYS.forEach(k=>{ const b=document.createElement("button"); b.textContent=k[0]==="SET"?"SET":k[0]; if(k[1])b.classList.add(k[1]); b.onclick=()=>keyPress(k[0]); gk.appendChild(b); });
+  function openKeypad(ed){ KPedge=ed; SEL=ed.id; KPstr=ed.dim?ed.dim.text:""; document.getElementById("kpval").textContent=KPstr||"_"; document.getElementById("skkeypad").classList.add("show"); render(); }
+  function closeKeypad(){ document.getElementById("skkeypad").classList.remove("show"); KPedge=null; SEL=null; render(); }
+  function keyPress(k){ if(k==="SET"){ if(KPedge){ const inch=parseFeet(KPstr); KPedge.dim={inches:(inch==null?null:inch),text:KPstr.trim()}; save(); } closeKeypad(); return; }
+    if(k==="CLR"){ KPstr=""; } else if(k==="⌫"){ KPstr=KPstr.slice(0,-1); } else { KPstr+=k; }
+    document.getElementById("kpval").textContent=KPstr||"_"; }
+
+  // ---- sheet (basic; full RB frame in a later increment) ----
+  function sheet(){ if(!SK||!SK.edges.length){ alert("Draw the outline first."); return; }
+    const xs=[],ys=[]; SK.edges.forEach(e=>{xs.push(e.x1,e.x2);ys.push(e.y1,e.y2);});
+    const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),gw=(maxx-minx)||1,gh=(maxy-miny)||1;
+    const VW=1600,VH=1000,M=150,sc=Math.min((VW-2*M)/gw,(VH-2*M)/gh),ox=(VW-gw*sc)/2-minx*sc,oy=(VH-gh*sc)/2-miny*sc;
+    const tx=x=>x*sc+ox,ty=y=>y*sc+oy;
+    let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VW} ${VH}" width="100%"><rect x="8" y="8" width="${VW-16}" height="${VH-16}" fill="none" stroke="#000" stroke-width="1.4"/>`;
+    s+=`<text x="30" y="42" font-family="Arial" font-size="22" font-weight="700">${esc((typeLabel(CURT.type)||"Sketch")+(CURT.label?" — "+CURT.label:""))}</text>`;
+    s+=`<text x="30" y="66" font-family="Arial" font-size="13" fill="#333">${esc(S.meta.venue||"")}${S.meta.quote?" · Q"+esc(S.meta.quote):""}${S.meta.surveyor?" · "+esc(S.meta.surveyor):""} · NTS — DIMENSIONED</text>`;
+    SK.edges.forEach(e=>{ s+=`<line x1="${tx(e.x1)}" y1="${ty(e.y1)}" x2="${tx(e.x2)}" y2="${ty(e.y2)}" stroke="#000" stroke-width="2.6" stroke-linecap="round"/>`; });
+    SK.edges.forEach(e=>{ if(e.dim){ const mx=tx((e.x1+e.x2)/2),my=ty((e.y1+e.y2)/2)-11; s+=`<text x="${mx}" y="${my}" font-family="ui-monospace,monospace" font-size="18" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(e.dim.text)}</text>`; } });
+    s+=`</svg>`;
+    const w=window.open("","_blank"); if(!w){ alert("Allow popups to print the sheet."); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset=utf-8><title>Sketch Sheet</title><style>@page{size:landscape;margin:.4in}html,body{margin:0}</style></head><body>${s}</body></html>`);
+    w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(_){}} ,300); }
+
+  // ---- rail wiring ----
+  function setTool(t){ TOOL=t; ["pen","dim","erase"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it."}[t]; document.getElementById("skhint").textContent=h; }
+  document.getElementById("tPen").onclick=()=>setTool("pen");
+  document.getElementById("tDim").onclick=()=>setTool("dim");
+  document.getElementById("tErase").onclick=()=>setTool("erase");
+  document.getElementById("skUndo").onclick=()=>{ const s=SK.strokes.pop(); if(!s)return; SK.edges=SK.edges.filter(e=>!s.edgeIds.includes(e.id)); save(); render(); };
+  document.getElementById("skClear").onclick=()=>{ if(confirm("Clear this sketch?")){ SK.strokes=[]; SK.edges=[]; SK.nextId=1; save(); render(); } };
+  document.getElementById("skSheet").onclick=sheet;
+  document.getElementById("skDone").onclick=()=>{ closeKeypad(); document.getElementById("skwrap").classList.remove("show"); save(); render(); /* main app */ if(typeof window.__rerender==="function")window.__rerender(); };
+  document.getElementById("skback").onclick=()=>document.getElementById("skDone").click();
+  window.addEventListener("resize",()=>{ if(document.getElementById("skwrap").classList.contains("show")){ sizeCanvas(); render(); } });
+
+  window.openSketch=function(tid){ const t=S.treatments.find(x=>x.id===tid); if(!t)return; if(!t.sketch)t.sketch={strokes:[],edges:[],nextId:1}; SK=t.sketch; CURT=t; penSeen=false; setTool("pen");
+    document.getElementById("sktitle").textContent=(typeLabel(t.type)||"Sketch")+(t.label?" — "+t.label:"");
+    document.getElementById("skwrap").classList.add("show"); requestAnimationFrame(()=>{ sizeCanvas(); render(); }); };
+})();
+window.__rerender=render;
 render();
 </script>
 </body>
