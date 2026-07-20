@@ -603,6 +603,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   .skkeypad{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #d9dde2;padding:12px;z-index:5;display:none;box-shadow:0 -3px 14px rgba(0,0,0,.14);}
   .skkeypad.show{display:block;}
   .skkeypad .kh{max-width:520px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .skkeypad #kpclose{width:42px;height:42px;flex:0 0 auto;border:1.5px solid #d9dde2;background:#fff;border-radius:9px;font-size:22px;line-height:1;font-weight:700;color:#6a7079;cursor:pointer;}
   .skkeypad #kplabel{font-size:12px;color:#6a7079;font-weight:600;white-space:nowrap;}
   .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:26px;font-weight:700;color:#c8102e;flex:1;text-align:center;background:#fff5f6;border:1.5px solid #f3c6cd;border-radius:8px;padding:7px 12px;}
   .skgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:0 auto;}
@@ -633,7 +634,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
       </div>
       <div class="skhint" id="skhint">Pen: draw each edge. Lines straighten &amp; snap square when you lift. Then tap <b>Dim</b> and tap an edge.</div>
       <div class="skkeypad" id="skkeypad">
-        <div class="kh"><span id="kplabel">Edge dimension</span><span class="val" id="kpval">_</span></div>
+        <div class="kh"><button id="kpclose" title="Cancel">&times;</button><span id="kplabel">Edge dim</span><span class="val" id="kpval">_</span></div>
         <div class="skgrid" id="skgridkeys"></div>
       </div>
     </div>`;
@@ -736,6 +737,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   const KEYS=[["7"],["8"],["9"],["'","act"],["4"],["5"],["6"],["\"","act"],["1"],["2"],["3"],["⌫","del"],["0"],[" ","act"],["CLR","del"],["SET","set"]];
   const gk=document.getElementById("skgridkeys");
   KEYS.forEach(k=>{ const b=document.createElement("button"); b.textContent=k[0]==="SET"?"SET":k[0]; if(k[1])b.classList.add(k[1]); b.onclick=()=>keyPress(k[0]); gk.appendChild(b); });
+  document.getElementById("kpclose").onclick=closeKeypad;
   function openKeypad(ed){ KPedge=ed; SEL=ed.id; KPstr=ed.dim?ed.dim.text:""; document.getElementById("kpval").textContent=KPstr||"_"; document.getElementById("skkeypad").classList.add("show"); render(); }
   function closeKeypad(){ document.getElementById("skkeypad").classList.remove("show"); KPedge=null; SEL=null; render(); }
   function keyPress(k){ if(k==="SET"){ if(KPedge){ const inch=parseFeet(KPstr); KPedge.dim={inches:(inch==null?null:inch),text:KPstr.trim()}; save(); } closeKeypad(); return; }
