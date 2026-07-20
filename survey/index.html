@@ -146,6 +146,7 @@ function uid(){ return "t"+Math.random().toString(36).slice(2,8); }
 
 /* ============ SCHEMAS ============ */
 const JOB_TYPES=[["new","New install"],["replace","Replacement"],["repair","Repair / refurbish"],["addon","Add-on"]];
+const SURVEYORS=["Adam","Manny","Brandon","Gio","Angie"];
 const FRAMES=[["","Select…"],["proscenium","Proscenium theatre"],["gym","Gymnatorium / flat stage"],["blackbox","Black box"],["auditorium","Auditorium"],["worship","House of worship"],["ballroom","Ballroom / event"],["studio","Studio (cyc)"],["other","Other"]];
 
 // Treatment type -> field family
@@ -325,7 +326,9 @@ function render(){
       ${miniField("quote","Quote # (if any)")}
     </div>
     ${miniField("address","Address")}
-    <div class="grid2">${miniField("date","Date")}${miniField("surveyor","Surveyor")}</div>
+    ${miniField("date","Date")}
+    <label class="f"><span>Surveyor</span></label>
+    <div class="seg sm" id="surveyorseg">`+SURVEYORS.map(n=>`<button data-surveyor="${n}" class="${S.meta.surveyor===n?"on":""}">${n}</button>`).join("")+`</div>`+`
     <div class="grid2">${miniField("contactName","Contact name")}${miniField("contactTitle","Contact title")}</div>
     <div class="grid2">${miniField("contactEmail","Contact email")}${miniField("contactCell","Contact cell")}</div>
     <label class="f" style="margin-top:14px"><span>Venue frame</span>
@@ -398,6 +401,7 @@ function loadinBlock(){
 function bind(){
   // job seg
   app.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>{S.job=b.dataset.job;save();render();});
+  app.querySelectorAll("[data-surveyor]").forEach(b=>b.onclick=()=>{S.meta.surveyor=b.dataset.surveyor;save();render();});
   // meta
   app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue")document.getElementById("hdrsub").textContent=i.value||"New survey";});
   // frame
