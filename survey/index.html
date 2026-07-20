@@ -51,6 +51,13 @@
   .sw input:checked + .track{background:var(--ok);}
   .sw input:checked + .track:after{transform:translateX(19px);}
   .reveal{border-left:3px solid var(--rb);margin:12px 0 2px;padding-left:12px;}
+  .stnhdr{display:grid;grid-template-columns:1fr 1.4fr 34px;gap:8px;margin-top:12px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stnrow{display:grid;grid-template-columns:1fr 1.4fr 34px;gap:8px;margin-top:7px;align-items:center;}
+  .stnrow input{padding:10px;}
+  .stnrow .stnx{background:none;border:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:2px;}
+  .addstn{width:100%;margin-top:10px;font-size:13.5px;font-weight:700;color:var(--rb);background:#fff;border:1.5px dashed var(--rb);border-radius:9px;padding:10px;cursor:pointer;}
+  .derived{margin-top:11px;font-size:12px;color:#7a8088;font-style:italic;background:#f7f9fb;border:1px dashed var(--line);border-radius:9px;padding:9px 11px;line-height:1.55;}
+  .derived b{font-style:normal;color:#2a2e33;}
   .treat{border:1.5px solid var(--line);border-radius:11px;margin-top:12px;overflow:hidden;background:#fff;}
   .treat.badcfg{border-color:var(--warn);}
   .treat .thead{display:flex;align-items:center;gap:9px;background:#f7f9fb;padding:10px 12px;border-bottom:1px solid var(--line);}
@@ -129,7 +136,7 @@ function fresh(){
     meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:""},
     job:"",
     venueFrame:"",
-    prosc:{present:false, openW:"",openH:"",wallToWall:"",floorToGrid:"",apron:"",wingSL:"",wingSR:""},
+    prosc:{present:false, openW:"", openH:"", stations:[]},
     treatments:[],
     install:{responsibility:"", loadin:{doorH:"",doorW:"",path:"",obstructions:"",freight:false,freightH:"",freightW:"",freightL:"",access:"",accessBy:"",union:false,parking:false,multiLevel:false,notes:""}},
     generalNotes:""
@@ -143,6 +150,12 @@ function save(){
   saveT=setTimeout(()=>{ localStorage.setItem(KEY,JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; },250);
 }
 function uid(){ return "t"+Math.random().toString(36).slice(2,8); }
+function parseFeet(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”]/g,'"').replace(/[‘’]/g,"'"); if(!s) return null;
+  let m=s.match(/^(\d+(?:\.\d+)?)\s*'\s*-?\s*(\d+(?:\.\d+)?)?\s*"?$/); if(m) return parseFloat(m[1])+(m[2]?parseFloat(m[2])/12:0);
+  m=s.match(/^(\d+(?:\.\d+)?)\s*"$/); if(m) return parseFloat(m[1])/12;
+  m=s.match(/^(\d+(?:\.\d+)?)\s*'$/); if(m) return parseFloat(m[1]);
+  m=s.match(/^(\d+(?:\.\d+)?)$/); if(m) return parseFloat(m[1]);
+  return null; }
 
 /* ============ SCHEMAS ============ */
 const JOB_TYPES=[["new","New install"],["replace","Replacement"],["repair","Repair / refurbish"],["addon","Add-on"]];
@@ -170,10 +183,17 @@ const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[1]:"";};
 
 const FABRICS=["Velour IFR","Commando cloth","IFR muslin","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Encore velour","Other (type)"];
 const PLEATS=["Shirred","Box","Pinch","Knife","Pleater tape","Flat (none)"];
-const TOPFIN=["4\" webbing + ties","4\" webbing + grommets","Webbing + snaps","Pipe pocket","Velcro","Pleated header"];
+const TOPFIN=[
+  "3\" webbing + snap hooks flush","4\" webbing + snap hooks flush",
+  "3\" webbing + grommets & ties","4\" webbing + grommets & ties",
+  "3\" webbing + ties","4\" webbing + ties",
+  "3\" webbing + snaps","4\" webbing + snaps",
+  "Webbing + S-hooks","Pipe pocket","Velcro (loop)","Pleated header"
+];
 const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weight pocket"];
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
+const OVERLAP=["12\"","16\"","24\""];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
 
 // field builders return [key,label,control,opts,sub]
@@ -187,7 +207,7 @@ function drawnFields(){return [
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["draw","Draw style","select",["",...DRAW],""],
-  ["overlap","Overlap","text",null,"center overlap"]
+  ["overlap","Overlap","datalist",OVERLAP,"center overlap, inches"]
 ];}
 function valanceFields(){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
@@ -246,8 +266,8 @@ const MOVABLE=new Set(["drawn","valance","flat"]); // can have an operation
 function opFields(op){
   switch(op){
     case "fixed": return [["hang","Hang method","text",null,"e.g. tie-line to pipe"]];
-    case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","text",null,""],["mount","Mount","text",null,"wall / ceiling / pipe"]];
-    case "cord": return [["track","Track series","text",null,""],["cording","Cording type","text",null,""],["overlap","Overlap","text",null,""],["mount","Mount","text",null,""]];
+    case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","text",null,"wall / ceiling / pipe"]];
+    case "cord": return [["track","Track series","text",null,""],["cording","Cording type","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","text",null,""]];
     case "motor": return [["track","Track series","text",null,""],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""]];
     case "fly": return [["batten","Batten / pipe","text",null,""],["trimHi","Trim - high","text",null,""],["trimLo","Trim - low","text",null,""],["arbor","Counterweight / arbor","text",null,""],["rig","Rigging notes","textarea",null,""]];
     default: return [];
@@ -370,15 +390,41 @@ function miniField(k,label){
   return `<label class="f"><span>${label}</span><input type="text" data-meta="${k}" value="${esc(S.meta[k]||"")}"></label>`;
 }
 function proscBlock(){
-  const p=S.prosc;
-  const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-prosc="${k}" value="${esc(p[k]||"")}"></label>`;
-  return `<div class="reveal"><div class="hint" style="padding:0 0 4px">Confirm which dim each captures on your form — labels are my best read.</div>
-    <div class="grid2">${f("openW","Opening width")}${f("openH","Opening height")}</div>
-    <div class="grid2">${f("wallToWall","Wall to wall","smash")}${f("floorToGrid","Floor to grid / header")}</div>
-    <div class="grid2">${f("apron","Apron depth")}${f("wingSL","Wing width SL")}</div>
-    ${f("wingSR","Wing width SR")}
+  const p=S.prosc; p.stations=p.stations||[];
+  const rows=p.stations.length? p.stations.map((st,i)=>`
+    <div class="stnrow">
+      <input type="text" data-stn="pos" data-si="${i}" inputmode="decimal" placeholder="pos ft (0,5,10…)" value="${esc(st.pos||"")}">
+      <input type="text" data-stn="h" data-si="${i}" placeholder="floor → track ht" value="${esc(st.h||"")}">
+      <button class="stnx" data-stnx="${i}">&times;</button>
+    </div>`).join("") : `<div class="empty">No stations yet — add one per measured point across the opening.</div>`;
+  return `<div class="reveal">
+    <div class="hint" style="padding:0 0 4px">Floor-to-track height at stations across the opening (measure L&rarr;R). The app derives the track angle from these.</div>
+    <div class="grid2">
+      <label class="f"><span>Opening width <span class="sub">(ref)</span></span><input type="text" data-prosc="openW" value="${esc(p.openW||"")}"></label>
+      <label class="f"><span>Opening height <span class="sub">(ref, center)</span></span><input type="text" data-prosc="openH" value="${esc(p.openH||"")}"></label>
+    </div>
+    <div class="stnhdr"><span>Station pos</span><span>Floor &rarr; track height</span><span></span></div>
+    ${rows}
+    <button class="addstn" id="addStn">+ Add station</button>
+    <div class="derived" id="proscDerivedBox">${proscDerivedInner()}</div>
   </div>`;
 }
+function proscStations(){ return (S.prosc.stations||[]).map(s=>({pos:parseFeet(s.pos),h:parseFeet(s.h)})).filter(s=>s.pos!==null&&s.h!==null).sort((a,b)=>a.pos-b.pos); }
+function proscDerivedInner(){
+  const sts=proscStations();
+  if(sts.length<2) return "Add 2+ stations with position + height to auto-compute the track angle.";
+  let segs=[]; for(let i=1;i<sts.length;i++){ const dp=sts[i].pos-sts[i-1].pos, dh=sts[i].h-sts[i-1].h; if(dp<=0) continue; const ang=Math.atan2(dh,dp)*180/Math.PI; segs.push(`${sts[i-1].pos}&rarr;${sts[i].pos}′: ${dh>=0?"+":""}${(dh*12).toFixed(1)}″ = <b>${ang.toFixed(1)}°</b>`); }
+  const f=sts[0],o=sts[sts.length-1]; const overall=Math.atan2(o.h-f.h,o.pos-f.pos)*180/Math.PI; const level=Math.abs(overall)<0.3;
+  return `<b>Derived (d):</b> ${level?"track reads <b>LEVEL</b> ":"overall <b>"+overall.toFixed(1)+"°</b> "}across ${(o.pos-f.pos).toFixed(0)}′ (${((o.h-f.h)*12).toFixed(1)}″ rise)`+(segs.length?`<br>segments — ${segs.join(" · ")}`:"");
+}
+function proscDerivedText(){
+  const sts=proscStations();
+  if(sts.length<2) return "(add 2+ stations for angle)";
+  const f=sts[0],o=sts[sts.length-1]; const overall=Math.atan2(o.h-f.h,o.pos-f.pos)*180/Math.PI;
+  let segs=[]; for(let i=1;i<sts.length;i++){const dp=sts[i].pos-sts[i-1].pos,dh=sts[i].h-sts[i-1].h; if(dp<=0)continue; const a=Math.atan2(dh,dp)*180/Math.PI; segs.push(`${sts[i-1].pos}->${sts[i].pos}':${a>=0?"+":""}${a.toFixed(1)}deg`);}
+  return `(d) overall ${overall.toFixed(1)}deg across ${(o.pos-f.pos).toFixed(0)}' · segs ${segs.join(", ")}`;
+}
+function updateDerived(){ const d=document.getElementById("proscDerivedBox"); if(d) d.innerHTML=proscDerivedInner(); }
 function loadinBlock(){
   const L=S.install.loadin;
   const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-loadin="${k}" value="${esc(L[k]||"")}"></label>`;
@@ -408,6 +454,9 @@ function bind(){
   const fr=document.getElementById("frame"); if(fr)fr.onchange=()=>{S.venueFrame=fr.value;save();};
   const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
   app.querySelectorAll("[data-prosc]").forEach(i=>i.oninput=()=>{S.prosc[i.dataset.prosc]=i.value;save();});
+  const astn=document.getElementById("addStn"); if(astn)astn.onclick=()=>{S.prosc.stations=S.prosc.stations||[]; const last=S.prosc.stations[S.prosc.stations.length-1]; const lp=last?parseFeet(last.pos):null; const np=(S.prosc.stations.length===0)?"0":(lp!=null?String(lp+5):""); S.prosc.stations.push({pos:np,h:""});save();render();};
+  app.querySelectorAll("[data-stnx]").forEach(b=>b.onclick=()=>{S.prosc.stations.splice(+b.dataset.stnx,1);save();render();});
+  app.querySelectorAll("[data-stn]").forEach(inp=>inp.oninput=()=>{S.prosc.stations[+inp.dataset.si][inp.dataset.stn]=inp.value;save();updateDerived();});
   // treatments
   const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{}});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
@@ -489,8 +538,10 @@ function fullSummary(){
   let o=kineticSheet()+`\n${"=".repeat(46)}\nCONTACT\n`;
   o+=`  ${m.contactName||"—"}${m.contactTitle?", "+m.contactTitle:""}\n  ${m.contactEmail||""}  ${m.contactCell||""}\n`;
   if(S.prosc.present){
-    const p=S.prosc;
-    o+=`${"=".repeat(46)}\nPROSCENIUM\n  opening ${p.openW||"?"} × ${p.openH||"?"} · wall-to-wall ${p.wallToWall||"?"} · floor-to-grid ${p.floorToGrid||"?"} · apron ${p.apron||"?"} · wings SL ${p.wingSL||"?"} / SR ${p.wingSR||"?"}\n`;
+    const p=S.prosc; const sts=(p.stations||[]);
+    o+=`${"=".repeat(46)}\nPROSCENIUM / TRACK LINE\n  opening ${p.openW||"?"} W × ${p.openH||"?"} H (ref)\n  floor→track heights (L→R):\n`;
+    if(sts.length){ sts.forEach(s=>{ o+=`    @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`  ${proscDerivedText()}\n`; }
+    else o+=`    (no stations recorded)\n`;
   }
   o+=`${"=".repeat(46)}\nTREATMENT DETAIL\n`;
   S.treatments.forEach((t,i)=>{
