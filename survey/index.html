@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rose Brand Site Survey</title>
+<style>
+  :root{
+    --rb:#c8102e; --rb-dark:#9a0c22; --ink:#1a1c1f; --muted:#6a7079;
+    --line:#d9dde2; --bg:#f4f6f8; --card:#ffffff; --accent:#0d6efd;
+    --ok:#1a9850; --warn:#b45309; --chip:#eef1f4;
+    --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.4;}
+  body{padding-bottom:120px;}
+  header{position:sticky;top:0;z-index:20;background:var(--rb);color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  header .row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  header h1{font-size:16px;font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:8px;}
+  header .logo{width:22px;height:22px;border:2px solid #fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;}
+  header small{display:block;opacity:.85;font-weight:500;font-size:11.5px;margin-top:2px;}
+  .savechip{font-size:11px;background:rgba(255,255,255,.18);padding:4px 9px;border-radius:20px;font-weight:600;white-space:nowrap;}
+  main{max-width:820px;margin:0 auto;padding:14px 14px 0;}
+  .sect{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;}
+  .sect > h2{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);padding:13px 15px 6px;display:flex;align-items:center;gap:8px;}
+  .sect > h2 .n{background:var(--ink);color:#fff;width:19px;height:19px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+  .sect .body{padding:6px 15px 15px;}
+  .hint{font-size:12px;color:var(--muted);padding:0 15px 12px;margin-top:-2px;}
+  label.f{display:block;margin:11px 0 0;}
+  label.f > span{display:block;font-size:12.5px;font-weight:600;color:#3a3f45;margin-bottom:5px;}
+  label.f .sub{font-weight:500;color:var(--muted);font-size:11.5px;}
+  input[type=text],input[type=email],input[type=tel],input[type=number],select,textarea{
+    width:100%;font-size:16px;font-family:inherit;color:var(--ink);background:#fff;
+    border:1.5px solid var(--line);border-radius:9px;padding:11px 12px;appearance:none;transition:border-color .12s;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%236a7079' stroke-width='1.6'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;}
+  textarea{min-height:64px;resize:vertical;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  @media(max-width:520px){.grid3{grid-template-columns:1fr 1fr;}}
+  .seg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .seg button{flex:1 1 auto;min-width:calc(50% - 4px);font-size:14px;font-weight:600;color:#3a3f45;background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:11px 10px;cursor:pointer;transition:all .12s;}
+  .seg button.on{background:var(--rb);border-color:var(--rb);color:#fff;box-shadow:var(--shadow);}
+  .seg.sm button{min-width:auto;flex:1 1 0;}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;background:#fbfcfd;}
+  .toggle span{font-size:13.5px;font-weight:600;color:#3a3f45;}
+  .sw{position:relative;width:46px;height:27px;flex:0 0 auto;}
+  .sw input{opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .sw .track{position:absolute;inset:0;background:#cfd5db;border-radius:20px;transition:.15s;pointer-events:none;}
+  .sw .track:after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;background:#fff;border-radius:50%;transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.3);}
+  .sw input:checked + .track{background:var(--ok);}
+  .sw input:checked + .track:after{transform:translateX(19px);}
+  .reveal{border-left:3px solid var(--rb);margin:12px 0 2px;padding-left:12px;}
+  .treat{border:1.5px solid var(--line);border-radius:11px;margin-top:12px;overflow:hidden;background:#fff;}
+  .treat.badcfg{border-color:var(--warn);}
+  .treat .thead{display:flex;align-items:center;gap:9px;background:#f7f9fb;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .treat .thead .tnum{background:var(--rb);color:#fff;font-size:12px;font-weight:800;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .treat .thead .ttitle{font-size:13.5px;font-weight:700;flex:1;color:#2a2e33;}
+  .treat .thead button.del{background:none;border:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;}
+  .treat .tbody{padding:4px 12px 13px;}
+  .addbtn{width:100%;margin-top:13px;font-size:14.5px;font-weight:700;color:var(--rb);background:#fff;border:1.5px dashed var(--rb);border-radius:10px;padding:13px;cursor:pointer;}
+  .addbtn:active{background:#fff5f6;}
+  .fam{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:3px 8px;border-radius:20px;margin-top:2px;}
+  .note-lesson{font-size:11.5px;color:var(--warn);font-weight:600;margin-top:5px;}
+  .bar{position:fixed;bottom:0;left:0;right:0;z-index:30;background:#fff;border-top:1px solid var(--line);padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:10px;max-width:820px;margin:0 auto;box-shadow:0 -2px 10px rgba(0,0,0,.06);}
+  .bar button{flex:1;font-size:15px;font-weight:700;border-radius:10px;padding:14px;cursor:pointer;border:1.5px solid var(--line);background:#fff;color:#3a3f45;}
+  .bar button.primary{background:var(--rb);border-color:var(--rb);color:#fff;}
+  .out{position:fixed;inset:0;z-index:50;background:rgba(20,22,25,.55);display:none;align-items:flex-end;justify-content:center;}
+  .out.show{display:flex;}
+  .out .panel{background:#fff;width:100%;max-width:820px;max-height:92vh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden;}
+  .out .phead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);}
+  .out .phead h3{font-size:15px;font-weight:800;}
+  .out .phead .x{background:none;border:none;font-size:24px;color:var(--muted);cursor:pointer;line-height:1;}
+  .out .pbody{overflow:auto;padding:14px 16px;-webkit-overflow-scrolling:touch;}
+  .out .tabs{display:flex;gap:8px;margin-bottom:12px;}
+  .out .tabs button{flex:1;font-size:13px;font-weight:700;padding:9px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:#3a3f45;cursor:pointer;}
+  .out .tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .out pre{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.5;background:#f7f9fb;border:1px solid var(--line);border-radius:10px;padding:14px;color:#1a1c1f;}
+  .out .copybar{display:flex;gap:10px;margin-top:12px;}
+  .out .copybar button{flex:1;font-size:14px;font-weight:700;padding:12px;border-radius:9px;border:1.5px solid var(--line);background:#fff;cursor:pointer;}
+  .out .copybar button.primary{background:var(--ok);border-color:var(--ok);color:#fff;}
+  .empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 0;}
+  @media print{header,.bar,.addbtn,.treat .thead button.del{display:none;}body{padding:0;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <div>
+      <h1><span class="logo">R</span> Site Survey</h1>
+      <small id="hdrsub">New survey</small>
+    </div>
+    <span class="savechip" id="savechip">Saved</span>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div class="bar">
+  <button id="newbtn">New</button>
+  <button class="primary" id="genbtn">Generate Handoff</button>
+</div>
+
+<div class="out" id="outmodal">
+  <div class="panel">
+    <div class="phead"><h3>Survey Handoff</h3><button class="x" id="outx">&times;</button></div>
+    <div class="pbody">
+      <div class="tabs">
+        <button class="on" data-tab="kinetic" id="tabK">Kinetic Sheet</button>
+        <button data-tab="summary" id="tabS">Full Summary</button>
+      </div>
+      <pre id="outpre"></pre>
+      <div class="copybar">
+        <button id="copybtn" class="primary">Copy</button>
+        <button id="printbtn">Print / PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ STATE ============ */
+const KEY = "rb_site_survey_v1";
+let S = load() || fresh();
+
+function fresh(){
+  return {
+    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:""},
+    job:"",
+    venueFrame:"",
+    prosc:{present:false, openW:"",openH:"",wallToWall:"",floorToGrid:"",apron:"",wingSL:"",wingSR:""},
+    treatments:[],
+    install:{responsibility:"", loadin:{doorH:"",doorW:"",path:"",obstructions:"",freight:false,freightH:"",freightW:"",freightL:"",access:"",accessBy:"",union:false,parking:false,multiLevel:false,notes:""}},
+    generalNotes:""
+  };
+}
+function load(){ try{return JSON.parse(localStorage.getItem(KEY));}catch(e){return null;} }
+let saveT;
+function save(){
+  clearTimeout(saveT);
+  document.getElementById("savechip").textContent="Saving…";
+  saveT=setTimeout(()=>{ localStorage.setItem(KEY,JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; },250);
+}
+function uid(){ return "t"+Math.random().toString(36).slice(2,8); }
+
+/* ============ SCHEMAS ============ */
+const JOB_TYPES=[["new","New install"],["replace","Replacement"],["repair","Repair / refurbish"],["addon","Add-on"]];
+const FRAMES=[["","Select…"],["proscenium","Proscenium theatre"],["gym","Gymnatorium / flat stage"],["blackbox","Black box"],["auditorium","Auditorium"],["worship","House of worship"],["ballroom","Ballroom / event"],["studio","Studio (cyc)"],["other","Other"]];
+
+// Treatment type -> field family
+const TYPES=[
+  ["","Select type…",""],
+  ["main","Main / Front curtain","drawn"],
+  ["traveler","Traveler curtain","drawn"],
+  ["valance","Valance","valance"],
+  ["leg","Leg","flat"],
+  ["border","Border / Teaser","flat"],
+  ["tab","Tab","flat"],
+  ["cyc","Cyclorama","backdrop"],
+  ["scrim","Scrim","backdrop"],
+  ["drop","Backdrop / Drop","backdrop"],
+  ["pipedrape","Pipe & Drape","pipedrape"],
+  ["arch","Architectural / Window drape","arch"],
+  ["other","Other","other"]
+];
+const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[2]:"";};
+const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[1]:"";};
+
+const FABRICS=["Velour IFR","Commando cloth","IFR muslin","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Encore velour","Other (type)"];
+const PLEATS=["Shirred","Box","Pinch","Knife","Pleater tape","Flat (none)"];
+const TOPFIN=["4\" webbing + ties","4\" webbing + grommets","Webbing + snaps","Pipe pocket","Velcro","Pleated header"];
+const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weight pocket"];
+const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
+const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
+const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
+
+// field builders return [key,label,control,opts,sub]
+function drawnFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
+  ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
+  ["h","Height","text",null,"finished, e.g. 20'-0\""],
+  ["w","Width","text",null,"finished / opening"],
+  ["topFin","Top finish","datalist",TOPFIN,""],
+  ["botFin","Bottom finish","datalist",BOTFIN,""],
+  ["sideFin","Side finish","datalist",SIDEFIN,""],
+  ["draw","Draw style","select",["",...DRAW],""],
+  ["overlap","Overlap","text",null,"center overlap"]
+];}
+function valanceFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
+  ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
+  ["profile","Profile / shape","text",null,"e.g. pointed, straight, arched"],
+  ["h","Height (peak / ends)","text",null,"e.g. peak 6'-4\", ends 1'-8\""],
+  ["w","Width (developed)","text",null,"along face / arc"],
+  ["topFin","Top finish","datalist",TOPFIN,"e.g. 4\" webbing stapled"],
+  ["botFin","Bottom finish","datalist",BOTFIN,""],
+  ["oneSided","One-sided?","toggle",null,""]
+];}
+function flatFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ["h","Height","text",null,""],
+  ["w","Width","text",null,""],
+  ["topFin","Top finish","datalist",TOPFIN,""],
+  ["botFin","Bottom finish","datalist",BOTFIN,""],
+  ["sideFin","Side finish","datalist",SIDEFIN,""]
+];}
+function backdropFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ["h","Height","text",null,""],
+  ["w","Width","text",null,""],
+  ["seamless","Seamless?","toggle",null,""],
+  ["topFin","Top finish","datalist",["Pipe pocket","Webbing + ties","Grommets"],""],
+  ["botFin","Bottom finish","datalist",["Chain pocket","Pipe pocket","Plain hem"],""],
+  ["sideFin","Side finish","datalist",["Ties","Plain","Webbing"],""]
+];}
+function pipedrapeFields(){return [
+  ["panelH","Panel height","text",null,""],
+  ["panelW","Panel width","text",null,""],
+  ["qty","Panel qty","number",null,""],
+  ["uprightRange","Upright height range","text",null,"e.g. 8'-14'"],
+  ["baseType","Base type / weight","text",null,""],
+  ["crossbars","Crossbars","text",null,"adjustable range"],
+  ["fabric","Fabric","datalist",FABRICS,""]
+];}
+function archFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,""],
+  ["h","Height","text",null,""],
+  ["w","Width","text",null,""],
+  ["header","Header / pleat","text",null,""],
+  ["mount","Mount","text",null,""],
+  ["stack","Stackback","text",null,""]
+];}
+function otherFields(){return [
+  ["fabric","Fabric","datalist",FABRICS,""],
+  ["h","Height","text",null,""],
+  ["w","Width","text",null,""],
+  ["desc","Description","textarea",null,""]
+];}
+const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,other:otherFields};
+const MOVABLE=new Set(["drawn","valance","flat"]); // can have an operation
+
+function opFields(op){
+  switch(op){
+    case "fixed": return [["hang","Hang method","text",null,"e.g. tie-line to pipe"]];
+    case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","text",null,""],["mount","Mount","text",null,"wall / ceiling / pipe"]];
+    case "cord": return [["track","Track series","text",null,""],["cording","Cording type","text",null,""],["overlap","Overlap","text",null,""],["mount","Mount","text",null,""]];
+    case "motor": return [["track","Track series","text",null,""],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""]];
+    case "fly": return [["batten","Batten / pipe","text",null,""],["trimHi","Trim - high","text",null,""],["trimLo","Trim - low","text",null,""],["arbor","Counterweight / arbor","text",null,""],["rig","Rigging notes","textarea",null,""]];
+    default: return [];
+  }
+}
+
+/* ============ RENDER ============ */
+const app=document.getElementById("app");
+function el(html){const d=document.createElement("div");d.innerHTML=html.trim();return d.firstChild;}
+function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+function field(f,val,onkey){
+  const [key,label,ctrl,opts,sub]=f;
+  const id=onkey+"__"+key;
+  const subhtml=sub?` <span class="sub">(${esc(sub)})</span>`:"";
+  let control="";
+  if(ctrl==="toggle"){
+    return `<div class="toggle"><span>${esc(label)}${subhtml}</span><label class="sw"><input type="checkbox" data-k="${key}" data-t="${onkey}" ${val?"checked":""}><span class="track"></span></label></div>`;
+  }
+  if(ctrl==="textarea"){ control=`<textarea data-k="${key}" data-t="${onkey}">${esc(val||"")}</textarea>`; }
+  else if(ctrl==="select"){
+    control=`<select data-k="${key}" data-t="${onkey}">`+opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const l=Array.isArray(o)?o[1]:(o||"Select…");return `<option value="${esc(v)}" ${val===v?"selected":""}>${esc(l)}</option>`;}).join("")+`</select>`;
+  }
+  else if(ctrl==="datalist"){
+    control=`<input type="text" list="${id}_dl" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}"><datalist id="${id}_dl">`+opts.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist>`;
+  }
+  else{ control=`<input type="${ctrl==="number"?"number":"text"}" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}">`; }
+  return `<label class="f"><span>${esc(label)}${subhtml}</span>${control}</label>`;
+}
+
+function treatmentCard(t,i){
+  const fam=typeFamily(t.type);
+  const showOp=MOVABLE.has(fam);
+  const missingType=!t.type;
+  let fieldsHtml="";
+  if(fam && FAMILY_FIELDS[fam]){
+    const fs=FAMILY_FIELDS[fam]();
+    // 2-col grid for compact fields
+    fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)).join("")+`</div>`;
+  }
+  let opHtml="";
+  if(showOp){
+    opHtml=`<div class="reveal">
+      <label class="f"><span>Operation</span>
+      <select data-op="${t.id}">`+OPS.map(o=>`<option value="${o[0]}" ${t.operation===o[0]?"selected":""}>${o[1]}</option>`).join("")+`</select></label>`;
+    const ofs=opFields(t.operation);
+    if(ofs.length){ opHtml+=`<div class="grid2">`+ofs.map(f=>(f[2]==="textarea")?`</div>${field(f,t.opFields[f[0]],t.id+"_op")}<div class="grid2">`:field(f,t.opFields[f[0]],t.id+"_op")).join("")+`</div>`; }
+    opHtml+=`</div>`;
+  }
+  const title=t.type? `${typeLabel(t.type)}${t.label?" — "+esc(t.label):""}` : "New treatment";
+  return `<div class="treat ${missingType?"":""}">
+    <div class="thead"><span class="tnum">${i+1}</span><span class="ttitle">${title}</span><button class="del" data-del="${t.id}">&times;</button></div>
+    <div class="tbody">
+      <div class="grid2">
+        <label class="f"><span>Type</span><select data-type="${t.id}">`+TYPES.map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
+        <label class="f"><span>Label / location <span class="sub">(optional)</span></span><input type="text" data-label="${t.id}" value="${esc(t.label||"")}"></label>
+      </div>
+      ${t.type?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
+      ${t.type?`<span class="fam">${fam} goods</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
+      ${fieldsHtml}
+      ${opHtml}
+    </div>
+  </div>`;
+}
+
+function render(){
+  const doneJob=!!S.job, doneFrame=!!S.venueFrame;
+  let h="";
+
+  // SECTION 1: Job & Venue
+  h+=`<div class="sect"><h2><span class="n">1</span> Job &amp; Venue</h2><div class="body">
+    <label class="f"><span>Job type</span></label>
+    <div class="seg" id="jobseg">`+JOB_TYPES.map(j=>`<button data-job="${j[0]}" class="${S.job===j[0]?"on":""}">${j[1]}</button>`).join("")+`</div>
+    <div class="grid2">
+      ${miniField("venue","Venue name")}
+      ${miniField("quote","Quote # (if any)")}
+    </div>
+    ${miniField("address","Address")}
+    <div class="grid2">${miniField("date","Date")}${miniField("surveyor","Surveyor")}</div>
+    <div class="grid2">${miniField("contactName","Contact name")}${miniField("contactTitle","Contact title")}</div>
+    <div class="grid2">${miniField("contactEmail","Contact email")}${miniField("contactCell","Contact cell")}</div>
+    <label class="f" style="margin-top:14px"><span>Venue frame</span>
+      <select id="frame">`+FRAMES.map(f=>`<option value="${f[0]}" ${S.venueFrame===f[0]?"selected":""}>${f[1]}</option>`).join("")+`</select></label>
+    <div class="toggle"><span>Proscenium arch present?</span><label class="sw"><input type="checkbox" id="proscTog" ${S.prosc.present?"checked":""}><span class="track"></span></label></div>
+    ${S.prosc.present?proscBlock():""}
+  </div></div>`;
+
+  // SECTION 2: Treatments
+  h+=`<div class="sect"><h2><span class="n">2</span> Treatments in scope</h2>
+    <div class="hint">Add one per soft good. Each type loads only its own fields. Enter fabric, fullness and pleat style as observed — never assumed.</div>
+    <div class="body">
+      ${S.treatments.length?S.treatments.map((t,i)=>treatmentCard(t,i)).join(""):`<div class="empty">No treatments yet.</div>`}
+      <button class="addbtn" id="addTreat">+ Add treatment</button>
+    </div></div>`;
+
+  // SECTION 3: Install & Logistics
+  h+=`<div class="sect"><h2><span class="n">3</span> Install &amp; Logistics</h2><div class="body">
+    <label class="f"><span>Who installs?</span></label>
+    <div class="seg sm" id="respseg">
+      <button data-resp="rb" class="${S.install.responsibility==="rb"?"on":""}">Rose Brand</button>
+      <button data-resp="installer" class="${S.install.responsibility==="installer"?"on":""}">Ship to installer</button>
+      <button data-resp="client" class="${S.install.responsibility==="client"?"on":""}">Client self-install</button>
+    </div>
+    ${S.install.responsibility==="rb"?loadinBlock():`<div class="hint" style="padding:12px 0 0">Load-in section hidden — Rose Brand is not installing this job.</div>`}
+  </div></div>`;
+
+  // SECTION 4: Notes
+  h+=`<div class="sect"><h2><span class="n">4</span> General notes</h2><div class="body">
+    <label class="f"><span>Anything the form didn't capture</span><textarea id="gnotes">${esc(S.generalNotes)}</textarea></label>
+  </div></div>`;
+
+  app.innerHTML=h;
+  document.getElementById("hdrsub").textContent = S.meta.venue ? S.meta.venue : "New survey";
+  bind();
+}
+
+function miniField(k,label){
+  return `<label class="f"><span>${label}</span><input type="text" data-meta="${k}" value="${esc(S.meta[k]||"")}"></label>`;
+}
+function proscBlock(){
+  const p=S.prosc;
+  const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-prosc="${k}" value="${esc(p[k]||"")}"></label>`;
+  return `<div class="reveal"><div class="hint" style="padding:0 0 4px">Confirm which dim each captures on your form — labels are my best read.</div>
+    <div class="grid2">${f("openW","Opening width")}${f("openH","Opening height")}</div>
+    <div class="grid2">${f("wallToWall","Wall to wall","smash")}${f("floorToGrid","Floor to grid / header")}</div>
+    <div class="grid2">${f("apron","Apron depth")}${f("wingSL","Wing width SL")}</div>
+    ${f("wingSR","Wing width SR")}
+  </div>`;
+}
+function loadinBlock(){
+  const L=S.install.loadin;
+  const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-loadin="${k}" value="${esc(L[k]||"")}"></label>`;
+  const tog=(k,l)=>`<div class="toggle"><span>${l}</span><label class="sw"><input type="checkbox" data-loaditog="${k}" ${L[k]?"checked":""}><span class="track"></span></label></div>`;
+  return `<div class="reveal">
+    <div class="grid2">${f("doorW","Load-in door W")}${f("doorH","Load-in door H")}</div>
+    ${f("path","Load-in path")}
+    ${f("obstructions","Obstructions / tight turns")}
+    ${tog("freight","Freight elevator?")}
+    ${L.freight?`<div class="grid3">${f("freightH","Frt H")}${f("freightW","Frt W")}${f("freightL","Frt L")}</div>`:""}
+    <div class="grid2">${f("access","Access equip","lift/scaff/ladder")}${f("accessBy","Provided by")}</div>
+    ${tog("union","Union house?")}
+    ${tog("parking","Parking / dock?")}
+    ${tog("multiLevel","Multi-level building?")}
+    <label class="f"><span>Load-in notes</span><textarea data-loadin="notes">${esc(L.notes||"")}</textarea></label>
+  </div>`;
+}
+
+/* ============ BIND ============ */
+function bind(){
+  // job seg
+  app.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>{S.job=b.dataset.job;save();render();});
+  // meta
+  app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue")document.getElementById("hdrsub").textContent=i.value||"New survey";});
+  // frame
+  const fr=document.getElementById("frame"); if(fr)fr.onchange=()=>{S.venueFrame=fr.value;save();};
+  const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
+  app.querySelectorAll("[data-prosc]").forEach(i=>i.oninput=()=>{S.prosc[i.dataset.prosc]=i.value;save();});
+  // treatments
+  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{}});save();render();};
+  app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
+  app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
+  app.querySelectorAll("[data-label]").forEach(i=>i.oninput=()=>{T(i.dataset.label).label=i.value;save();document.querySelectorAll(`[data-del]`);});
+  app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
+  app.querySelectorAll("[data-qty]").forEach(i=>i.oninput=()=>{T(i.dataset.qty).qty=i.value;save();});
+  app.querySelectorAll("[data-op]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.op);t.operation=s.value;t.opFields={};save();render();});
+  // treatment fields (data-k + data-t)
+  app.querySelectorAll("[data-k]").forEach(inp=>{
+    const handler=()=>{const t=T(inp.dataset.t.replace("_op",""));const bucket=inp.dataset.t.endsWith("_op")?t.opFields:t.fields;bucket[inp.dataset.k]=(inp.type==="checkbox")?inp.checked:inp.value;save();};
+    inp.oninput=handler; inp.onchange=handler;
+  });
+  // install
+  app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
+  app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
+  app.querySelectorAll("[data-loaditog]").forEach(i=>i.onchange=()=>{S.install.loadin[i.dataset.loaditog]=i.checked;save();render();});
+  const gn=document.getElementById("gnotes"); if(gn)gn.oninput=()=>{S.generalNotes=gn.value;save();};
+}
+function T(id){return S.treatments.find(t=>t.id===id);}
+
+/* ============ OUTPUT ============ */
+function ftxt(t){
+  const fam=typeFamily(t.type);
+  const F=t.fields||{}, O=t.opFields||{};
+  const parts=[];
+  const dims=[F.w?("W "+F.w):"",F.h?("H "+F.h):""].filter(Boolean).join(" × ");
+  if(dims)parts.push(dims);
+  if(F.fabric)parts.push(F.fabric);
+  if(F.pleat||F.fullness)parts.push([F.pleat,F.fullness].filter(Boolean).join(" "));
+  const fins=[F.topFin&&("top: "+F.topFin),F.botFin&&("btm: "+F.botFin),F.sideFin&&("side: "+F.sideFin)].filter(Boolean);
+  if(fins.length)parts.push(fins.join(", "));
+  if(F.draw)parts.push("draw: "+F.draw);
+  if(F.overlap)parts.push("overlap "+F.overlap);
+  if(F.profile)parts.push("profile: "+F.profile);
+  if(F.seamless)parts.push("seamless");
+  if(F.oneSided)parts.push("one-sided");
+  if(fam==="pipedrape")parts.push([F.panelW&&("panel "+F.panelW+"×"+(F.panelH||"")),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType)].filter(Boolean).join(", "));
+  if(t.operation){
+    const opLabel=(OPS.find(o=>o[0]===t.operation)||[])[1]||t.operation;
+    const opBits=[opLabel];
+    if(O.track)opBits.push("track "+O.track);
+    if(O.motor)opBits.push("motor "+O.motor);
+    if(O.power)opBits.push(O.power);
+    if(O.control)opBits.push("ctrl "+O.control);
+    if(O.batten)opBits.push("batten "+O.batten);
+    parts.push("["+opBits.join(", ")+"]");
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+function kineticSheet(){
+  const m=S.meta;
+  let o=`ROSE BRAND — SITE SURVEY → KINETIC QUOTE\n`;
+  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:""}\n`;
+  o+=`${m.address||""}\n`;
+  o+=`Date ${m.date||"—"}  ·  Surveyor ${m.surveyor||"—"}\n`;
+  o+=`Job: ${(JOB_TYPES.find(j=>j[0]===S.job)||["","—"])[1]}  ·  Frame: ${(FRAMES.find(f=>f[0]===S.venueFrame)||["","—"])[1]}\n`;
+  o+=`Install: ${({rb:"Rose Brand",installer:"Ship to installer",client:"Client self-install"}[S.install.responsibility]||"—")}\n`;
+  o+=`${"—".repeat(46)}\nLINE ITEMS\n`;
+  if(!S.treatments.length)o+=`  (none)\n`;
+  S.treatments.forEach((t,i)=>{
+    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+(t.basis==="match"?"match existing":"new from opening")+")":""}\n`;
+    const line=ftxt(t);
+    if(line)o+=`    ${line}\n`;
+  });
+  if(S.install.responsibility==="rb"){
+    const L=S.install.loadin;
+    const li=[L.doorW&&("door "+L.doorW+"×"+(L.doorH||"")),L.freight&&("freight "+(L.freightW||"")+"×"+(L.freightH||"")+"×"+(L.freightL||"")),L.access&&("access "+L.access),L.union&&"union",L.parking&&"parking",L.multiLevel&&"multi-level"].filter(Boolean).join(", ");
+    o+=`${"—".repeat(46)}\nLOAD-IN: ${li||"—"}\n`;
+    if(L.path)o+=`  path: ${L.path}\n`;
+    if(L.obstructions)o+=`  obstructions: ${L.obstructions}\n`;
+    if(L.notes)o+=`  notes: ${L.notes}\n`;
+  }
+  if(S.generalNotes)o+=`${"—".repeat(46)}\nNOTES: ${S.generalNotes}\n`;
+  return o;
+}
+function fullSummary(){
+  const m=S.meta;
+  let o=kineticSheet()+`\n${"=".repeat(46)}\nCONTACT\n`;
+  o+=`  ${m.contactName||"—"}${m.contactTitle?", "+m.contactTitle:""}\n  ${m.contactEmail||""}  ${m.contactCell||""}\n`;
+  if(S.prosc.present){
+    const p=S.prosc;
+    o+=`${"=".repeat(46)}\nPROSCENIUM\n  opening ${p.openW||"?"} × ${p.openH||"?"} · wall-to-wall ${p.wallToWall||"?"} · floor-to-grid ${p.floorToGrid||"?"} · apron ${p.apron||"?"} · wings SL ${p.wingSL||"?"} / SR ${p.wingSR||"?"}\n`;
+  }
+  o+=`${"=".repeat(46)}\nTREATMENT DETAIL\n`;
+  S.treatments.forEach((t,i)=>{
+    o+=`\n#${i+1} ${typeLabel(t.type)}${t.label?" — "+t.label:""}\n`;
+    const F=t.fields||{};
+    Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
+    if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
+  });
+  return o;
+}
+let CURTAB="kinetic";
+function showOut(){
+  document.getElementById("outpre").textContent = CURTAB==="kinetic"?kineticSheet():fullSummary();
+  document.getElementById("outmodal").classList.add("show");
+}
+document.getElementById("genbtn").onclick=showOut;
+document.getElementById("outx").onclick=()=>document.getElementById("outmodal").classList.remove("show");
+document.getElementById("tabK").onclick=()=>{CURTAB="kinetic";document.getElementById("tabK").classList.add("on");document.getElementById("tabS").classList.remove("on");showOut();};
+document.getElementById("tabS").onclick=()=>{CURTAB="summary";document.getElementById("tabS").classList.add("on");document.getElementById("tabK").classList.remove("on");showOut();};
+document.getElementById("copybtn").onclick=()=>{navigator.clipboard.writeText(document.getElementById("outpre").textContent).then(()=>{const b=document.getElementById("copybtn");b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy",1400);});};
+document.getElementById("printbtn").onclick=()=>window.print();
+document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? Current one is saved in this browser only until overwritten.")){S=fresh();save();render();} };
+
+render();
+</script>
+</body>
+</html>
