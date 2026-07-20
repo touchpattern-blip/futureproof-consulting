@@ -623,6 +623,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
         <button data-tool="erase" id="tErase">Erase</button>
         <button data-tool="edit" id="tEdit">Edit</button>
         <button id="tGrid">Grid</button>
+        <button id="tScale" title="Scale shape to entered dims">Scale</button>
         <div class="sep"></div>
         <button id="skUndo">Undo</button>
         <button id="skClear">Clear</button>
@@ -641,7 +642,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   const canvas=document.getElementById("skcanvas"), ctx=canvas.getContext("2d");
   let SK=null, CURT=null, TOOL="pen", DPR=1;
   let drawing=false, curRaw=null, activePid=null, penSeen=false;
-  let SEL=null, KPedge=null, KPstr="", dragV=null, GRID="off", GRIDSZ=28;
+  let SEL=null, KPedge=null, KPstr="", dragV=null, GRID="off", GRIDSZ=28, snapTarget=null;
 
   // ---- geometry ----
   function bbox(pts){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; pts.forEach(p=>{x1=Math.min(x1,p[0]);y1=Math.min(y1,p[1]);x2=Math.max(x2,p[0]);y2=Math.max(y2,p[1]);}); return {w:x2-x1,h:y2-y1}; }
@@ -665,11 +666,11 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     if(v.length>2){ const d=Math.hypot(v[0][0]-v[v.length-1][0],v[0][1]-v[v.length-1][1]); if(d<30) v[v.length-1]=v[0].slice(); }
     const ids=[]; for(let i=0;i<v.length-1;i++){ if(Math.abs(v[i][0]-v[i+1][0])<0.5&&Math.abs(v[i][1]-v[i+1][1])<0.5)continue; const id=SK.nextId++; SK.edges.push({id,x1:v[i][0],y1:v[i][1],x2:v[i+1][0],y2:v[i+1][1],dim:null}); ids.push(id); } return ids; }
   function snap(raw){ if(raw.length<2)return []; const bx=bbox(raw); const diag=Math.hypot(bx.w,bx.h)||1; let v=resample(raw,2); v=rdp(v,Math.max(8,0.05*diag)); v=dropStraight(v,18); v=ortho(v,12); v=mergeCollinear(v,10); if(GRID!=="off")v=v.map(snapGrid); v=mergeCollinear(v,8); return integrate(v); }
-  function hitVertex(p){ let best=null,bd=24; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]); if(d<bd){bd=d;best={x:q[0],y:q[1]};}}); }); return best; }
+  function hitVertex(p){ let best=null,bd=32; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]); if(d<bd){bd=d;best={x:q[0],y:q[1]};}}); }); return best; }
   function moveVertex(ox,oy,nx,ny){ SK.edges.forEach(e=>{ if(Math.abs(e.x1-ox)<0.5&&Math.abs(e.y1-oy)<0.5){e.x1=nx;e.y1=ny;} if(Math.abs(e.x2-ox)<0.5&&Math.abs(e.y2-oy)<0.5){e.x2=nx;e.y2=ny;} }); }
   function snapVertex(np,drag){ const neigh=[]; SK.edges.forEach(e=>{ if(Math.abs(e.x1-drag.ox)<0.5&&Math.abs(e.y1-drag.oy)<0.5)neigh.push([e.x2,e.y2]); if(Math.abs(e.x2-drag.ox)<0.5&&Math.abs(e.y2-drag.oy)<0.5)neigh.push([e.x1,e.y1]); });
     let x=np[0],y=np[1]; neigh.forEach(q=>{ if(Math.abs(x-q[0])<11)x=q[0]; if(Math.abs(y-q[1])<11)y=q[1]; });
-    let best=null,bd=18; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{ if(Math.abs(q[0]-drag.ox)<0.5&&Math.abs(q[1]-drag.oy)<0.5)return; const d=Math.hypot(x-q[0],y-q[1]); if(d<bd){bd=d;best=q;} }); }); if(best){x=best[0];y=best[1];}
+    let best=null,bd=28; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{ if(Math.abs(q[0]-drag.ox)<0.5&&Math.abs(q[1]-drag.oy)<0.5)return; const d=Math.hypot(x-q[0],y-q[1]); if(d<bd){bd=d;best=q;} }); }); if(best){x=best[0];y=best[1];snapTarget=[x,y];}else{snapTarget=null;}
     return [x,y]; }
   function snapGrid(pt){ if(GRID==="sq") return [Math.round(pt[0]/GRIDSZ)*GRIDSZ,Math.round(pt[1]/GRIDSZ)*GRIDSZ];
     if(GRID==="tri"){ const h=GRIDSZ*0.8660254; let best=null,bd=1e9,r0=Math.round(pt[1]/h); for(let r=r0-1;r<=r0+1;r++){ const o=(((r%2)+2)%2)?GRIDSZ/2:0,c=Math.round((pt[0]-o)/GRIDSZ),x=c*GRIDSZ+o,y=r*h,d=Math.hypot(pt[0]-x,pt[1]-y); if(d<bd){bd=d;best=[x,y];} } return best; }
@@ -678,6 +679,18 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     if(GRID==="sq"){ for(let x=0;x<=W;x+=G)for(let y=0;y<=H;y+=G){ ctx.beginPath(); ctx.arc(x,y,1.4*DPR,0,7); ctx.fill(); } }
     else{ const h=G*0.8660254; let row=0; for(let y=0;y<=H;y+=h,row++){ const off=(row%2)?G/2:0; for(let x=off;x<=W;x+=G){ ctx.beginPath(); ctx.arc(x,y,1.4*DPR,0,7); ctx.fill(); } } } }
   function cycleGrid(){ GRID=GRID==="off"?"sq":(GRID==="sq"?"tri":"off"); if(SK)SK.grid=GRID; const b=document.getElementById("tGrid"); b.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); b.classList.toggle("on",GRID!=="off"); save(); render(); }
+  function median(a){ if(!a.length)return 0; const b=a.slice().sort((x,y)=>x-y),m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; }
+  function fitView(){ if(!SK.edges.length)return 1; let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; SK.edges.forEach(e=>{x1=Math.min(x1,e.x1,e.x2);y1=Math.min(y1,e.y1,e.y2);x2=Math.max(x2,e.x1,e.x2);y2=Math.max(y2,e.y1,e.y2);}); const gw=(x2-x1)||1,gh=(y2-y1)||1,r=canvas.getBoundingClientRect(),k=Math.min(r.width*0.8/gw,r.height*0.8/gh,4),cx=(x1+x2)/2,cy=(y1+y2)/2,tx=r.width/2,ty=r.height/2; SK.edges.forEach(e=>{ e.x1=tx+(e.x1-cx)*k; e.y1=ty+(e.y1-cy)*k; e.x2=tx+(e.x2-cx)*k; e.y2=ty+(e.y2-cy)*k; }); return k; }
+  function trueUp(){ const dm=SK.edges.filter(e=>e.dim&&parseFeet(e.dim.text)!=null&&parseFeet(e.dim.text)>0); if(!dm.length){ alert("Dimension at least one edge first (Dim tool), then tap Scale."); return; }
+    const info=dm.map(e=>{ const dx=Math.abs(e.x2-e.x1),dy=Math.abs(e.y2-e.y1); return {dx,dy,len:Math.hypot(dx,dy),feet:parseFeet(e.dim.text)}; });
+    const S=median(info.map(i=>i.len/i.feet));
+    const hor=info.filter(i=>i.dy<0.35*i.dx), ver=info.filter(i=>i.dx<0.35*i.dy);
+    let kx=hor.length?median(hor.map(i=>i.feet*S/i.dx)):null, ky=ver.length?median(ver.map(i=>i.feet*S/i.dy)):null;
+    if(kx==null&&ky==null){ const k=median(info.map(i=>i.feet*S/i.len)); kx=ky=k; } else if(kx==null){kx=ky;} else if(ky==null){ky=kx;}
+    let ax=1e9,ay=1e9; SK.edges.forEach(e=>{ax=Math.min(ax,e.x1,e.x2);ay=Math.min(ay,e.y1,e.y2);});
+    SK.edges.forEach(e=>{ e.x1=ax+(e.x1-ax)*kx; e.y1=ay+(e.y1-ay)*ky; e.x2=ax+(e.x2-ax)*kx; e.y2=ay+(e.y2-ay)*ky; });
+    fitView(); SK.scaled=true; save(); render();
+    document.getElementById("skhint").textContent="Scaled to your dims — shape now matches the entered feet-inches."; }
   function distSeg(p,e){ const dx=e.x2-e.x1,dy=e.y2-e.y1,L2=dx*dx+dy*dy||1; let t=((p[0]-e.x1)*dx+(p[1]-e.y1)*dy)/L2; t=Math.max(0,Math.min(1,t)); const cx=e.x1+t*dx,cy=e.y1+t*dy; return Math.hypot(p[0]-cx,p[1]-cy); }
   function hitEdge(p){ let best=null,bd=24; SK.edges.forEach(e=>{const d=distSeg(p,e); if(d<bd){bd=d;best=e;}}); return best; }
 
@@ -695,10 +708,12 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     // edges
     SK.edges.forEach(e=>{ ctx.beginPath(); ctx.lineWidth=(SEL&&e.id===SEL?4:2.6)*DPR; ctx.strokeStyle=(SEL&&e.id===SEL?"#0d6efd":"#111315"); ctx.moveTo(e.x1*DPR,e.y1*DPR); ctx.lineTo(e.x2*DPR,e.y2*DPR); ctx.stroke(); });
     // vertices
-    const isEd=(TOOL==="edit"); const seen=new Set();
+    const isEd=(TOOL==="edit"); const seen=new Set(), deg={};
+    SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{ const k=Math.round(p[0])+","+Math.round(p[1]); deg[k]=(deg[k]||0)+1; }); });
     SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{ const k=Math.round(p[0])+","+Math.round(p[1]); if(seen.has(k))return; seen.add(k);
-      if(isEd){ const s=5.5*DPR; ctx.fillStyle="#fff"; ctx.strokeStyle="#0d6efd"; ctx.lineWidth=2*DPR; ctx.beginPath(); ctx.rect(p[0]*DPR-s,p[1]*DPR-s,2*s,2*s); ctx.fill(); ctx.stroke(); }
+      if(isEd){ const open=(deg[k]===1); const s=5.5*DPR; ctx.fillStyle="#fff"; ctx.strokeStyle=open?"#c0392b":"#0d6efd"; ctx.lineWidth=(open?2.6:2)*DPR; ctx.beginPath(); ctx.rect(p[0]*DPR-s,p[1]*DPR-s,2*s,2*s); ctx.fill(); ctx.stroke(); }
       else{ ctx.fillStyle="#111315"; ctx.beginPath(); ctx.arc(p[0]*DPR,p[1]*DPR,3.2*DPR,0,7); ctx.fill(); } }); });
+    if(dragV&&snapTarget){ ctx.strokeStyle="#1a9850"; ctx.lineWidth=2.6*DPR; ctx.beginPath(); ctx.arc(snapTarget[0]*DPR,snapTarget[1]*DPR,12*DPR,0,7); ctx.stroke(); }
     // dims
     ctx.font=`${13*DPR}px ui-monospace,monospace`; ctx.textAlign="center"; ctx.textBaseline="middle";
     SK.edges.forEach(e=>{ if(e.dim){ const mx=(e.x1+e.x2)/2*DPR,my=(e.y1+e.y2)/2*DPR-9*DPR; ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(e.dim.text,mx,my); ctx.fillStyle="#111315"; ctx.fillText(e.dim.text,mx,my); } });
@@ -707,14 +722,14 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   function renderLive(){ render(); if(curRaw&&curRaw.length){ ctx.beginPath(); ctx.lineWidth=2.2*DPR; ctx.strokeStyle="#0d6efd"; curRaw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); } }
 
   // ---- pointer ----
-  canvas.addEventListener("pointerdown",e=>{ if(!SK)return; if(e.pointerType==="pen")penSeen=true; if(e.pointerType==="touch"&&penSeen)return;
+  canvas.addEventListener("pointerdown",e=>{ if(!SK)return; if(e.pointerType==="pen")penSeen=true; if(e.pointerType==="touch"&&penSeen&&TOOL==="pen")return;
     const p=xy(e);
     if(TOOL==="dim"){ const ed=hitEdge(p); if(ed) openKeypad(ed); return; }
     if(TOOL==="erase"){ const ed=hitEdge(p); if(ed){ SK.edges=SK.edges.filter(x=>x.id!==ed.id); SK.strokes.forEach(s=>s.edgeIds=s.edgeIds.filter(id=>id!==ed.id)); save(); render(); } return; }
     if(TOOL==="edit"){ const vx=hitVertex(p); if(vx){ dragV={ox:vx.x,oy:vx.y}; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; } return; }
     drawing=true; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; curRaw=[p]; });
   canvas.addEventListener("pointermove",e=>{ if(dragV&&e.pointerId===activePid){ let np=snapVertex(xy(e),dragV); if(GRID!=="off")np=snapGrid(np); moveVertex(dragV.ox,dragV.oy,np[0],np[1]); dragV.ox=np[0];dragV.oy=np[1]; render(); return; } if(!drawing||e.pointerId!==activePid)return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(x=>curRaw.push(xy(x))); renderLive(); });
-  function endStroke(e){ if(dragV){ dragV=null; save(); render(); return; } if(!drawing||(e&&e.pointerId!==activePid))return; drawing=false; if(curRaw&&curRaw.length>2){ const ids=snap(curRaw); SK.strokes.push({raw:curRaw,edgeIds:ids}); save(); } curRaw=null; render(); }
+  function endStroke(e){ if(dragV){ dragV=null; snapTarget=null; save(); render(); return; } if(!drawing||(e&&e.pointerId!==activePid))return; drawing=false; if(curRaw&&curRaw.length>2){ const ids=snap(curRaw); SK.strokes.push({raw:curRaw,edgeIds:ids}); save(); } curRaw=null; render(); }
   canvas.addEventListener("pointerup",endStroke); canvas.addEventListener("pointercancel",endStroke); canvas.addEventListener("pointerleave",e=>{ if(drawing)endStroke(e); });
 
   // ---- keypad ----
@@ -744,12 +759,13 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(_){}} ,300); }
 
   // ---- rail wiring ----
-  function setTool(t){ TOOL=t; ["pen","dim","erase","edit"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it.",edit:"Edit: drag any corner (blue square). It snaps to align with neighbors and welds to nearby corners."}[t]; document.getElementById("skhint").textContent=h; render(); }
+  function setTool(t){ TOOL=t; ["pen","dim","erase","edit"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it.",edit:"Edit: drag a corner. Red squares = open ends — drag one onto another point to join it (green ring = will snap). Blue = joined."}[t]; document.getElementById("skhint").textContent=h; render(); }
   document.getElementById("tPen").onclick=()=>setTool("pen");
   document.getElementById("tDim").onclick=()=>setTool("dim");
   document.getElementById("tErase").onclick=()=>setTool("erase");
   document.getElementById("tEdit").onclick=()=>setTool("edit");
   document.getElementById("tGrid").onclick=cycleGrid;
+  document.getElementById("tScale").onclick=trueUp;
   document.getElementById("skUndo").onclick=()=>{ const s=SK.strokes.pop(); if(!s)return; SK.edges=SK.edges.filter(e=>!s.edgeIds.includes(e.id)); save(); render(); };
   document.getElementById("skClear").onclick=()=>{ if(confirm("Clear this sketch?")){ SK.strokes=[]; SK.edges=[]; SK.nextId=1; save(); render(); } };
   document.getElementById("skSheet").onclick=sheet;
