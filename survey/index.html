@@ -87,7 +87,14 @@
   .out .copybar button{flex:1;font-size:14px;font-weight:700;padding:12px;border-radius:9px;border:1.5px solid var(--line);background:#fff;cursor:pointer;}
   .out .copybar button.primary{background:var(--ok);border-color:var(--ok);color:#fff;}
   .empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 0;}
-  @media print{header,.bar,.addbtn,.treat .thead button.del{display:none;}body{padding:0;}}
+  @media print{
+    header,.bar,.addbtn,.treat .thead button.del,#app,.out .phead,.out .tabs,.out .copybar{display:none !important;}
+    body{padding:0;}
+    .out{position:static !important;background:none !important;display:block !important;}
+    .out .panel{max-height:none !important;box-shadow:none !important;border-radius:0 !important;}
+    .out .pbody{overflow:visible !important;padding:0 !important;}
+    .out pre{border:none !important;background:none !important;padding:0 !important;}
+  }
 </style>
 </head>
 <body>
@@ -564,7 +571,15 @@ document.getElementById("outx").onclick=()=>document.getElementById("outmodal").
 document.getElementById("tabK").onclick=()=>{CURTAB="kinetic";document.getElementById("tabK").classList.add("on");document.getElementById("tabS").classList.remove("on");showOut();};
 document.getElementById("tabS").onclick=()=>{CURTAB="summary";document.getElementById("tabS").classList.add("on");document.getElementById("tabK").classList.remove("on");showOut();};
 document.getElementById("copybtn").onclick=()=>{navigator.clipboard.writeText(document.getElementById("outpre").textContent).then(()=>{const b=document.getElementById("copybtn");b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy",1400);});};
-document.getElementById("printbtn").onclick=()=>window.print();
+document.getElementById("printbtn").onclick=()=>{
+  const raw=document.getElementById("outpre").textContent;
+  const escd=raw.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const w=window.open("","_blank");
+  if(!w){ window.print(); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>RB Site Survey Handoff</title><style>@page{margin:0.5in;}html,body{margin:0;padding:0;}body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11pt;line-height:1.45;color:#000;}pre{white-space:pre-wrap;margin:0;}</style></head><body><pre>'+escd+'</pre></body></html>');
+  w.document.close(); w.focus();
+  setTimeout(function(){ w.print(); w.onafterprint=function(){ w.close(); }; }, 250);
+};
 document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? Current one is saved in this browser only until overwritten.")){S=fresh();save();render();} };
 
 render();
