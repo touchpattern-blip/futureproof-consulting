@@ -194,6 +194,7 @@ const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weig
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","16\"","24\""];
+const TRACKS=["ADC 1300","ADC 1400","ADC 1700","ADC 2800"];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
 
 // field builders return [key,label,control,opts,sub]
@@ -267,8 +268,8 @@ function opFields(op){
   switch(op){
     case "fixed": return [["hang","Hang method","text",null,"e.g. tie-line to pipe"]];
     case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","text",null,"wall / ceiling / pipe"]];
-    case "cord": return [["track","Track series","text",null,""],["cording","Cording type","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","text",null,""]];
-    case "motor": return [["track","Track series","text",null,""],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""]];
+    case "cord": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["cording","Cording type","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","text",null,""]];
+    case "motor": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""]];
     case "fly": return [["batten","Batten / pipe","text",null,""],["trimHi","Trim - high","text",null,""],["trimLo","Trim - low","text",null,""],["arbor","Counterweight / arbor","text",null,""],["rig","Rigging notes","textarea",null,""]];
     default: return [];
   }
