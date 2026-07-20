@@ -602,8 +602,9 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   .skhint{position:absolute;left:12px;bottom:12px;background:rgba(22,24,27,.82);color:#fff;font-size:12px;padding:7px 11px;border-radius:8px;z-index:3;max-width:62%;}
   .skkeypad{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #d9dde2;padding:12px;z-index:5;display:none;box-shadow:0 -3px 14px rgba(0,0,0,.14);}
   .skkeypad.show{display:block;}
-  .skkeypad .kh{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:700;margin-bottom:10px;}
-  .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:20px;color:#c8102e;min-width:80px;text-align:right;}
+  .skkeypad .kh{max-width:520px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .skkeypad #kplabel{font-size:12px;color:#6a7079;font-weight:600;white-space:nowrap;}
+  .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:26px;font-weight:700;color:#c8102e;flex:1;text-align:center;background:#fff5f6;border:1.5px solid #f3c6cd;border-radius:8px;padding:7px 12px;}
   .skgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:0 auto;}
   .skgrid button{min-height:54px;font-size:19px;font-weight:700;border-radius:9px;border:1.5px solid #d9dde2;background:#fff;cursor:pointer;font-family:ui-monospace,monospace;}
   .skgrid button.set{background:#1a9850;color:#fff;border-color:#1a9850;}
@@ -620,6 +621,8 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
         <button data-tool="pen" class="on" id="tPen">Pen</button>
         <button data-tool="dim" id="tDim">Dim</button>
         <button data-tool="erase" id="tErase">Erase</button>
+        <button data-tool="edit" id="tEdit">Edit</button>
+        <button id="tGrid">Grid</button>
         <div class="sep"></div>
         <button id="skUndo">Undo</button>
         <button id="skClear">Clear</button>
@@ -638,7 +641,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   const canvas=document.getElementById("skcanvas"), ctx=canvas.getContext("2d");
   let SK=null, CURT=null, TOOL="pen", DPR=1;
   let drawing=false, curRaw=null, activePid=null, penSeen=false;
-  let SEL=null, KPedge=null, KPstr="";
+  let SEL=null, KPedge=null, KPstr="", dragV=null, GRID="off", GRIDSZ=28;
 
   // ---- geometry ----
   function bbox(pts){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; pts.forEach(p=>{x1=Math.min(x1,p[0]);y1=Math.min(y1,p[1]);x2=Math.max(x2,p[0]);y2=Math.max(y2,p[1]);}); return {w:x2-x1,h:y2-y1}; }
@@ -652,13 +655,29 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     for(let i=1;i<pts.length-1;i++){ const d=perp(pts[i],a,b); if(d>dmax){dmax=d;idx=i;} }
     if(dmax>eps){ const l=rdp(pts.slice(0,idx+1),eps), r=rdp(pts.slice(idx),eps); return l.slice(0,-1).concat(r); }
     return [a.slice(),b.slice()]; }
-  function ortho(v){ for(let i=0;i<v.length-1;i++){ const dx=v[i+1][0]-v[i][0],dy=v[i+1][1]-v[i][1]; let ang=Math.atan2(dy,dx)*180/Math.PI; const aa=((ang%180)+180)%180;
-      if(aa<6||aa>174) v[i+1][1]=v[i][1]; else if(Math.abs(aa-90)<6) v[i+1][0]=v[i][0]; } return v; }
-  function integrate(v){ const eps=13; const pts=[]; SK.edges.forEach(e=>{pts.push([e.x1,e.y1]);pts.push([e.x2,e.y2]);});
+  function turnDeg(a,b,c){ let a1=Math.atan2(b[1]-a[1],b[0]-a[0]),a2=Math.atan2(c[1]-b[1],c[0]-b[0]); let d=Math.abs((a2-a1)*180/Math.PI); d=((d%360)+360)%360; if(d>180)d=360-d; return d; }
+  function dropStraight(v,thr){ if(v.length<3)return v; const out=[v[0]]; for(let i=1;i<v.length-1;i++){ const prev=out[out.length-1]; if(turnDeg(prev,v[i],v[i+1])>=thr) out.push(v[i]); } out.push(v[v.length-1]); return out; }
+  function mergeCollinear(v,thr){ if(v.length<3)return v; let out=v.slice(),ch=true; while(ch&&out.length>2){ ch=false; for(let i=1;i<out.length-1;i++){ if(turnDeg(out[i-1],out[i],out[i+1])<thr){ out.splice(i,1); ch=true; break; } } } return out; }
+  function ortho(v,tol){ tol=tol||12; for(let i=0;i<v.length-1;i++){ const dx=v[i+1][0]-v[i][0],dy=v[i+1][1]-v[i][1]; const aa=((Math.atan2(dy,dx)*180/Math.PI)%180+180)%180;
+      if(aa<tol||aa>180-tol) v[i+1][1]=v[i][1]; else if(Math.abs(aa-90)<tol) v[i+1][0]=v[i][0]; } return v; }
+  function integrate(v){ const eps=20; const pts=[]; SK.edges.forEach(e=>{pts.push([e.x1,e.y1]);pts.push([e.x2,e.y2]);});
     v=v.map(pt=>{ let best=null,bd=eps; pts.forEach(q=>{const d=Math.hypot(pt[0]-q[0],pt[1]-q[1]); if(d<bd){bd=d;best=q;}}); return best?best.slice():pt.slice(); });
-    if(v.length>2){ const d=Math.hypot(v[0][0]-v[v.length-1][0],v[0][1]-v[v.length-1][1]); if(d<18) v[v.length-1]=v[0].slice(); }
-    const ids=[]; for(let i=0;i<v.length-1;i++){ if(v[i][0]===v[i+1][0]&&v[i][1]===v[i+1][1])continue; const id=SK.nextId++; SK.edges.push({id,x1:v[i][0],y1:v[i][1],x2:v[i+1][0],y2:v[i+1][1],dim:null}); ids.push(id); } return ids; }
-  function snap(raw){ if(raw.length<2)return []; const bx=bbox(raw); const diag=Math.hypot(bx.w,bx.h)||1; let v=resample(raw,2); v=rdp(v,Math.max(3.5,0.02*diag)); v=ortho(v); return integrate(v); }
+    if(v.length>2){ const d=Math.hypot(v[0][0]-v[v.length-1][0],v[0][1]-v[v.length-1][1]); if(d<30) v[v.length-1]=v[0].slice(); }
+    const ids=[]; for(let i=0;i<v.length-1;i++){ if(Math.abs(v[i][0]-v[i+1][0])<0.5&&Math.abs(v[i][1]-v[i+1][1])<0.5)continue; const id=SK.nextId++; SK.edges.push({id,x1:v[i][0],y1:v[i][1],x2:v[i+1][0],y2:v[i+1][1],dim:null}); ids.push(id); } return ids; }
+  function snap(raw){ if(raw.length<2)return []; const bx=bbox(raw); const diag=Math.hypot(bx.w,bx.h)||1; let v=resample(raw,2); v=rdp(v,Math.max(8,0.05*diag)); v=dropStraight(v,18); v=ortho(v,12); v=mergeCollinear(v,10); if(GRID!=="off")v=v.map(snapGrid); v=mergeCollinear(v,8); return integrate(v); }
+  function hitVertex(p){ let best=null,bd=24; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]); if(d<bd){bd=d;best={x:q[0],y:q[1]};}}); }); return best; }
+  function moveVertex(ox,oy,nx,ny){ SK.edges.forEach(e=>{ if(Math.abs(e.x1-ox)<0.5&&Math.abs(e.y1-oy)<0.5){e.x1=nx;e.y1=ny;} if(Math.abs(e.x2-ox)<0.5&&Math.abs(e.y2-oy)<0.5){e.x2=nx;e.y2=ny;} }); }
+  function snapVertex(np,drag){ const neigh=[]; SK.edges.forEach(e=>{ if(Math.abs(e.x1-drag.ox)<0.5&&Math.abs(e.y1-drag.oy)<0.5)neigh.push([e.x2,e.y2]); if(Math.abs(e.x2-drag.ox)<0.5&&Math.abs(e.y2-drag.oy)<0.5)neigh.push([e.x1,e.y1]); });
+    let x=np[0],y=np[1]; neigh.forEach(q=>{ if(Math.abs(x-q[0])<11)x=q[0]; if(Math.abs(y-q[1])<11)y=q[1]; });
+    let best=null,bd=18; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{ if(Math.abs(q[0]-drag.ox)<0.5&&Math.abs(q[1]-drag.oy)<0.5)return; const d=Math.hypot(x-q[0],y-q[1]); if(d<bd){bd=d;best=q;} }); }); if(best){x=best[0];y=best[1];}
+    return [x,y]; }
+  function snapGrid(pt){ if(GRID==="sq") return [Math.round(pt[0]/GRIDSZ)*GRIDSZ,Math.round(pt[1]/GRIDSZ)*GRIDSZ];
+    if(GRID==="tri"){ const h=GRIDSZ*0.8660254; let best=null,bd=1e9,r0=Math.round(pt[1]/h); for(let r=r0-1;r<=r0+1;r++){ const o=(((r%2)+2)%2)?GRIDSZ/2:0,c=Math.round((pt[0]-o)/GRIDSZ),x=c*GRIDSZ+o,y=r*h,d=Math.hypot(pt[0]-x,pt[1]-y); if(d<bd){bd=d;best=[x,y];} } return best; }
+    return [pt[0],pt[1]]; }
+  function drawGrid(){ if(GRID==="off")return; const W=canvas.width,H=canvas.height,G=GRIDSZ*DPR; ctx.fillStyle="#dfe4e9";
+    if(GRID==="sq"){ for(let x=0;x<=W;x+=G)for(let y=0;y<=H;y+=G){ ctx.beginPath(); ctx.arc(x,y,1.4*DPR,0,7); ctx.fill(); } }
+    else{ const h=G*0.8660254; let row=0; for(let y=0;y<=H;y+=h,row++){ const off=(row%2)?G/2:0; for(let x=off;x<=W;x+=G){ ctx.beginPath(); ctx.arc(x,y,1.4*DPR,0,7); ctx.fill(); } } } }
+  function cycleGrid(){ GRID=GRID==="off"?"sq":(GRID==="sq"?"tri":"off"); if(SK)SK.grid=GRID; const b=document.getElementById("tGrid"); b.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); b.classList.toggle("on",GRID!=="off"); save(); render(); }
   function distSeg(p,e){ const dx=e.x2-e.x1,dy=e.y2-e.y1,L2=dx*dx+dy*dy||1; let t=((p[0]-e.x1)*dx+(p[1]-e.y1)*dy)/L2; t=Math.max(0,Math.min(1,t)); const cx=e.x1+t*dx,cy=e.y1+t*dy; return Math.hypot(p[0]-cx,p[1]-cy); }
   function hitEdge(p){ let best=null,bd=24; SK.edges.forEach(e=>{const d=distSeg(p,e); if(d<bd){bd=d;best=e;}}); return best; }
 
@@ -670,13 +689,16 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   // ---- render ----
   function xy(e){ const r=canvas.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; }
   function sizeCanvas(){ const r=canvas.getBoundingClientRect(); DPR=window.devicePixelRatio||1; canvas.width=Math.max(1,Math.round(r.width*DPR)); canvas.height=Math.max(1,Math.round(r.height*DPR)); }
-  function render(){ if(!SK)return; const W=canvas.width,H=canvas.height; ctx.clearRect(0,0,W,H); ctx.lineCap="round"; ctx.lineJoin="round";
+  function render(){ if(!SK)return; const W=canvas.width,H=canvas.height; ctx.clearRect(0,0,W,H); drawGrid(); ctx.lineCap="round"; ctx.lineJoin="round";
     // ghost ink
     ctx.strokeStyle="#c9cdd2"; ctx.lineWidth=2*DPR; SK.strokes.forEach(s=>{ ctx.beginPath(); s.raw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); });
     // edges
     SK.edges.forEach(e=>{ ctx.beginPath(); ctx.lineWidth=(SEL&&e.id===SEL?4:2.6)*DPR; ctx.strokeStyle=(SEL&&e.id===SEL?"#0d6efd":"#111315"); ctx.moveTo(e.x1*DPR,e.y1*DPR); ctx.lineTo(e.x2*DPR,e.y2*DPR); ctx.stroke(); });
     // vertices
-    ctx.fillStyle="#111315"; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{ ctx.beginPath(); ctx.arc(p[0]*DPR,p[1]*DPR,3.2*DPR,0,7); ctx.fill(); }); });
+    const isEd=(TOOL==="edit"); const seen=new Set();
+    SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{ const k=Math.round(p[0])+","+Math.round(p[1]); if(seen.has(k))return; seen.add(k);
+      if(isEd){ const s=5.5*DPR; ctx.fillStyle="#fff"; ctx.strokeStyle="#0d6efd"; ctx.lineWidth=2*DPR; ctx.beginPath(); ctx.rect(p[0]*DPR-s,p[1]*DPR-s,2*s,2*s); ctx.fill(); ctx.stroke(); }
+      else{ ctx.fillStyle="#111315"; ctx.beginPath(); ctx.arc(p[0]*DPR,p[1]*DPR,3.2*DPR,0,7); ctx.fill(); } }); });
     // dims
     ctx.font=`${13*DPR}px ui-monospace,monospace`; ctx.textAlign="center"; ctx.textBaseline="middle";
     SK.edges.forEach(e=>{ if(e.dim){ const mx=(e.x1+e.x2)/2*DPR,my=(e.y1+e.y2)/2*DPR-9*DPR; ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(e.dim.text,mx,my); ctx.fillStyle="#111315"; ctx.fillText(e.dim.text,mx,my); } });
@@ -689,9 +711,10 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     const p=xy(e);
     if(TOOL==="dim"){ const ed=hitEdge(p); if(ed) openKeypad(ed); return; }
     if(TOOL==="erase"){ const ed=hitEdge(p); if(ed){ SK.edges=SK.edges.filter(x=>x.id!==ed.id); SK.strokes.forEach(s=>s.edgeIds=s.edgeIds.filter(id=>id!==ed.id)); save(); render(); } return; }
+    if(TOOL==="edit"){ const vx=hitVertex(p); if(vx){ dragV={ox:vx.x,oy:vx.y}; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; } return; }
     drawing=true; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; curRaw=[p]; });
-  canvas.addEventListener("pointermove",e=>{ if(!drawing||e.pointerId!==activePid)return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(x=>curRaw.push(xy(x))); renderLive(); });
-  function endStroke(e){ if(!drawing||(e&&e.pointerId!==activePid))return; drawing=false; if(curRaw&&curRaw.length>2){ const ids=snap(curRaw); SK.strokes.push({raw:curRaw,edgeIds:ids}); save(); } curRaw=null; render(); }
+  canvas.addEventListener("pointermove",e=>{ if(dragV&&e.pointerId===activePid){ let np=snapVertex(xy(e),dragV); if(GRID!=="off")np=snapGrid(np); moveVertex(dragV.ox,dragV.oy,np[0],np[1]); dragV.ox=np[0];dragV.oy=np[1]; render(); return; } if(!drawing||e.pointerId!==activePid)return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(x=>curRaw.push(xy(x))); renderLive(); });
+  function endStroke(e){ if(dragV){ dragV=null; save(); render(); return; } if(!drawing||(e&&e.pointerId!==activePid))return; drawing=false; if(curRaw&&curRaw.length>2){ const ids=snap(curRaw); SK.strokes.push({raw:curRaw,edgeIds:ids}); save(); } curRaw=null; render(); }
   canvas.addEventListener("pointerup",endStroke); canvas.addEventListener("pointercancel",endStroke); canvas.addEventListener("pointerleave",e=>{ if(drawing)endStroke(e); });
 
   // ---- keypad ----
@@ -721,10 +744,12 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
     w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(_){}} ,300); }
 
   // ---- rail wiring ----
-  function setTool(t){ TOOL=t; ["pen","dim","erase"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it."}[t]; document.getElementById("skhint").textContent=h; }
+  function setTool(t){ TOOL=t; ["pen","dim","erase","edit"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it.",edit:"Edit: drag any corner (blue square). It snaps to align with neighbors and welds to nearby corners."}[t]; document.getElementById("skhint").textContent=h; render(); }
   document.getElementById("tPen").onclick=()=>setTool("pen");
   document.getElementById("tDim").onclick=()=>setTool("dim");
   document.getElementById("tErase").onclick=()=>setTool("erase");
+  document.getElementById("tEdit").onclick=()=>setTool("edit");
+  document.getElementById("tGrid").onclick=cycleGrid;
   document.getElementById("skUndo").onclick=()=>{ const s=SK.strokes.pop(); if(!s)return; SK.edges=SK.edges.filter(e=>!s.edgeIds.includes(e.id)); save(); render(); };
   document.getElementById("skClear").onclick=()=>{ if(confirm("Clear this sketch?")){ SK.strokes=[]; SK.edges=[]; SK.nextId=1; save(); render(); } };
   document.getElementById("skSheet").onclick=sheet;
@@ -732,7 +757,7 @@ document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? 
   document.getElementById("skback").onclick=()=>document.getElementById("skDone").click();
   window.addEventListener("resize",()=>{ if(document.getElementById("skwrap").classList.contains("show")){ sizeCanvas(); render(); } });
 
-  window.openSketch=function(tid){ const t=S.treatments.find(x=>x.id===tid); if(!t)return; if(!t.sketch)t.sketch={strokes:[],edges:[],nextId:1}; SK=t.sketch; CURT=t; penSeen=false; setTool("pen");
+  window.openSketch=function(tid){ const t=S.treatments.find(x=>x.id===tid); if(!t)return; if(!t.sketch)t.sketch={strokes:[],edges:[],nextId:1}; SK=t.sketch; CURT=t; penSeen=false; GRID=SK.grid||"off"; { const gb=document.getElementById("tGrid"); if(gb){ gb.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); gb.classList.toggle("on",GRID!=="off"); } } setTool("pen");
     document.getElementById("sktitle").textContent=(typeLabel(t.type)||"Sketch")+(t.label?" — "+t.label:"");
     document.getElementById("skwrap").classList.add("show"); requestAnimationFrame(()=>{ sizeCanvas(); render(); }); };
 })();
