@@ -95,6 +95,15 @@
     .out .pbody{overflow:visible !important;padding:0 !important;}
     .out pre{border:none !important;background:none !important;padding:0 !important;}
   }
+  .projrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:11px;margin-bottom:9px;}
+  .projrow.active{border-color:var(--rb);background:#f2f7ff;}
+  .projrow .pn{font-weight:700;font-size:15px;color:#16181b;}
+  .projrow .badge{font-size:10px;font-weight:700;background:var(--rb);color:#fff;padding:2px 7px;border-radius:20px;margin-left:6px;}
+  .projrow .ps{font-size:12px;color:var(--muted);margin-top:2px;}
+  .projrow .pa{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .projrow .pa button{font-size:12px;padding:6px 10px;border:1px solid #ccd2d8;background:#fff;border-radius:8px;cursor:pointer;font-weight:600;color:#16181b;}
+  .projrow .pa button[data-del]{color:#c0392b;border-color:#e6b3ad;}
+  #projempty{color:var(--muted);font-size:13px;text-align:center;padding:18px 0;}
 </style>
 </head>
 <body>
@@ -111,8 +120,19 @@
 <main id="app"></main>
 
 <div class="bar">
+  <button id="projbtn">Surveys</button>
   <button id="newbtn">New</button>
   <button class="primary" id="genbtn">Generate Handoff</button>
+</div>
+
+<div class="out" id="projmodal">
+  <div class="panel">
+    <div class="phead"><h3>Saved Surveys</h3><button class="x" id="projx">&times;</button></div>
+    <div class="pbody">
+      <button class="primary" id="projnew" style="width:100%;font-weight:700;padding:12px;border-radius:10px;border:none;color:#fff;background:var(--rb);cursor:pointer;margin-bottom:14px;">+ New survey</button>
+      <div id="projlist"></div>
+    </div>
+  </div>
 </div>
 
 <div class="out" id="outmodal">
@@ -135,12 +155,19 @@
 <script>
 "use strict";
 /* ============ STATE ============ */
-const KEY = "rb_site_survey_v1";
-let S = load() || fresh();
+/* ---- projects store: an index + one localStorage key per survey ---- */
+const PKEY = "rb_projects_v1";        // index: {activeId, order:[id,...]}
+const LEGACY = "rb_site_survey_v1";   // pre-projects single survey (migrated once)
+const pKey = id => "rb_proj_"+id;
+function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
+function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
+function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
+function loadProj(id){ try{return JSON.parse(localStorage.getItem(pKey(id)));}catch(e){return null;} }
+function esc(s){ return (s==null?"":""+s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function fresh(){
   return {
-    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:""},
+    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",projName:""},
     job:"",
     venueFrame:"",
     prosc:{present:false, openW:"", openH:"", stations:[]},
@@ -149,13 +176,34 @@ function fresh(){
     generalNotes:""
   };
 }
-function load(){ try{return JSON.parse(localStorage.getItem(KEY));}catch(e){return null;} }
+
+let IDX = loadIndex();
+if(!IDX || !Array.isArray(IDX.order)){          // first run under the projects model
+  let legacy=null; try{legacy=JSON.parse(localStorage.getItem(LEGACY));}catch(e){}
+  const id=pid();
+  localStorage.setItem(pKey(id), JSON.stringify(legacy||fresh()));   // migrate the loaded survey in place
+  IDX={activeId:id, order:[id]}; saveIndex();
+}
+if(!IDX.activeId || !IDX.order.includes(IDX.activeId)) IDX.activeId = IDX.order[0]||"";
+if(!IDX.activeId){ const id=pid(); localStorage.setItem(pKey(id),JSON.stringify(fresh())); IDX={activeId:id,order:[id]}; saveIndex(); }
+
+let S = loadProj(IDX.activeId) || fresh();
+
 let saveT;
 function save(){
   clearTimeout(saveT);
   document.getElementById("savechip").textContent="Saving…";
-  saveT=setTimeout(()=>{ localStorage.setItem(KEY,JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; },250);
+  saveT=setTimeout(()=>{ localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; },250);
 }
+function flushSave(){ clearTimeout(saveT); localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); }
+
+/* ---- project operations (never lose the current survey) ---- */
+function projName(d){ const m=(d&&d.meta)||{}; return (m.projName&&m.projName.trim())||(m.venue&&m.venue.trim())||"Untitled survey"; }
+function newProject(){ flushSave(); const id=pid(); S=fresh(); localStorage.setItem(pKey(id),JSON.stringify(S)); IDX.order.unshift(id); IDX.activeId=id; saveIndex(); render(); }
+function openProject(id){ if(id===IDX.activeId)return; flushSave(); const d=loadProj(id); if(!d)return; S=d; IDX.activeId=id; saveIndex(); render(); }
+function dupProject(id){ flushSave(); const d=loadProj(id); if(!d)return; const c=JSON.parse(JSON.stringify(d)); c.meta.projName=projName(d)+" (copy)"; const nid=pid(); localStorage.setItem(pKey(nid),JSON.stringify(c)); const at=IDX.order.indexOf(id); IDX.order.splice(at<0?0:at+1,0,nid); saveIndex(); }
+function delProject(id){ localStorage.removeItem(pKey(id)); IDX.order=IDX.order.filter(x=>x!==id); if(!IDX.order.length){ const nid=pid(); localStorage.setItem(pKey(nid),JSON.stringify(fresh())); IDX.order=[nid]; } if(id===IDX.activeId){ IDX.activeId=IDX.order[0]; S=loadProj(IDX.activeId)||fresh(); } saveIndex(); render(); }
+function renameProject(id,name){ const d=(id===IDX.activeId)?S:loadProj(id); if(!d)return; d.meta.projName=name; if(id===IDX.activeId){ flushSave(); } else { localStorage.setItem(pKey(id),JSON.stringify(d)); } }
 function uid(){ return "t"+Math.random().toString(36).slice(2,8); }
 function parseFeet(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”]/g,'"').replace(/[‘’]/g,"'"); if(!s) return null;
   let m=s.match(/^(\d+(?:\.\d+)?)\s*'\s*-?\s*(\d+(?:\.\d+)?)?\s*"?$/); if(m) return parseFloat(m[1])+(m[2]?parseFloat(m[2])/12:0);
@@ -391,7 +439,7 @@ function render(){
   </div></div>`;
 
   app.innerHTML=h;
-  document.getElementById("hdrsub").textContent = S.meta.venue ? S.meta.venue : "New survey";
+  document.getElementById("hdrsub").textContent = projName(S);
   bind();
 }
 
@@ -458,7 +506,7 @@ function bind(){
   app.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>{S.job=b.dataset.job;save();render();});
   app.querySelectorAll("[data-surveyor]").forEach(b=>b.onclick=()=>{S.meta.surveyor=b.dataset.surveyor;save();render();});
   // meta
-  app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue")document.getElementById("hdrsub").textContent=i.value||"New survey";});
+  app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue"||i.dataset.meta==="projName")document.getElementById("hdrsub").textContent=projName(S);});
   // frame
   const fr=document.getElementById("frame"); if(fr)fr.onchange=()=>{S.venueFrame=fr.value;save();};
   const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
@@ -582,7 +630,35 @@ document.getElementById("printbtn").onclick=()=>{
   w.document.close(); w.focus();
   setTimeout(function(){ w.print(); w.onafterprint=function(){ w.close(); }; }, 250);
 };
-document.getElementById("newbtn").onclick=()=>{ if(confirm("Start a new survey? Current one is saved in this browser only until overwritten.")){S=fresh();save();render();} };
+/* ---- Saved Surveys manager ---- */
+function jobLabel(j){ const f=JOB_TYPES.find(x=>x[0]===j); return f?f[1]:""; }
+function renderProjList(){
+  const wrap=document.getElementById("projlist"); wrap.innerHTML="";
+  if(!IDX.order.length){ wrap.innerHTML='<div id="projempty">No saved surveys yet.</div>'; return; }
+  IDX.order.forEach(id=>{
+    const d=(id===IDX.activeId)?S:loadProj(id); if(!d)return;
+    const tc=(d.treatments||[]).length, active=id===IDX.activeId;
+    const bits=[d.meta.venue&&d.meta.projName?d.meta.venue:null, jobLabel(d.job), tc+" treatment"+(tc===1?"":"s"), d.meta.date].filter(Boolean);
+    const row=document.createElement("div");
+    row.className="projrow"+(active?" active":"");
+    row.innerHTML='<div class="pi"><div class="pn">'+esc(projName(d))+(active?' <span class="badge">current</span>':'')+'</div><div class="ps">'+(esc(bits.join("  •  "))||"empty")+'</div></div>'+
+      '<div class="pa"><button data-open="'+id+'">Open</button><button data-ren="'+id+'">Rename</button><button data-dup="'+id+'">Duplicate</button><button data-del="'+id+'">Delete</button></div>';
+    wrap.appendChild(row);
+  });
+}
+function openProjModal(){ renderProjList(); document.getElementById("projmodal").classList.add("show"); }
+function closeProjModal(){ document.getElementById("projmodal").classList.remove("show"); }
+document.getElementById("projbtn").onclick=openProjModal;
+document.getElementById("projx").onclick=closeProjModal;
+document.getElementById("projnew").onclick=()=>{ newProject(); closeProjModal(); };
+document.getElementById("newbtn").onclick=()=>{ newProject(); };
+document.getElementById("projlist").onclick=(e)=>{
+  const b=e.target.closest("button"); if(!b)return;
+  if(b.dataset.open){ openProject(b.dataset.open); closeProjModal(); }
+  else if(b.dataset.dup){ dupProject(b.dataset.dup); renderProjList(); }
+  else if(b.dataset.ren){ const id=b.dataset.ren; const cur=projName((id===IDX.activeId)?S:loadProj(id)); const nn=prompt("Survey name:",cur); if(nn!=null){ renameProject(id,nn.trim()); if(id===IDX.activeId)render(); renderProjList(); } }
+  else if(b.dataset.del){ const id=b.dataset.del; const d=(id===IDX.activeId)?S:loadProj(id); if(confirm('Delete "'+projName(d)+'"?  This cannot be undone.')){ delProject(id); renderProjList(); } }
+};
 
 /* ================= SKETCH PAD v1 (offline draw + Stage-1 snap + dims) ================= */
 (function(){
