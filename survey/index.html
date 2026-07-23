@@ -715,6 +715,7 @@ document.getElementById("projlist").onclick=(e)=>{
       <div class="skrail">
         <button data-tool="pen" class="on" id="tPen">Pen</button>
         <button data-tool="dim" id="tDim">Dim</button>
+        <button data-tool="gap" id="tGap">Dim Gap</button>
         <button data-tool="erase" id="tErase">Erase</button>
         <button data-tool="edit" id="tEdit">Edit</button>
         <button id="tGrid">Grid</button>
@@ -738,7 +739,7 @@ document.getElementById("projlist").onclick=(e)=>{
   const canvas=document.getElementById("skcanvas"), ctx=canvas.getContext("2d");
   let SK=null, CURT=null, TOOL="pen", DPR=1;
   let drawing=false, curRaw=null, activePid=null, penSeen=false;
-  let SEL=null, KPedge=null, KPstr="", dragV=null, GRID="off", GRIDSZ=28, snapTarget=null, SHOWINK=true;
+  let SEL=null, KPedge=null, KPspan=null, KPstr="", dragV=null, GRID="off", GRIDSZ=28, snapTarget=null, SHOWINK=true, pendingA=null;
 
   // ---- geometry ----
   function bbox(pts){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; pts.forEach(p=>{x1=Math.min(x1,p[0]);y1=Math.min(y1,p[1]);x2=Math.max(x2,p[0]);y2=Math.max(y2,p[1]);}); return {w:x2-x1,h:y2-y1}; }
@@ -763,7 +764,8 @@ document.getElementById("projlist").onclick=(e)=>{
     const ids=[]; for(let i=0;i<v.length-1;i++){ if(Math.abs(v[i][0]-v[i+1][0])<0.5&&Math.abs(v[i][1]-v[i+1][1])<0.5)continue; const id=SK.nextId++; SK.edges.push({id,x1:v[i][0],y1:v[i][1],x2:v[i+1][0],y2:v[i+1][1],dim:null}); ids.push(id); } return ids; }
   function snap(raw){ if(raw.length<2)return []; const bx=bbox(raw); const diag=Math.hypot(bx.w,bx.h)||1; let v=resample(raw,2); v=rdp(v,Math.max(8,0.05*diag)); v=dropStraight(v,18); v=ortho(v,12); v=mergeCollinear(v,10); if(GRID!=="off")v=v.map(snapGrid); v=mergeCollinear(v,8); return integrate(v); }
   function hitVertex(p){ let best=null,bd=32; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]); if(d<bd){bd=d;best={x:q[0],y:q[1]};}}); }); return best; }
-  function moveVertex(ox,oy,nx,ny){ SK.edges.forEach(e=>{ if(Math.abs(e.x1-ox)<0.5&&Math.abs(e.y1-oy)<0.5){e.x1=nx;e.y1=ny;} if(Math.abs(e.x2-ox)<0.5&&Math.abs(e.y2-oy)<0.5){e.x2=nx;e.y2=ny;} }); }
+  function moveVertex(ox,oy,nx,ny){ SK.edges.forEach(e=>{ if(Math.abs(e.x1-ox)<0.5&&Math.abs(e.y1-oy)<0.5){e.x1=nx;e.y1=ny;} if(Math.abs(e.x2-ox)<0.5&&Math.abs(e.y2-oy)<0.5){e.x2=nx;e.y2=ny;} });
+    if(SK.spans)SK.spans.forEach(s=>{ if(Math.abs(s.a[0]-ox)<0.5&&Math.abs(s.a[1]-oy)<0.5)s.a=[nx,ny]; if(Math.abs(s.b[0]-ox)<0.5&&Math.abs(s.b[1]-oy)<0.5)s.b=[nx,ny]; }); }
   function snapVertex(np,drag){ const neigh=[]; SK.edges.forEach(e=>{ if(Math.abs(e.x1-drag.ox)<0.5&&Math.abs(e.y1-drag.oy)<0.5)neigh.push([e.x2,e.y2]); if(Math.abs(e.x2-drag.ox)<0.5&&Math.abs(e.y2-drag.oy)<0.5)neigh.push([e.x1,e.y1]); });
     let x=np[0],y=np[1]; neigh.forEach(q=>{ if(Math.abs(x-q[0])<11)x=q[0]; if(Math.abs(y-q[1])<11)y=q[1]; });
     let best=null,bd=28; SK.edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(q=>{ if(Math.abs(q[0]-drag.ox)<0.5&&Math.abs(q[1]-drag.oy)<0.5)return; const d=Math.hypot(x-q[0],y-q[1]); if(d<bd){bd=d;best=q;} }); }); if(best){x=best[0];y=best[1];snapTarget=[x,y];}else{snapTarget=null;}
@@ -776,7 +778,8 @@ document.getElementById("projlist").onclick=(e)=>{
     else{ const h=G*0.8660254; let row=0; for(let y=0;y<=H;y+=h,row++){ const off=(row%2)?G/2:0; for(let x=off;x<=W;x+=G){ ctx.beginPath(); ctx.arc(x,y,1.4*DPR,0,7); ctx.fill(); } } } }
   function cycleGrid(){ GRID=GRID==="off"?"sq":(GRID==="sq"?"tri":"off"); if(SK)SK.grid=GRID; const b=document.getElementById("tGrid"); b.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); b.classList.toggle("on",GRID!=="off"); save(); render(); }
   function median(a){ if(!a.length)return 0; const b=a.slice().sort((x,y)=>x-y),m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; }
-  function fitView(){ if(!SK.edges.length)return 1; let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; SK.edges.forEach(e=>{x1=Math.min(x1,e.x1,e.x2);y1=Math.min(y1,e.y1,e.y2);x2=Math.max(x2,e.x1,e.x2);y2=Math.max(y2,e.y1,e.y2);}); const gw=(x2-x1)||1,gh=(y2-y1)||1,r=canvas.getBoundingClientRect(),k=Math.min(r.width*0.8/gw,r.height*0.8/gh,4),cx=(x1+x2)/2,cy=(y1+y2)/2,tx=r.width/2,ty=r.height/2; SK.edges.forEach(e=>{ e.x1=tx+(e.x1-cx)*k; e.y1=ty+(e.y1-cy)*k; e.x2=tx+(e.x2-cx)*k; e.y2=ty+(e.y2-cy)*k; }); return k; }
+  function fitView(){ if(!SK.edges.length)return 1; let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; SK.edges.forEach(e=>{x1=Math.min(x1,e.x1,e.x2);y1=Math.min(y1,e.y1,e.y2);x2=Math.max(x2,e.x1,e.x2);y2=Math.max(y2,e.y1,e.y2);}); const gw=(x2-x1)||1,gh=(y2-y1)||1,r=canvas.getBoundingClientRect(),k=Math.min(r.width*0.8/gw,r.height*0.8/gh,4),cx=(x1+x2)/2,cy=(y1+y2)/2,tx=r.width/2,ty=r.height/2; SK.edges.forEach(e=>{ e.x1=tx+(e.x1-cx)*k; e.y1=ty+(e.y1-cy)*k; e.x2=tx+(e.x2-cx)*k; e.y2=ty+(e.y2-cy)*k; });
+    if(SK.spans)SK.spans.forEach(s=>{ s.a=[tx+(s.a[0]-cx)*k,ty+(s.a[1]-cy)*k]; s.b=[tx+(s.b[0]-cx)*k,ty+(s.b[1]-cy)*k]; }); return k; }
   function components(){ const par={},key=(x,y)=>Math.round(x)+","+Math.round(y); const find=k=>{ let r=k; while(par[r]!==r)r=par[r]; while(par[k]!==r){const n=par[k];par[k]=r;k=n;} return r; };
     SK.edges.forEach(e=>{ const a=key(e.x1,e.y1),b=key(e.x2,e.y2); if(par[a]===undefined)par[a]=a; if(par[b]===undefined)par[b]=b; const ra=find(a),rb=find(b); if(ra!==rb)par[ra]=rb; });
     const g={}; SK.edges.forEach(e=>{ const r=find(key(e.x1,e.y1)); (g[r]=g[r]||[]).push(e); }); return Object.values(g); }
@@ -788,16 +791,22 @@ document.getElementById("projlist").onclick=(e)=>{
       let kx=hor.length?median(hor.map(i=>i.feet*S/i.dx)):null, ky=ver.length?median(ver.map(i=>i.feet*S/i.dy)):null;
       if(kx==null&&ky==null){ const k=median(info.map(i=>i.feet*S/i.len)); kx=ky=k; } else if(kx==null){kx=ky;} else if(ky==null){ky=kx;}
       let sx=0,sy=0,n=0,seen=new Set(); edges.forEach(e=>{ [[e.x1,e.y1],[e.x2,e.y2]].forEach(p=>{const k=Math.round(p[0])+","+Math.round(p[1]); if(seen.has(k))return; seen.add(k); sx+=p[0];sy+=p[1];n++;}); }); const cx=sx/n,cy=sy/n;
-      edges.forEach(e=>{ e.x1=cx+(e.x1-cx)*kx; e.y1=cy+(e.y1-cy)*ky; e.x2=cx+(e.x2-cx)*kx; e.y2=cy+(e.y2-cy)*ky; }); });
+      edges.forEach(e=>{ e.x1=cx+(e.x1-cx)*kx; e.y1=cy+(e.y1-cy)*ky; e.x2=cx+(e.x2-cx)*kx; e.y2=cy+(e.y2-cy)*ky; });
+      if(SK.spans)SK.spans.forEach(s=>{ ["a","b"].forEach(kk=>{ const p=s[kk]; if(seen.has(Math.round(p[0])+","+Math.round(p[1]))) s[kk]=[cx+(p[0]-cx)*kx,cy+(p[1]-cy)*ky]; }); }); });
     fitView(); SK.scaled=true; save(); render();
     document.getElementById("skhint").textContent="Scaled to dims — all shapes now share one scale (equal feet = equal length)."; }
   function distSeg(p,e){ const dx=e.x2-e.x1,dy=e.y2-e.y1,L2=dx*dx+dy*dy||1; let t=((p[0]-e.x1)*dx+(p[1]-e.y1)*dy)/L2; t=Math.max(0,Math.min(1,t)); const cx=e.x1+t*dx,cy=e.y1+t*dy; return Math.hypot(p[0]-cx,p[1]-cy); }
   function hitEdge(p){ let best=null,bd=24; SK.edges.forEach(e=>{const d=distSeg(p,e); if(d<bd){bd=d;best=e;}}); return best; }
+  function hitSpan(p){ let best=null,bd=20; (SK.spans||[]).forEach(s=>{ const d=distSeg(p,{x1:s.a[0],y1:s.a[1],x2:s.b[0],y2:s.b[1]}); if(d<bd){bd=d;best=s;} }); return best; }
+  // snap a free tap to nearest vertex, else nearest point on an edge, else grid
+  function snapPoint(p){ const v=hitVertex(p); if(v)return [v.x,v.y]; const ed=hitEdge(p); if(ed){ const dx=ed.x2-ed.x1,dy=ed.y2-ed.y1,L2=dx*dx+dy*dy||1; let t=((p[0]-ed.x1)*dx+(p[1]-ed.y1)*dy)/L2; t=Math.max(0,Math.min(1,t)); return [ed.x1+t*dx,ed.y1+t*dy]; } if(GRID!=="off")return snapGrid(p); return p.slice(); }
 
   // ---- expose for testing ----
   window._skDraw=function(pts){ if(!SK)return 0; const ids=snap(pts); SK.strokes.push({raw:pts,edgeIds:ids}); save(); render(); return SK.edges.length; };
   window._skEdges=function(){ return SK?SK.edges.map(e=>({x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,dim:e.dim})):[]; };
   window._skSetDim=function(i,txt){ if(SK&&SK.edges[i]){ SK.edges[i].dim={inches:parseFeet(txt),text:txt}; save(); render(); } };
+  window._skAddSpan=function(a,b,txt){ if(!SK)return 0; SK.spans=SK.spans||[]; SK.spans.push({id:"s"+(SK.nextId++),a:snapPoint(a),b:snapPoint(b),dim:txt?{inches:parseFeet(txt),text:txt}:null}); save(); render(); return SK.spans.length; };
+  window._skSpans=function(){ return SK?(SK.spans||[]).map(s=>({a:s.a,b:s.b,dim:s.dim})):[]; };
 
   // ---- render ----
   function xy(e){ const r=canvas.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; }
@@ -817,7 +826,15 @@ document.getElementById("projlist").onclick=(e)=>{
     // dims
     ctx.font=`${13*DPR}px ui-monospace,monospace`; ctx.textAlign="center"; ctx.textBaseline="middle";
     SK.edges.forEach(e=>{ if(e.dim){ const mx=(e.x1+e.x2)/2*DPR,my=(e.y1+e.y2)/2*DPR-9*DPR; ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(e.dim.text,mx,my); ctx.fillStyle="#111315"; ctx.fillText(e.dim.text,mx,my); } });
-    const nd=SK.edges.filter(e=>e.dim).length; document.getElementById("skstat").textContent=`${SK.edges.length} edges · ${nd} dims`;
+    // gap / span dims (freestanding)
+    (SK.spans||[]).forEach(s=>{ const ax=s.a[0]*DPR,ay=s.a[1]*DPR,bx=s.b[0]*DPR,by=s.b[1]*DPR;
+      const ang=Math.atan2(by-ay,bx-ax), tx=Math.cos(ang+Math.PI/2)*6*DPR, ty=Math.sin(ang+Math.PI/2)*6*DPR;
+      ctx.strokeStyle="#c8102e"; ctx.lineWidth=1.7*DPR;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.moveTo(ax-tx,ay-ty); ctx.lineTo(ax+tx,ay+ty); ctx.moveTo(bx-tx,by-ty); ctx.lineTo(bx+tx,by+ty); ctx.stroke();
+      const lx=(ax+bx)/2+tx*1.9, ly=(ay+by)/2+ty*1.9, lab=s.dim?s.dim.text:"?";
+      ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(lab,lx,ly); ctx.fillStyle="#c8102e"; ctx.fillText(lab,lx,ly); });
+    if(TOOL==="gap"&&pendingA){ ctx.strokeStyle="#c8102e"; ctx.lineWidth=2*DPR; ctx.beginPath(); ctx.arc(pendingA[0]*DPR,pendingA[1]*DPR,8*DPR,0,7); ctx.stroke(); }
+    const nd=SK.edges.filter(e=>e.dim).length, ng=(SK.spans||[]).length; document.getElementById("skstat").textContent=`${SK.edges.length} edges · ${nd} dims${ng?" · "+ng+" gap":""}`;
   }
   function renderLive(){ render(); if(curRaw&&curRaw.length){ ctx.beginPath(); ctx.lineWidth=2.2*DPR; ctx.strokeStyle="#0d6efd"; curRaw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); } }
 
@@ -825,7 +842,9 @@ document.getElementById("projlist").onclick=(e)=>{
   canvas.addEventListener("pointerdown",e=>{ if(!SK)return; if(e.pointerType==="pen")penSeen=true; if(e.pointerType==="touch"&&penSeen&&TOOL==="pen")return;
     const p=xy(e);
     if(TOOL==="dim"){ const ed=hitEdge(p); if(ed) openKeypad(ed); return; }
-    if(TOOL==="erase"){ const ed=hitEdge(p); if(ed){ SK.edges=SK.edges.filter(x=>x.id!==ed.id); SK.strokes.forEach(s=>s.edgeIds=s.edgeIds.filter(id=>id!==ed.id)); save(); render(); } return; }
+    if(TOOL==="gap"){ if(pendingA==null){ const hs=hitSpan(p); if(hs){ openSpanKeypad(hs); return; } pendingA=snapPoint(p); render(); }
+      else{ const bpt=snapPoint(p); SK.spans=SK.spans||[]; const sp={id:"s"+(SK.nextId++),a:pendingA,b:bpt,dim:null}; SK.spans.push(sp); pendingA=null; save(); openSpanKeypad(sp); } return; }
+    if(TOOL==="erase"){ const sp=hitSpan(p); if(sp){ SK.spans=SK.spans.filter(x=>x!==sp); save(); render(); return; } const ed=hitEdge(p); if(ed){ SK.edges=SK.edges.filter(x=>x.id!==ed.id); SK.strokes.forEach(s=>s.edgeIds=s.edgeIds.filter(id=>id!==ed.id)); save(); render(); } return; }
     if(TOOL==="edit"){ const vx=hitVertex(p); if(vx){ dragV={ox:vx.x,oy:vx.y}; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; } return; }
     drawing=true; activePid=e.pointerId; try{canvas.setPointerCapture(e.pointerId);}catch(_){}; curRaw=[p]; });
   canvas.addEventListener("pointermove",e=>{ if(dragV&&e.pointerId===activePid){ let np=snapVertex(xy(e),dragV); if(GRID!=="off")np=snapGrid(np); moveVertex(dragV.ox,dragV.oy,np[0],np[1]); dragV.ox=np[0];dragV.oy=np[1]; render(); return; } if(!drawing||e.pointerId!==activePid)return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(x=>curRaw.push(xy(x))); renderLive(); });
@@ -837,15 +856,17 @@ document.getElementById("projlist").onclick=(e)=>{
   const gk=document.getElementById("skgridkeys");
   KEYS.forEach(k=>{ const b=document.createElement("button"); b.textContent=k[0]==="SET"?"SET":k[0]; if(k[1])b.classList.add(k[1]); b.onclick=()=>keyPress(k[0]); gk.appendChild(b); });
   document.getElementById("kpclose").onclick=closeKeypad;
-  function openKeypad(ed){ KPedge=ed; SEL=ed.id; KPstr=ed.dim?ed.dim.text:""; document.getElementById("kpval").textContent=KPstr||"_"; document.getElementById("skkeypad").classList.add("show"); render(); }
-  function closeKeypad(){ document.getElementById("skkeypad").classList.remove("show"); KPedge=null; SEL=null; render(); }
-  function keyPress(k){ if(k==="SET"){ if(KPedge){ const inch=parseFeet(KPstr); KPedge.dim={inches:(inch==null?null:inch),text:KPstr.trim()}; save(); } closeKeypad(); return; }
+  function openKeypad(ed){ KPedge=ed; KPspan=null; SEL=ed.id; KPstr=ed.dim?ed.dim.text:""; document.getElementById("kplabel").textContent="Edge dim"; document.getElementById("kpval").textContent=KPstr||"_"; document.getElementById("skkeypad").classList.add("show"); render(); }
+  function openSpanKeypad(sp){ KPspan=sp; KPedge=null; SEL=null; KPstr=sp.dim?sp.dim.text:""; document.getElementById("kplabel").textContent="Gap / space dim"; document.getElementById("kpval").textContent=KPstr||"_"; document.getElementById("skkeypad").classList.add("show"); render(); }
+  function closeKeypad(){ if(KPspan&&!KPspan.dim){ SK.spans=(SK.spans||[]).filter(s=>s!==KPspan); save(); } document.getElementById("skkeypad").classList.remove("show"); KPedge=null; KPspan=null; SEL=null; render(); }
+  function keyPress(k){ if(k==="SET"){ const inch=parseFeet(KPstr); const dim={inches:(inch==null?null:inch),text:KPstr.trim()};
+      if(KPedge){ KPedge.dim=dim; } else if(KPspan){ KPspan.dim=KPstr.trim()?dim:null; } save(); closeKeypad(); return; }
     if(k==="CLR"){ KPstr=""; } else if(k==="⌫"){ KPstr=KPstr.slice(0,-1); } else { KPstr+=k; }
     document.getElementById("kpval").textContent=KPstr||"_"; }
 
   // ---- sheet (basic; full RB frame in a later increment) ----
   function sheet(){ if(!SK||!SK.edges.length){ alert("Draw the outline first."); return; }
-    const xs=[],ys=[]; SK.edges.forEach(e=>{xs.push(e.x1,e.x2);ys.push(e.y1,e.y2);});
+    const xs=[],ys=[]; SK.edges.forEach(e=>{xs.push(e.x1,e.x2);ys.push(e.y1,e.y2);}); (SK.spans||[]).forEach(s=>{xs.push(s.a[0],s.b[0]);ys.push(s.a[1],s.b[1]);});
     const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),gw=(maxx-minx)||1,gh=(maxy-miny)||1;
     const VW=1600,VH=1000,M=150,sc=Math.min((VW-2*M)/gw,(VH-2*M)/gh),ox=(VW-gw*sc)/2-minx*sc,oy=(VH-gh*sc)/2-miny*sc;
     const tx=x=>x*sc+ox,ty=y=>y*sc+oy;
@@ -854,28 +875,32 @@ document.getElementById("projlist").onclick=(e)=>{
     s+=`<text x="30" y="66" font-family="Arial" font-size="13" fill="#333">${esc(S.meta.venue||"")}${S.meta.quote?" · Q"+esc(S.meta.quote):" · Quote # __________"}${S.meta.surveyor?" · "+esc(S.meta.surveyor):""} · NTS — DIMENSIONED</text>`;
     SK.edges.forEach(e=>{ s+=`<line x1="${tx(e.x1)}" y1="${ty(e.y1)}" x2="${tx(e.x2)}" y2="${ty(e.y2)}" stroke="#000" stroke-width="2.6" stroke-linecap="round"/>`; });
     SK.edges.forEach(e=>{ if(e.dim){ const mx=tx((e.x1+e.x2)/2),my=ty((e.y1+e.y2)/2)-11; s+=`<text x="${mx}" y="${my}" font-family="ui-monospace,monospace" font-size="18" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(e.dim.text)}</text>`; } });
+    (SK.spans||[]).forEach(sp=>{ const ax=tx(sp.a[0]),ay=ty(sp.a[1]),bx=tx(sp.b[0]),by=ty(sp.b[1]); const ang=Math.atan2(by-ay,bx-ax), px=Math.cos(ang+Math.PI/2)*7,py=Math.sin(ang+Math.PI/2)*7;
+      s+=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#c8102e" stroke-width="1.7"/><line x1="${ax-px}" y1="${ay-py}" x2="${ax+px}" y2="${ay+py}" stroke="#c8102e" stroke-width="1.7"/><line x1="${bx-px}" y1="${by-py}" x2="${bx+px}" y2="${by+py}" stroke="#c8102e" stroke-width="1.7"/>`;
+      const lx=(ax+bx)/2+px*1.7,ly=(ay+by)/2+py*1.7; s+=`<text x="${lx}" y="${ly}" font-family="ui-monospace,monospace" font-size="17" font-weight="700" fill="#c8102e" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(sp.dim?sp.dim.text:"?")}</text>`; });
     s+=`</svg>`;
     const w=window.open("","_blank"); if(!w){ alert("Allow popups to print the sheet."); return; }
     w.document.write(`<!DOCTYPE html><html><head><meta charset=utf-8><title>Sketch Sheet</title><style>@page{size:landscape;margin:.4in}html,body{margin:0}</style></head><body>${s}</body></html>`);
     w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(_){}} ,300); }
 
   // ---- rail wiring ----
-  function setTool(t){ TOOL=t; ["pen","dim","erase","edit"].forEach(x=>document.getElementById("t"+x[0].toUpperCase()+x.slice(1)).classList.toggle("on",x===t)); if(t!=="dim")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",erase:"Erase: tap an edge to remove it.",edit:"Edit: drag a corner. Red squares = open ends — drag one onto another point to join it (green ring = will snap). Blue = joined."}[t]; document.getElementById("skhint").textContent=h; render(); }
+  function setTool(t){ TOOL=t; pendingA=null; ["pen","dim","gap","erase","edit"].forEach(x=>{const b=document.getElementById("t"+x[0].toUpperCase()+x.slice(1)); if(b)b.classList.toggle("on",x===t);}); if(t!=="dim"&&t!=="gap")closeKeypad(); const h={pen:"Pen: draw each edge. Lines straighten & snap square on lift.",dim:"Dim: tap an edge, then type feet-inches (e.g. 6'4) and SET.",gap:"Dim Gap: tap two points (they snap to corners/edges) to dimension a space or border, then type the value. Tap a gap dim to edit it.",erase:"Erase: tap an edge or gap dim to remove it.",edit:"Edit: drag a corner. Red squares = open ends — drag one onto another point to join it (green ring = will snap). Blue = joined."}[t]; document.getElementById("skhint").textContent=h; render(); }
   document.getElementById("tPen").onclick=()=>setTool("pen");
   document.getElementById("tDim").onclick=()=>setTool("dim");
+  document.getElementById("tGap").onclick=()=>setTool("gap");
   document.getElementById("tErase").onclick=()=>setTool("erase");
   document.getElementById("tEdit").onclick=()=>setTool("edit");
   document.getElementById("tGrid").onclick=cycleGrid;
   document.getElementById("tScale").onclick=trueUp;
   document.getElementById("tInk").onclick=()=>{ SHOWINK=!SHOWINK; document.getElementById("tInk").classList.toggle("on",SHOWINK); render(); };
   document.getElementById("skUndo").onclick=()=>{ const s=SK.strokes.pop(); if(!s)return; SK.edges=SK.edges.filter(e=>!s.edgeIds.includes(e.id)); save(); render(); };
-  document.getElementById("skClear").onclick=()=>{ if(confirm("Clear this sketch?")){ SK.strokes=[]; SK.edges=[]; SK.nextId=1; save(); render(); } };
+  document.getElementById("skClear").onclick=()=>{ if(confirm("Clear this sketch?")){ SK.strokes=[]; SK.edges=[]; SK.spans=[]; SK.nextId=1; save(); render(); } };
   document.getElementById("skSheet").onclick=sheet;
   document.getElementById("skDone").onclick=()=>{ closeKeypad(); document.getElementById("skwrap").classList.remove("show"); save(); render(); /* main app */ if(typeof window.__rerender==="function")window.__rerender(); };
   document.getElementById("skback").onclick=()=>document.getElementById("skDone").click();
   window.addEventListener("resize",()=>{ if(document.getElementById("skwrap").classList.contains("show")){ sizeCanvas(); render(); } });
 
-  window.openSketch=function(tid){ const t=S.treatments.find(x=>x.id===tid); if(!t)return; if(!t.sketch)t.sketch={strokes:[],edges:[],nextId:1}; SK=t.sketch; CURT=t; penSeen=false; GRID=SK.grid||"off"; { const gb=document.getElementById("tGrid"); if(gb){ gb.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); gb.classList.toggle("on",GRID!=="off"); } } setTool("pen");
+  window.openSketch=function(tid){ const t=S.treatments.find(x=>x.id===tid); if(!t)return; if(!t.sketch)t.sketch={strokes:[],edges:[],spans:[],nextId:1}; if(!t.sketch.spans)t.sketch.spans=[]; SK=t.sketch; CURT=t; penSeen=false; pendingA=null; GRID=SK.grid||"off"; { const gb=document.getElementById("tGrid"); if(gb){ gb.textContent=GRID==="off"?"Grid":(GRID==="sq"?"Grid □":"Grid △"); gb.classList.toggle("on",GRID!=="off"); } } setTool("pen");
     document.getElementById("sktitle").textContent=(typeLabel(t.type)||"Sketch")+(t.label?" — "+t.label:"");
     document.getElementById("skwrap").classList.add("show"); requestAnimationFrame(()=>{ sizeCanvas(); render(); }); };
 })();
