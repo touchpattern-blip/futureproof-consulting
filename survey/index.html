@@ -410,7 +410,7 @@ function render(){
     <div class="seg" id="jobseg">`+JOB_TYPES.map(j=>`<button data-job="${j[0]}" class="${S.job===j[0]?"on":""}">${j[1]}</button>`).join("")+`</div>
     <div class="grid2">
       ${miniField("venue","Venue name")}
-      ${miniField("quote","Quote # (if any)")}
+      ${miniField("quote","Quote # (blank until Citrix)")}
     </div>
     ${miniField("address","Address")}
     ${miniField("date","Date")}
@@ -583,7 +583,7 @@ function ftxt(t){
 function kineticSheet(){
   const m=S.meta;
   let o=`ROSE BRAND — SITE SURVEY → KINETIC QUOTE\n`;
-  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:""}\n`;
+  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:"  ·  Quote # __________"}\n`;
   o+=`${m.address||""}\n`;
   o+=`Date ${m.date||"—"}  ·  Surveyor ${m.surveyor||"—"}\n`;
   o+=`Job: ${(JOB_TYPES.find(j=>j[0]===S.job)||["","—"])[1]}  ·  Frame: ${(FRAMES.find(f=>f[0]===S.venueFrame)||["","—"])[1]}\n`;
@@ -851,7 +851,7 @@ document.getElementById("projlist").onclick=(e)=>{
     const tx=x=>x*sc+ox,ty=y=>y*sc+oy;
     let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VW} ${VH}" width="100%"><rect x="8" y="8" width="${VW-16}" height="${VH-16}" fill="none" stroke="#000" stroke-width="1.4"/>`;
     s+=`<text x="30" y="42" font-family="Arial" font-size="22" font-weight="700">${esc((typeLabel(CURT.type)||"Sketch")+(CURT.label?" — "+CURT.label:""))}</text>`;
-    s+=`<text x="30" y="66" font-family="Arial" font-size="13" fill="#333">${esc(S.meta.venue||"")}${S.meta.quote?" · Q"+esc(S.meta.quote):""}${S.meta.surveyor?" · "+esc(S.meta.surveyor):""} · NTS — DIMENSIONED</text>`;
+    s+=`<text x="30" y="66" font-family="Arial" font-size="13" fill="#333">${esc(S.meta.venue||"")}${S.meta.quote?" · Q"+esc(S.meta.quote):" · Quote # __________"}${S.meta.surveyor?" · "+esc(S.meta.surveyor):""} · NTS — DIMENSIONED</text>`;
     SK.edges.forEach(e=>{ s+=`<line x1="${tx(e.x1)}" y1="${ty(e.y1)}" x2="${tx(e.x2)}" y2="${ty(e.y2)}" stroke="#000" stroke-width="2.6" stroke-linecap="round"/>`; });
     SK.edges.forEach(e=>{ if(e.dim){ const mx=tx((e.x1+e.x2)/2),my=ty((e.y1+e.y2)/2)-11; s+=`<text x="${mx}" y="${my}" font-family="ui-monospace,monospace" font-size="18" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(e.dim.text)}</text>`; } });
     s+=`</svg>`;
