@@ -6,9 +6,9 @@
 <title>Rose Brand Site Survey</title>
 <style>
   :root{
-    --rb:#c8102e; --rb-dark:#9a0c22; --ink:#1a1c1f; --muted:#6a7079;
-    --line:#d9dde2; --bg:#f4f6f8; --card:#ffffff; --accent:#0d6efd;
-    --ok:#1a9850; --warn:#b45309; --chip:#eef1f4;
+    --rb:#111827; --rb-dark:#0b0f19; --ink:#14181b; --muted:#6a7079;
+    --line:#dcdfe4; --bg:#f5f6f7; --card:#ffffff; --accent:#f59e0b;
+    --ok:#1a9850; --warn:#b45309; --chip:#eef0f3;
     --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -66,7 +66,7 @@
   .treat .thead button.del{background:none;border:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;}
   .treat .tbody{padding:4px 12px 13px;}
   .addbtn{width:100%;margin-top:13px;font-size:14.5px;font-weight:700;color:var(--rb);background:#fff;border:1.5px dashed var(--rb);border-radius:10px;padding:13px;cursor:pointer;}
-  .addbtn:active{background:#fff5f6;}
+  .addbtn:active{background:#fff8ec;}
   .fam{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:3px 8px;border-radius:20px;margin-top:2px;}
   .note-lesson{font-size:11.5px;color:var(--warn);font-weight:600;margin-top:5px;}
   .bar{position:fixed;bottom:0;left:0;right:0;z-index:30;background:#fff;border-top:1px solid var(--line);padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:10px;max-width:820px;margin:0 auto;box-shadow:0 -2px 10px rgba(0,0,0,.06);}
@@ -691,7 +691,7 @@ document.getElementById("projlist").onclick=(e)=>{
   .skcanvas{position:absolute;inset:0;touch-action:none;display:block;width:100%;height:100%;background:#fff;}
   .skrail{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:8px;z-index:3;}
   .skrail button{width:66px;min-height:50px;border-radius:10px;border:1.5px solid #d9dde2;background:#fff;color:#2a2e33;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12);}
-  .skrail button.on{background:#c8102e;color:#fff;border-color:#c8102e;}
+  .skrail button.on{background:#111827;color:#fff;border-color:#111827;}
   .skrail .sep{height:1px;background:#d9dde2;margin:2px 2px;}
   .skhint{position:absolute;left:12px;bottom:12px;background:rgba(22,24,27,.82);color:#fff;font-size:12px;padding:7px 11px;border-radius:8px;z-index:3;max-width:62%;}
   .skkeypad{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #d9dde2;padding:12px;z-index:5;display:none;box-shadow:0 -3px 14px rgba(0,0,0,.14);}
@@ -699,7 +699,7 @@ document.getElementById("projlist").onclick=(e)=>{
   .skkeypad .kh{max-width:520px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
   .skkeypad #kpclose{width:42px;height:42px;flex:0 0 auto;border:1.5px solid #d9dde2;background:#fff;border-radius:9px;font-size:22px;line-height:1;font-weight:700;color:#6a7079;cursor:pointer;}
   .skkeypad #kplabel{font-size:12px;color:#6a7079;font-weight:600;white-space:nowrap;}
-  .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:26px;font-weight:700;color:#c8102e;flex:1;text-align:center;background:#fff5f6;border:1.5px solid #f3c6cd;border-radius:8px;padding:7px 12px;}
+  .skkeypad .kh .val{font-family:ui-monospace,monospace;font-size:26px;font-weight:700;color:#111827;flex:1;text-align:center;background:#fff8ec;border:1.5px solid #f0d49a;border-radius:8px;padding:7px 12px;}
   .skgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:0 auto;}
   .skgrid button{min-height:54px;font-size:19px;font-weight:700;border-radius:9px;border:1.5px solid #d9dde2;background:#fff;cursor:pointer;font-family:ui-monospace,monospace;}
   .skgrid button.set{background:#1a9850;color:#fff;border-color:#1a9850;}
@@ -726,7 +726,7 @@ document.getElementById("projlist").onclick=(e)=>{
         <button id="skClear">Clear</button>
         <div class="sep"></div>
         <button id="skSheet">Sheet</button>
-        <button id="skDone" style="background:#0d6efd;color:#fff;border-color:#0d6efd">Done</button>
+        <button id="skDone" style="background:#111827;color:#fff;border-color:#111827">Done</button>
       </div>
       <div class="skhint" id="skhint">Pen: draw each edge. Lines straighten &amp; snap square when you lift. Then tap <b>Dim</b> and tap an edge.</div>
       <div class="skkeypad" id="skkeypad">
@@ -829,11 +829,11 @@ document.getElementById("projlist").onclick=(e)=>{
     // gap / span dims (freestanding)
     (SK.spans||[]).forEach(s=>{ const ax=s.a[0]*DPR,ay=s.a[1]*DPR,bx=s.b[0]*DPR,by=s.b[1]*DPR;
       const ang=Math.atan2(by-ay,bx-ax), tx=Math.cos(ang+Math.PI/2)*6*DPR, ty=Math.sin(ang+Math.PI/2)*6*DPR;
-      ctx.strokeStyle="#c8102e"; ctx.lineWidth=1.7*DPR;
+      ctx.strokeStyle="#d97706"; ctx.lineWidth=1.7*DPR;
       ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.moveTo(ax-tx,ay-ty); ctx.lineTo(ax+tx,ay+ty); ctx.moveTo(bx-tx,by-ty); ctx.lineTo(bx+tx,by+ty); ctx.stroke();
       const lx=(ax+bx)/2+tx*1.9, ly=(ay+by)/2+ty*1.9, lab=s.dim?s.dim.text:"?";
-      ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(lab,lx,ly); ctx.fillStyle="#c8102e"; ctx.fillText(lab,lx,ly); });
-    if(TOOL==="gap"&&pendingA){ ctx.strokeStyle="#c8102e"; ctx.lineWidth=2*DPR; ctx.beginPath(); ctx.arc(pendingA[0]*DPR,pendingA[1]*DPR,8*DPR,0,7); ctx.stroke(); }
+      ctx.lineWidth=3.5*DPR; ctx.strokeStyle="#fff"; ctx.strokeText(lab,lx,ly); ctx.fillStyle="#d97706"; ctx.fillText(lab,lx,ly); });
+    if(TOOL==="gap"&&pendingA){ ctx.strokeStyle="#d97706"; ctx.lineWidth=2*DPR; ctx.beginPath(); ctx.arc(pendingA[0]*DPR,pendingA[1]*DPR,8*DPR,0,7); ctx.stroke(); }
     const nd=SK.edges.filter(e=>e.dim).length, ng=(SK.spans||[]).length; document.getElementById("skstat").textContent=`${SK.edges.length} edges · ${nd} dims${ng?" · "+ng+" gap":""}`;
   }
   function renderLive(){ render(); if(curRaw&&curRaw.length){ ctx.beginPath(); ctx.lineWidth=2.2*DPR; ctx.strokeStyle="#0d6efd"; curRaw.forEach((p,i)=> i?ctx.lineTo(p[0]*DPR,p[1]*DPR):ctx.moveTo(p[0]*DPR,p[1]*DPR)); ctx.stroke(); } }
@@ -876,8 +876,8 @@ document.getElementById("projlist").onclick=(e)=>{
     SK.edges.forEach(e=>{ s+=`<line x1="${tx(e.x1)}" y1="${ty(e.y1)}" x2="${tx(e.x2)}" y2="${ty(e.y2)}" stroke="#000" stroke-width="2.6" stroke-linecap="round"/>`; });
     SK.edges.forEach(e=>{ if(e.dim){ const mx=tx((e.x1+e.x2)/2),my=ty((e.y1+e.y2)/2)-11; s+=`<text x="${mx}" y="${my}" font-family="ui-monospace,monospace" font-size="18" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(e.dim.text)}</text>`; } });
     (SK.spans||[]).forEach(sp=>{ const ax=tx(sp.a[0]),ay=ty(sp.a[1]),bx=tx(sp.b[0]),by=ty(sp.b[1]); const ang=Math.atan2(by-ay,bx-ax), px=Math.cos(ang+Math.PI/2)*7,py=Math.sin(ang+Math.PI/2)*7;
-      s+=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#c8102e" stroke-width="1.7"/><line x1="${ax-px}" y1="${ay-py}" x2="${ax+px}" y2="${ay+py}" stroke="#c8102e" stroke-width="1.7"/><line x1="${bx-px}" y1="${by-py}" x2="${bx+px}" y2="${by+py}" stroke="#c8102e" stroke-width="1.7"/>`;
-      const lx=(ax+bx)/2+px*1.7,ly=(ay+by)/2+py*1.7; s+=`<text x="${lx}" y="${ly}" font-family="ui-monospace,monospace" font-size="17" font-weight="700" fill="#c8102e" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(sp.dim?sp.dim.text:"?")}</text>`; });
+      s+=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#d97706" stroke-width="1.7"/><line x1="${ax-px}" y1="${ay-py}" x2="${ax+px}" y2="${ay+py}" stroke="#d97706" stroke-width="1.7"/><line x1="${bx-px}" y1="${by-py}" x2="${bx+px}" y2="${by+py}" stroke="#d97706" stroke-width="1.7"/>`;
+      const lx=(ax+bx)/2+px*1.7,ly=(ay+by)/2+py*1.7; s+=`<text x="${lx}" y="${ly}" font-family="ui-monospace,monospace" font-size="17" font-weight="700" fill="#d97706" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(sp.dim?sp.dim.text:"?")}</text>`; });
     s+=`</svg>`;
     const w=window.open("","_blank"); if(!w){ alert("Allow popups to print the sheet."); return; }
     w.document.write(`<!DOCTYPE html><html><head><meta charset=utf-8><title>Sketch Sheet</title><style>@page{size:landscape;margin:.4in}html,body{margin:0}</style></head><body>${s}</body></html>`);
