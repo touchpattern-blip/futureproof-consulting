@@ -163,7 +163,6 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 function loadProj(id){ try{return JSON.parse(localStorage.getItem(pKey(id)));}catch(e){return null;} }
-function esc(s){ return (s==null?"":""+s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function fresh(){
   return {
@@ -231,6 +230,7 @@ const TYPES=[
   ["drop","Backdrop / Drop","backdrop"],
   ["pipedrape","Pipe & Drape","pipedrape"],
   ["arch","Architectural / Window drape","arch"],
+  ["hardware","Installation hardware / material","hardware"],
   ["other","Other","other"]
 ];
 const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[2]:"";};
@@ -251,7 +251,7 @@ const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","14\"","16\"","24\""];
 const TRACKS=["ADC 1300","ADC 1400","ADC 1700","ADC 2800"];
 const CORDING=["Hand line (rope)","Continuous cord loop","Bead / ball chain","Sash cord"];
-const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket"];
+const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
 
 // field builders return [key,label,control,opts,sub]
@@ -317,15 +317,23 @@ function otherFields(){return [
   ["w","Width","text",null,""],
   ["desc","Description","textarea",null,""]
 ];}
-const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,other:otherFields};
+function hardwareFields(){return [
+  ["desc","Item / description","text",null,"e.g. 20' thick-wall alum pipe"],
+  ["unit","Unit","datalist",["ea","ft","lb","set","roll","pair"],"ea"],
+  ["source","Source / vendor","datalist",["McMaster-Carr","IMS (metal supply)","Local hardware","Rose Brand catalog","Other"],"where priced from"],
+  ["partNo","Part # / spec","text",null,"catalog # or spec"],
+  ["unitPrice","Unit price","text",null,"$ (optional)"],
+  ["notes","Notes / attachment","textarea",null,"how it mounts / attaches"]
+];}
+const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
 const MOVABLE=new Set(["drawn","valance","flat"]); // can have an operation
 
 function opFields(op){
   switch(op){
     case "fixed": return [["hang","Hang method","text",null,"e.g. tie-line to pipe"]];
-    case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","datalist",MOUNTS,"or type other"]];
-    case "cord": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["cording","Cording type","datalist",CORDING,"or type other"],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","datalist",MOUNTS,"or type other"]];
-    case "motor": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""]];
+    case "manual": return [["track","Track series","text",null,"e.g. ADC 1300"],["carrier","Master carrier","text",null,""],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","datalist",MOUNTS,"or type other"],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
+    case "cord": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["cording","Cording type","datalist",CORDING,"or type other"],["overlap","Overlap","datalist",OVERLAP,"inches"],["mount","Mount","datalist",MOUNTS,"or type other"],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
+    case "motor": return [["track","Track series","datalist",TRACKS,"ADC series or type other"],["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
     case "fly": return [["batten","Batten / pipe","text",null,""],["trimHi","Trim - high","text",null,""],["trimLo","Trim - low","text",null,""],["arbor","Counterweight / arbor","text",null,""],["rig","Rigging notes","textarea",null,""]];
     default: return [];
   }
@@ -386,6 +394,8 @@ function treatmentCard(t,i){
       ${t.type?`<span class="fam">${fam} goods</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
       ${opHtml}
+      ${t.type?`<div class="toggle tbdtog"><span>&#9888; Needs engineering / TBD</span><label class="sw"><input type="checkbox" data-tbd="${t.id}" ${t.tbd?"checked":""}><span class="track"></span></label></div>`:""}
+      ${t.tbd?`<label class="f"><span>What's unresolved <span class="sub">(carries to handoff)</span></span><input type="text" data-tbdnote="${t.id}" value="${esc(t.tbdNote||"")}" placeholder="e.g. pipe attachment HW TBD"></label>`:""}
     </div>
   </div>`;
 }
@@ -515,7 +525,7 @@ function bind(){
   app.querySelectorAll("[data-stnx]").forEach(b=>b.onclick=()=>{S.prosc.stations.splice(+b.dataset.stnx,1);save();render();});
   app.querySelectorAll("[data-stn]").forEach(inp=>inp.oninput=()=>{S.prosc.stations[+inp.dataset.si][inp.dataset.stn]=inp.value;save();updateDerived();});
   // treatments
-  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{}});save();render();};
+  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},tbd:false,tbdNote:""});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
@@ -523,6 +533,8 @@ function bind(){
   app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
   app.querySelectorAll("[data-qty]").forEach(i=>i.oninput=()=>{T(i.dataset.qty).qty=i.value;save();});
   app.querySelectorAll("[data-op]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.op);t.operation=s.value;t.opFields={};save();render();});
+  app.querySelectorAll("[data-tbd]").forEach(c=>c.onchange=()=>{const t=T(c.dataset.tbd);t.tbd=c.checked;save();render();});
+  app.querySelectorAll("[data-tbdnote]").forEach(i=>i.oninput=()=>{T(i.dataset.tbdnote).tbdNote=i.value;save();});
   // treatment fields (data-k + data-t)
   app.querySelectorAll("[data-k]").forEach(inp=>{
     const handler=()=>{const t=T(inp.dataset.t.replace("_op",""));const bucket=inp.dataset.t.endsWith("_op")?t.opFields:t.fields;bucket[inp.dataset.k]=(inp.type==="checkbox")?inp.checked:inp.value;save();};
@@ -540,6 +552,9 @@ function T(id){return S.treatments.find(t=>t.id===id);}
 function ftxt(t){
   const fam=typeFamily(t.type);
   const F=t.fields||{}, O=t.opFields||{};
+  if(fam==="hardware"){
+    return [F.desc, (t.qty&&t.qty!=="1")?("qty "+t.qty+(F.unit?" "+F.unit:"")):"", F.source&&("["+F.source+"]"), F.partNo&&("#"+F.partNo), F.unitPrice&&("@ "+F.unitPrice), F.notes&&("— "+F.notes)].filter(Boolean).join(" · ");
+  }
   const parts=[];
   const dims=[F.w?("W "+F.w):"",F.h?("H "+F.h):""].filter(Boolean).join(" × ");
   if(dims)parts.push(dims);
@@ -580,7 +595,10 @@ function kineticSheet(){
     const line=ftxt(t);
     if(line)o+=`    ${line}\n`;
     if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
+    if(t.tbd)o+=`    ⚠ TBD / needs engineering${t.tbdNote?": "+t.tbdNote:""}\n`;
   });
+  const tbds=S.treatments.filter(t=>t.tbd);
+  if(tbds.length)o+=`   ⚠ ${tbds.length} item(s) flagged TBD / needs engineering — see above.\n`;
   if(S.install.responsibility==="rb"){
     const L=S.install.loadin;
     const li=[L.doorW&&("door "+L.doorW+"×"+(L.doorH||"")),L.freight&&("freight "+(L.freightW||"")+"×"+(L.freightH||"")+"×"+(L.freightL||"")),L.access&&("access "+L.access),L.union&&"union",L.parking&&"parking",L.multiLevel&&"multi-level"].filter(Boolean).join(", ");
