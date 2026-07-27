@@ -232,6 +232,7 @@ function pendOptions(){ if(!PENDING.length)return `<option value="">No pending o
 function applyPending(o){ if(!o)return; const m=S.meta;
   if(o.venue)m.venue=o.venue; if(o.customer)m.customerName=o.customer; if(o.customerId)m.customerId=o.customerId;
   if(o.so)m.so=o.so; if(o.quote)m.quote=o.quote; if(o.address)m.address=o.address; if(o.date)m.date=o.date; if(o.salesperson)m.salesperson=o.salesperson;
+  if(o.contactName)m.contactName=o.contactName; if(o.contactCell)m.contactCell=o.contactCell; if(o.contactEmail)m.contactEmail=o.contactEmail;
   if(!m.projName||!m.projName.trim())m.projName=o.venue||o.customer||"";
   flushSave(); render();
   const c=document.getElementById("savechip"); if(c){ c.textContent="Loaded ✓"; setTimeout(()=>{c.textContent="Saved";},1300); } }
