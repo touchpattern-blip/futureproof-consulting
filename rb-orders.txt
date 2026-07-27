@@ -1,4 +1,4 @@
-// RB Pending Orders -> site-survey dropdown feed. Save in Excel as:  RB Orders Feed
+// RB Pending Orders -> site-survey dropdown feed. Save in Excel as:  RB Site Survey Feed
 // Reads the RBW 2026 sheet and outputs upcoming customer jobs as the orders JSON the
 // survey app fetches. Customer ID = 6-digit number in Column B (fallback: "CID######"
 // inside the Column A job cell). Address / phone / contact name are parsed from the
