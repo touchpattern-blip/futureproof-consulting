@@ -1,0 +1,65 @@
+// RB Pending Orders -> site-survey dropdown feed. Save in Excel as:  RB Orders Feed
+// Reads the RBW 2026 sheet and outputs upcoming customer jobs as the orders JSON the
+// survey app fetches. Customer ID = 6-digit number in Column B (fallback: "CID######"
+// inside the Column A job cell). Console-logs the JSON to copy; also returns the array
+// for Power Automate to publish on a schedule.
+// NOTE: YEAR is fixed to the sheet name; update both when the 2027 tab arrives.
+
+interface Ord { venue:string; customer:string; customerId:string; so:string; quote:string; address:string; date:string; salesperson:string; }
+
+function main(workbook: ExcelScript.Workbook): Ord[] {
+  const SHEET="RBW 2026", YEAR=2026;
+  const sheet=workbook.getWorksheet(SHEET); if(!sheet) return [];
+  const used=sheet.getUsedRange(); if(!used) return [];
+  const vals=used.getValues();
+
+  const want=["Order #","Total SO Cost","Install Cost","Ship Date","Install Date","Salesperson","Notes",
+              "Brandon","Adam","Manny","Gio","Mike","RB Truck","Assigned Crew","Customer ID","Cust ID","CID","Customer"];
+  const col:{[k:string]:number}={};
+  for(let r=0;r<vals.length;r++){
+    let hits=0; for(let c=0;c<vals[r].length;c++) if(want.indexOf(String(vals[r][c]).trim())>=0) hits++;
+    if(hits>=4) for(let c=0;c<vals[r].length;c++){ const t=String(vals[r][c]).trim(); if(want.indexOf(t)>=0&&col[t]===undefined) col[t]=c; }
+    if(col["Salesperson"]!==undefined&&col["Order #"]!==undefined) break;
+  }
+  const cOrder=col["Order #"], cSales=col["Salesperson"], cNotes=col["Notes"];
+  // customer ID: header match if Angie labeled it, else default to Column B (index 1)
+  let cCust=col["Customer ID"]; if(cCust===undefined)cCust=col["Cust ID"]; if(cCust===undefined)cCust=col["CID"];
+  if(cCust===undefined)cCust=col["Customer"]; if(cCust===undefined)cCust=1;
+
+  const dateRe=/^\s*(\d{1,2})\/(\d{1,2})/;
+  const timeRe=/(\d{1,2})(?::(\d{2}))?\s*[ap]\.?m\.?(?![a-z])/i;
+  const cidRe=/CID\s*[:#]?\s*(\d{6})/i;
+  const pad=(n:number)=> n<10?"0"+n:""+n;
+  const now=new Date();
+  const cutoff=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-7));
+
+  const out:Ord[]=[]; const seen:{[k:string]:boolean}={};
+  for(let r=0;r<vals.length;r++){
+    const a=String(vals[r][0]).trim(); const m=a.match(dateRe); if(!m) continue;
+    const iso=`${YEAR}-${pad(Number(m[1]))}-${pad(Number(m[2]))}`;
+    if(new Date(iso+"T00:00:00Z")<cutoff) continue;                 // upcoming only (this week back + forward)
+    const order=cOrder!==undefined?String(vals[r][cOrder]).trim():"";
+    const isSV=/site visit/i.test(a);
+    if(!order && !isSV) continue;                                    // pending customer jobs = has order# OR is a site visit
+
+    // customer ID: 6-digit number in Column B, else "CID######" in the job cell
+    let custId=""; { const b=String(vals[r][cCust]||""); const bm=b.match(/\d{6}/); if(bm) custId=bm[0]; }
+    if(!custId){ const am=a.match(cidRe); if(am) custId=am[1]; }
+
+    let venue=a.replace(dateRe,"").replace(timeRe,"").replace(cidRe,"").replace(/\(\s*\)/g,"").replace(/^[-\s\/]+/,"").trim();
+    venue=venue.replace(/^site visit\s*/i,"").trim(); if(!venue) venue="(job)";
+
+    const sales=cSales!==undefined?String(vals[r][cSales]).trim():"";
+    const notes=cNotes!==undefined?String(vals[r][cNotes]).trim():"";
+    const address=(notes && /\d{2,}\s+[A-Za-z]/.test(notes))?notes:"";
+    const isQ=/^q/i.test(order);
+    const so=(!isQ&&order)?order:"", quote=isQ?order:"";
+
+    const uid=`${iso}|${venue}`.toLowerCase(); if(seen[uid])continue; seen[uid]=true;
+    out.push({venue, customer:venue, customerId:custId, so, quote, address, date:iso, salesperson:sales});
+  }
+
+  const payload={generated:`${YEAR}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`, orders:out};
+  console.log(JSON.stringify(payload));   // copy this whole line and drop it to Meridian
+  return out;                              // Power Automate uses this for the scheduled publish
+}
