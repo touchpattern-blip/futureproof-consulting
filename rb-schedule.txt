@@ -1,16 +1,29 @@
-function main(workbook: ExcelScript.Workbook) {
+// RB Schedule -> Calendar feed. Save this in Excel as:  RB Schedule Sync
+// Returns Gio's whole assigned schedule (every row with hours in the Gio column),
+// from the current week back through all future dates, as calendar-ready events.
+// NOTE: YEAR is fixed to the sheet name below; update both when the 2027 tab arrives.
+
+interface Ev {
+  subject: string;
+  start: string;      // "YYYY-MM-DDTHH:mm:00" if timed, "YYYY-MM-DD" if all-day
+  end: string;        // timed: +2h ; all-day: exclusive end (the day after the last day)
+  isAllDay: boolean;
+  location: string;
+  body: string;
+  uid: string;
+}
+
+function main(workbook: ExcelScript.Workbook): Ev[] {
   const SHEET = "RBW 2026";
   const YEAR = 2026;
 
   const sheet = workbook.getWorksheet(SHEET);
-  if (!sheet) { console.log(`Sheet "${SHEET}" not found. Tabs present:`);
-    workbook.getWorksheets().forEach(w => console.log("  " + w.getName())); return; }
-
+  if (!sheet) return [];
   const used = sheet.getUsedRange();
-  if (!used) { console.log("No used range."); return; }
+  if (!used) return [];
   const vals = used.getValues();
 
-  // Locate columns by matching the repeated header row (positions are constant).
+  // Locate columns from the repeated header row (positions are constant across the sheet).
   const want = ["Order #","Total SO Cost","Install Cost","Ship Date","Install Date",
                 "Salesperson","Notes","Brandon","Adam","Manny","Gio","Mike","RB Truck","Assigned Crew"];
   const col: { [k: string]: number } = {};
@@ -23,40 +36,82 @@ function main(workbook: ExcelScript.Workbook) {
     }
     if (col["Salesperson"] !== undefined && col["Gio"] !== undefined && col["Order #"] !== undefined) break;
   }
-  console.log("Column map: " + JSON.stringify(col));
-
   const cOrder = col["Order #"], cSales = col["Salesperson"], cNotes = col["Notes"], cGio = col["Gio"];
-  const dateRe = /^\s*(\d{1,2})\/(\d{1,2})(?:\s*-\s*(\d{1,2})\/(\d{1,2}))?/;
-  const timeRe = /\((\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?)\)/i;
 
-  const lines: string[] = [], jsonRows: object[] = [];
+  const dateRe = /^\s*(\d{1,2})\/(\d{1,2})(?:\s*-\s*(\d{1,2})\/(\d{1,2}))?/;
+  const timeRe = /(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?(?![a-z])/i;
+  const pad = (n: number) => (n < 10 ? "0" + n : "" + n);
+  const isoDate = (mo: number, da: number) => `${YEAR}-${pad(mo)}-${pad(da)}`;
+  function addDay(iso: string): string {
+    const p = iso.split("-").map(x => Number(x));
+    const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    d.setUTCDate(d.getUTCDate() + 1);
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  }
+
+  // Keep the current week back plus everything forward; drop older rows.
+  const now = new Date();
+  const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
+
+  const seen: { [k: string]: boolean } = {};
+  const out: Ev[] = [];
+
   for (let r = 0; r < vals.length; r++) {
     const a = String(vals[r][0]).trim();
     const m = a.match(dateRe);
-    if (!m) continue; // week headers / labels / blanks
+    if (!m) continue;
+
+    const gioVal = cGio !== undefined ? String(vals[r][cGio]).trim() : "";
+    if (gioVal === "" || gioVal === "0") continue;   // WHOLE assigned schedule = Gio has hours
 
     const mo = Number(m[1]), da = Number(m[2]);
     const emo = m[3] ? Number(m[3]) : mo, eda = m[4] ? Number(m[4]) : da;
-    const iso = `${YEAR}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`;
-    const isoEnd = `${YEAR}-${String(emo).padStart(2,"0")}-${String(eda).padStart(2,"0")}`;
-    const tm = a.match(timeRe), time = tm ? tm[1] : "";
-    let desc = a.replace(dateRe,"").replace(timeRe,"").replace(/^[-\s]+/,"").trim();
+    const dStart = isoDate(mo, da), dEnd = isoDate(emo, eda);
+    if (new Date(dEnd + "T00:00:00Z") < cutoff) continue;   // drop old rows
 
-    const gioVal = cGio  !== undefined ? String(vals[r][cGio]).trim()   : "";
-    const order  = cOrder!== undefined ? String(vals[r][cOrder]).trim() : "";
-    const sales  = cSales!== undefined ? String(vals[r][cSales]).trim() : "";
-    const notes  = cNotes!== undefined ? String(vals[r][cNotes]).trim() : "";
+    const multiDay = dStart !== dEnd;
+    let title = a.replace(dateRe, "").replace(/^[-\s\/]+/, "").trim();
 
-    const isSV = /site visit/i.test(a);
-    const gioH = gioVal !== "" && gioVal !== "0";
-    if (!isSV && !gioH) continue; // mine = "Site Visit" label OR hours in the Gio column
+    const tm = a.match(timeRe);
+    let start = "", end = "", isAllDay = true;
+    if (!multiDay && tm) {
+      let hh = Number(tm[1]); const mm = tm[2] ? Number(tm[2]) : 0;
+      const ap = tm[3].toLowerCase();
+      if (ap === "p" && hh < 12) hh += 12;
+      if (ap === "a" && hh === 12) hh = 0;
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+        start = `${dStart}T${pad(hh)}:${pad(mm)}:00`;
+        let eh = hh + 2; if (eh > 23) eh = 23;
+        end = `${dStart}T${pad(eh)}:${pad(mm)}:00`;
+        isAllDay = false;
+      }
+    }
+    if (isAllDay) { start = dStart; end = addDay(dEnd); }
 
-    const tag = (isSV ? "SV" : "") + (gioH ? "|GIO" : "");
-    lines.push(`${iso}${isoEnd!==iso?".."+isoEnd:""} | ${time||"    "} | [${tag}] ${desc} | Ord ${order||"-"} | ${sales||"-"} | Gio:${gioVal||"-"} | ${notes}`);
-    jsonRows.push({date:iso,endDate:isoEnd,time,title:desc,order,salesperson:sales,gio:gioVal,siteVisit:isSV,notes});
+    if (tm) title = title.replace(tm[0], "");
+    title = title.replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").replace(/^[-\s\/]+|[-\s]+$/g, "").trim();
+    if (!title) title = "RB job";
+
+    const order = cOrder !== undefined ? String(vals[r][cOrder]).trim() : "";
+    const sales = cSales !== undefined ? String(vals[r][cSales]).trim() : "";
+    const notes = cNotes !== undefined ? String(vals[r][cNotes]).trim() : "";
+
+    let location = "";
+    if (notes && /\d{2,}\s+[A-Za-z]/.test(notes)) location = notes;   // lift a street address if present
+
+    const bp: string[] = [];
+    if (order) bp.push("Order: " + order);
+    if (sales) bp.push("Salesperson: " + sales);
+    bp.push("Gio hrs: " + gioVal);
+    if (notes) bp.push("Notes: " + notes);
+    const body = bp.join("\n");
+
+    const uid = `${dStart}|${title}`.toLowerCase();
+    if (seen[uid]) continue;   // dedup exact repeats
+    seen[uid] = true;
+
+    out.push({ subject: title, start, end, isAllDay, location, body, uid });
   }
 
-  console.log(`\n==== Candidate visits (${lines.length}) ====`);
-  lines.forEach(v => console.log(v));
-  console.log(`\n==== JSON ====\n` + JSON.stringify(jsonRows));
+  return out;
 }

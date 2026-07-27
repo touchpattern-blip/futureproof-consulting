@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RB Schedule to Calendar - Setup</title>
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:820px;margin:0 auto;padding:24px 20px 80px;line-height:1.5;font-size:15px;}
+  h1{font-size:22px;margin:0 0 4px;}
+  h2{font-size:17px;margin:28px 0 8px;padding:6px 0 5px;border-bottom:2px solid #111;}
+  .lead{color:#444;margin:0 0 6px;}
+  .stage{background:#f6f7f8;border:1px solid #dcdee1;border-radius:8px;padding:2px 16px 12px;margin:10px 0;}
+  ol{margin:8px 0;padding-left:22px;}
+  li{margin:6px 0;}
+  code{background:#eceef0;border:1px solid #dcdee1;border-radius:4px;padding:1px 5px;font-family:Consolas,Menlo,monospace;font-size:13px;}
+  .k{font-weight:700;}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px;}
+  th,td{border:1px solid #cfd3d7;padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:#111;color:#fff;font-size:13px;}
+  td code{background:#fff;}
+  .note{background:#fff8e6;border:1px solid #e7d38a;border-radius:6px;padding:9px 12px;margin:10px 0;font-size:14px;}
+  .ok{background:#e9f6ec;border:1px solid #a9d9b6;border-radius:6px;padding:9px 12px;margin:10px 0;font-size:14px;}
+  a{color:#0b62c4;}
+  .small{color:#666;font-size:13px;}
+</style>
+</head>
+<body>
+
+<h1>RB Schedule &rarr; iPhone Calendar</h1>
+<p class="lead">One-time build, about 15 minutes. After this it runs itself every morning and your assigned schedule shows up in your native iPhone calendar. Everything below stays inside Microsoft's cloud; nothing installs on the laptop.</p>
+<p class="small">Four stages: <b>1</b> save the script &middot; <b>2</b> make the calendar &middot; <b>3</b> build the flow &middot; <b>4</b> publish + subscribe.</p>
+
+<h2>Stage 1 &mdash; Save the script</h2>
+<div class="stage">
+<ol>
+  <li>Open <a href="https://futureproofav.com/rb-schedule.txt">futureproofav.com/rb-schedule.txt</a>. Click into it, <span class="k">Ctrl+A</span>, <span class="k">Ctrl+C</span>.</li>
+  <li>In Excel (the RBW schedule open): <span class="k">Automate</span> tab &rarr; <span class="k">New Script</span>.</li>
+  <li>Select the template code in the editor (<span class="k">Ctrl+A</span>), delete it, then <span class="k">Ctrl+V</span> to paste this in.</li>
+  <li>Click <span class="k">Save</span>. Rename the script to <code>RB Schedule Sync</code> (click the script name at the top to rename).</li>
+  <li>Optional sanity check: click <span class="k">Run</span>. It should complete with no error (it returns your rows to nowhere for now).</li>
+</ol>
+</div>
+
+<h2>Stage 2 &mdash; Make the calendar</h2>
+<div class="stage">
+<ol>
+  <li>Open <b>Outlook on the web</b> &rarr; <b>Calendar</b>.</li>
+  <li>Left pane: <span class="k">Add calendar</span> &rarr; <span class="k">Create blank calendar</span>.</li>
+  <li>Name it exactly <code>RB Schedule</code> &rarr; <span class="k">Save</span>.</li>
+</ol>
+</div>
+
+<h2>Stage 3 &mdash; Build the flow</h2>
+<div class="stage">
+<ol>
+  <li>Go to <a href="https://flow.microsoft.com">flow.microsoft.com</a> &rarr; <span class="k">Create</span> &rarr; <span class="k">Scheduled cloud flow</span>.</li>
+  <li>Name it <code>RB Schedule to Calendar</code>. Set <b>Repeat every</b> <code>1</code> <code>Day</code>. Click <span class="k">Create</span>.</li>
+  <li>(Optional) click the <b>Recurrence</b> step and set a preferred time, e.g. <code>05:30</code>, Time zone <code>Pacific</code>.</li>
+
+  <li><span class="k">+ New step</span> &rarr; search <b>Excel Online (Business)</b> &rarr; action <b>Run script</b>.
+    <ul>
+      <li><b>Location:</b> OneDrive for Business (or the SharePoint site where the schedule file lives)</li>
+      <li><b>Document Library</b> / <b>File:</b> pick the RBW schedule workbook</li>
+      <li><b>Script:</b> <code>RB Schedule Sync</code></li>
+    </ul>
+  </li>
+
+  <li><span class="k">+ New step</span> &rarr; <b>Office 365 Outlook</b> &rarr; <b>Get events (V4)</b>.
+    <ul>
+      <li><b>Calendar Id:</b> <code>RB Schedule</code></li>
+      <li>Open <b>Show advanced options</b> &rarr; set <b>Top Count</b> to <code>500</code></li>
+    </ul>
+  </li>
+
+  <li><span class="k">+ New step</span> &rarr; <b>Apply to each</b>. In "select an output," pick <b>value</b> (from Get events). Inside it, <b>Add an action</b> &rarr; <b>Office 365 Outlook</b> &rarr; <b>Delete event (V4)</b>.
+    <ul>
+      <li><b>Calendar Id:</b> <code>RB Schedule</code></li>
+      <li><b>Event:</b> pick <b>Event id</b> (from the loop item)</li>
+    </ul>
+    <span class="small">This clears the calendar so each run is a clean mirror. It only ever touches the dedicated RB Schedule calendar.</span>
+  </li>
+
+  <li><span class="k">+ New step</span> (after that loop, not inside it) &rarr; <b>Apply to each</b>. In "select an output," pick <b>result</b> (from Run script). Inside it, <b>Add an action</b> &rarr; <b>Office 365 Outlook</b> &rarr; <b>Create event (V4)</b>. Map the fields:</li>
+</ol>
+
+<table>
+  <tr><th>Field in Create event</th><th>Set to (from the loop item)</th></tr>
+  <tr><td><b>Calendar Id</b></td><td><code>RB Schedule</code></td></tr>
+  <tr><td><b>Subject</b></td><td><code>subject</code></td></tr>
+  <tr><td><b>Start time</b></td><td><code>start</code></td></tr>
+  <tr><td><b>End time</b></td><td><code>end</code></td></tr>
+  <tr><td><b>Time zone</b></td><td><code>(UTC-08:00) Pacific Time (US &amp; Canada)</code></td></tr>
+  <tr><td colspan="2" class="small">Then click <b>Show advanced options</b> for the three below:</td></tr>
+  <tr><td><b>Is all day event</b></td><td><code>isAllDay</code></td></tr>
+  <tr><td><b>Location</b></td><td><code>location</code></td></tr>
+  <tr><td><b>Body</b></td><td><code>body</code></td></tr>
+</table>
+
+<ol start="8">
+  <li><span class="k">Save</span>. Then click <span class="k">Test</span> &rarr; <b>Manually</b> &rarr; <b>Run</b> to fire it once now.</li>
+</ol>
+<div class="ok"><b>Check:</b> open the <code>RB Schedule</code> calendar in Outlook. You should see your assigned jobs populate (timed ones at their times, everything else all-day, multi-day trips as spans).</div>
+</div>
+
+<h2>Stage 4 &mdash; Publish + subscribe your iPhone</h2>
+<div class="stage">
+<ol>
+  <li>Outlook web &rarr; <span class="k">Settings</span> (gear) &rarr; search <code>publish</code> (or Calendar &rarr; Shared calendars).</li>
+  <li>Under <b>Publish a calendar</b>: pick <code>RB Schedule</code>, permission <b>Can view all details</b>, click <span class="k">Publish</span>.</li>
+  <li>It gives two links. Copy the <b>ICS</b> one (not HTML).</li>
+  <li>On the iPhone: <b>Settings</b> &rarr; <b>Calendar</b> &rarr; <b>Accounts</b> &rarr; <b>Add Account</b> &rarr; <b>Other</b> &rarr; <b>Add Subscribed Calendar</b> &rarr; paste the ICS link &rarr; <b>Next</b> &rarr; <b>Save</b>.</li>
+</ol>
+</div>
+
+<div class="note">
+<b>How it behaves.</b>
+<ul style="margin:6px 0;">
+  <li><b>What syncs:</b> every row where your <b>Gio</b> column has hours (site visits, installs, prep, travel, PTO). Other people's site visits are left out.</li>
+  <li><b>Reschedules and edits</b> in the sheet just move or update the event on the next run. No duplicates, ever, because each run rebuilds the calendar from scratch.</li>
+  <li><b>Times:</b> rows with a clean time like <code>10:00am</code> become 2-hour blocks; anything without a parseable time is all-day; date ranges are multi-day all-day spans.</li>
+  <li><b>Refresh on the phone:</b> iOS pulls subscribed calendars on the schedule under Settings &rarr; Calendar &rarr; Accounts &rarr; Fetch New Data. Set to hourly if you want it snappier.</li>
+</ul>
+</div>
+
+<div class="note">
+<b>If the flow errors.</b> "Script not found" means the script did not save into your OneDrive Office Scripts; reopen Automate, confirm <code>RB Schedule Sync</code> is listed, re-save. If Create event rejects a date, confirm Start/End are mapped to <code>start</code>/<code>end</code> and Time zone is set.
+</div>
+
+<p class="small">Questions or a tweak (different time window, add the order number to the event title, split site-visits onto their own calendar): send a note through the drop page and I'll adjust the script.</p>
+
+</body>
+</html>
