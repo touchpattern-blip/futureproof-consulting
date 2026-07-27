@@ -1,0 +1,62 @@
+function main(workbook: ExcelScript.Workbook) {
+  const SHEET = "RBW 2026";
+  const YEAR = 2026;
+
+  const sheet = workbook.getWorksheet(SHEET);
+  if (!sheet) { console.log(`Sheet "${SHEET}" not found. Tabs present:`);
+    workbook.getWorksheets().forEach(w => console.log("  " + w.getName())); return; }
+
+  const used = sheet.getUsedRange();
+  if (!used) { console.log("No used range."); return; }
+  const vals = used.getValues();
+
+  // Locate columns by matching the repeated header row (positions are constant).
+  const want = ["Order #","Total SO Cost","Install Cost","Ship Date","Install Date",
+                "Salesperson","Notes","Brandon","Adam","Manny","Gio","Mike","RB Truck","Assigned Crew"];
+  const col: { [k: string]: number } = {};
+  for (let r = 0; r < vals.length; r++) {
+    let hits = 0;
+    for (let c = 0; c < vals[r].length; c++) if (want.indexOf(String(vals[r][c]).trim()) >= 0) hits++;
+    if (hits >= 4) for (let c = 0; c < vals[r].length; c++) {
+      const t = String(vals[r][c]).trim();
+      if (want.indexOf(t) >= 0 && col[t] === undefined) col[t] = c;
+    }
+    if (col["Salesperson"] !== undefined && col["Gio"] !== undefined && col["Order #"] !== undefined) break;
+  }
+  console.log("Column map: " + JSON.stringify(col));
+
+  const cOrder = col["Order #"], cSales = col["Salesperson"], cNotes = col["Notes"], cGio = col["Gio"];
+  const dateRe = /^\s*(\d{1,2})\/(\d{1,2})(?:\s*-\s*(\d{1,2})\/(\d{1,2}))?/;
+  const timeRe = /\((\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?)\)/i;
+
+  const lines: string[] = [], jsonRows: object[] = [];
+  for (let r = 0; r < vals.length; r++) {
+    const a = String(vals[r][0]).trim();
+    const m = a.match(dateRe);
+    if (!m) continue; // week headers / labels / blanks
+
+    const mo = Number(m[1]), da = Number(m[2]);
+    const emo = m[3] ? Number(m[3]) : mo, eda = m[4] ? Number(m[4]) : da;
+    const iso = `${YEAR}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`;
+    const isoEnd = `${YEAR}-${String(emo).padStart(2,"0")}-${String(eda).padStart(2,"0")}`;
+    const tm = a.match(timeRe), time = tm ? tm[1] : "";
+    let desc = a.replace(dateRe,"").replace(timeRe,"").replace(/^[-\s]+/,"").trim();
+
+    const gioVal = cGio  !== undefined ? String(vals[r][cGio]).trim()   : "";
+    const order  = cOrder!== undefined ? String(vals[r][cOrder]).trim() : "";
+    const sales  = cSales!== undefined ? String(vals[r][cSales]).trim() : "";
+    const notes  = cNotes!== undefined ? String(vals[r][cNotes]).trim() : "";
+
+    const isSV = /site visit/i.test(a);
+    const gioH = gioVal !== "" && gioVal !== "0";
+    if (!isSV && !gioH) continue; // mine = "Site Visit" label OR hours in the Gio column
+
+    const tag = (isSV ? "SV" : "") + (gioH ? "|GIO" : "");
+    lines.push(`${iso}${isoEnd!==iso?".."+isoEnd:""} | ${time||"    "} | [${tag}] ${desc} | Ord ${order||"-"} | ${sales||"-"} | Gio:${gioVal||"-"} | ${notes}`);
+    jsonRows.push({date:iso,endDate:isoEnd,time,title:desc,order,salesperson:sales,gio:gioVal,siteVisit:isSV,notes});
+  }
+
+  console.log(`\n==== Candidate visits (${lines.length}) ====`);
+  lines.forEach(v => console.log(v));
+  console.log(`\n==== JSON ====\n` + JSON.stringify(jsonRows));
+}
