@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RB Site Survey Feed - Run &amp; Send</title>
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:820px;margin:0 auto;padding:24px 20px 80px;line-height:1.5;font-size:15px;}
+  h1{font-size:22px;margin:0 0 4px;}
+  h2{font-size:17px;margin:26px 0 8px;padding:6px 0 5px;border-bottom:2px solid #111;}
+  .lead{color:#444;margin:0 0 6px;}
+  .stage{background:#f6f7f8;border:1px solid #dcdee1;border-radius:8px;padding:2px 16px 12px;margin:10px 0;}
+  ol{margin:8px 0;padding-left:22px;} li{margin:7px 0;}
+  code{background:#eceef0;border:1px solid #dcdee1;border-radius:4px;padding:1px 5px;font-family:Consolas,Menlo,monospace;font-size:13px;}
+  .k{font-weight:700;}
+  .note{background:#fff8e6;border:1px solid #e7d38a;border-radius:6px;padding:9px 12px;margin:10px 0;font-size:14px;}
+  .ok{background:#e9f6ec;border:1px solid #a9d9b6;border-radius:6px;padding:9px 12px;margin:10px 0;font-size:14px;}
+  a{color:#0b62c4;} .small{color:#666;font-size:13px;}
+  .mono{font-family:Consolas,Menlo,monospace;font-size:12.5px;background:#111;color:#8fe3a0;border-radius:6px;padding:8px 10px;overflow:auto;}
+</style>
+</head>
+<body>
+
+<h1>RB Site Survey Feed &mdash; Run &amp; Send</h1>
+<p class="lead">This pulls your pending jobs off the schedule sheet into the survey app's "Load from pending order" dropdown, with customer IDs and contacts. One run gives real data now; automating the refresh is a later step. The script only <b>reads</b> the sheet, it never changes it.</p>
+<p class="small">Two stages: <b>1</b> save + run the script &middot; <b>2</b> send me the output. About 3 minutes.</p>
+
+<h2>Stage 1 &mdash; Save &amp; run the script</h2>
+<div class="stage">
+<ol>
+  <li>Open <a href="https://futureproofav.com/rb-orders.txt">futureproofav.com/rb-orders.txt</a>. Click into it, <span class="k">Ctrl+A</span>, <span class="k">Ctrl+C</span>.</li>
+  <li>In Excel with the <b>RBW schedule</b> open: <span class="k">Automate</span> tab &rarr; <span class="k">New Script</span>.</li>
+  <li>In the code editor, select the template code (<span class="k">Ctrl+A</span>), delete it, then <span class="k">Ctrl+V</span> to paste this in.</li>
+  <li>Click <span class="k">Save</span>. Click the script name at the top and rename it to <code>RB Site Survey Feed</code>.</li>
+  <li>Click <span class="k">Run</span>. It finishes with no error and prints one long line in the <b>output/console pane</b> at the bottom, starting with:
+    <div class="mono">{"generated":"2026-07-27","orders":[ ... ]}</div>
+  </li>
+</ol>
+</div>
+
+<h2>Stage 2 &mdash; Send me the output</h2>
+<div class="stage">
+<ol>
+  <li>In the output pane, select that whole JSON line (starts with <code>{</code>, ends with <code>}</code>), <span class="k">Ctrl+C</span>.</li>
+  <li>Open <a href="https://drop.hyperchrist.com">drop.hyperchrist.com</a> (PIN <code>47732</code>).</li>
+  <li>Paste the JSON into the note box, label it <code>orders</code>, hit <span class="k">Send</span>.</li>
+</ol>
+<div class="ok">That's it. I publish it as the live feed and your dropdown fills with real customer IDs and contacts. No app changes on your end.</div>
+</div>
+
+<h2>What happens after</h2>
+<div class="stage">
+<ol>
+  <li><b>Now:</b> the dropdown is live-accurate from this one run.</li>
+  <li><b>Optional auto-refresh:</b> generate a <b>futureproofav Gmail app password</b> (Google Account &rarr; Security &rarr; App passwords) and drop it to me. Then I wire a scheduled flow (using this same <code>RB Site Survey Feed</code> script) so the feed republishes on its own, and hand you a short flow-build guide. Until then, re-running Stage 1 whenever you want fresh jobs is the manual refresh.</li>
+</ol>
+</div>
+
+<div class="note">
+<b>If Run shows nothing</b> in the output pane, make sure you're on the RBW workbook and the tab is named <code>RBW 2026</code>. If it prints "Sheet not found" it will list the tab names instead, send me that line and I'll adjust.
+</div>
+
+<p class="small">Ref: script at futureproofav.com/rb-orders.txt &middot; feed lands at futureproofav.com/survey/orders.json</p>
+
+</body>
+</html>
