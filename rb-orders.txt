@@ -61,7 +61,8 @@ function main(workbook: ExcelScript.Workbook): Ord[] {
     let custId=""; { const b=String(vals[r][cCust]||""); const bm=b.match(/\d{6}/); if(bm) custId=bm[0]; }
     if(!custId){ const am=a.match(cidRe); if(am) custId=am[1]; }
 
-    let venue=a.replace(dateRe,"").replace(timeRe,"").replace(cidRe,"").replace(/\(\s*\)/g,"").replace(/^[-\s\/]+/,"").trim();
+    let venue=a.replace(/^\s*\d{1,2}\/\d{1,2}(?:\s*[-–]\s*\d{1,2}\/\d{1,2})?\s*/,"")   // strip leading date or date-range
+               .replace(timeRe,"").replace(cidRe,"").replace(/\(\s*\)/g,"").replace(/^[-\s\/]+/,"").replace(/\?+\s*$/,"").trim();
     venue=venue.replace(/^site visit\s*/i,"").trim(); if(!venue) venue="(job)";
 
     const sales=cSales!==undefined?String(vals[r][cSales]).trim():"";
