@@ -1,11 +1,26 @@
 // RB Pending Orders -> site-survey dropdown feed. Save in Excel as:  RB Orders Feed
 // Reads the RBW 2026 sheet and outputs upcoming customer jobs as the orders JSON the
 // survey app fetches. Customer ID = 6-digit number in Column B (fallback: "CID######"
-// inside the Column A job cell). Console-logs the JSON to copy; also returns the array
-// for Power Automate to publish on a schedule.
+// inside the Column A job cell). Address / phone / contact name are parsed from the
+// Column J Notes cell when present. Console-logs the JSON to copy; also returns the
+// array for Power Automate to publish on a schedule.
 // NOTE: YEAR is fixed to the sheet name; update both when the 2027 tab arrives.
 
-interface Ord { venue:string; customer:string; customerId:string; so:string; quote:string; address:string; date:string; salesperson:string; }
+interface Ord { venue:string; customer:string; customerId:string; so:string; quote:string;
+                address:string; contactName:string; contactCell:string; contactEmail:string; date:string; salesperson:string; }
+
+function parseNote(N:string){
+  N = N||""; let phone="", email="", address="", name="";
+  const em=N.match(/[\w.\-+]+@[\w.\-]+\.[A-Za-z]{2,}/); if(em) email=em[0];
+  const pm=N.match(/\(?\d{3}\)?[.\-\s]?\d{3}[.\-\s]?\d{4}/); if(pm) phone=pm[0].trim();
+  const am=N.match(/\d{2,6}\s+[A-Za-z0-9.'\s]*?(?:Ave|Avenue|St\.?|Street|Blvd|Boulevard|Rd\.?|Road|Dr\.?|Drive|Ln|Lane|Way|Ct|Court|Pl|Place|Hwy|Highway|Cir|Circle)\b[^,\-\/]*(?:,\s*[A-Za-z][A-Za-z\s]+)?/i); if(am) address=am[0].replace(/\s{2,}/g," ").trim();
+  let rest=N; if(email)rest=rest.replace(email,""); if(pm)rest=rest.replace(pm[0],""); if(am)rest=rest.replace(am[0],"");
+  rest=rest.replace(/[\/,;|()]+/g," ").replace(/\s*-\s*/g," ").replace(/\s{2,}/g," ").trim();
+  // name only when a phone/address is present (contact context) AND the remainder is a proper name
+  // (1-3 capitalized words). This avoids grabbing instruction notes like "confirm sizes and install".
+  if((phone||address) && rest && /^([A-Z][A-Za-z.'’]+)(\s+[A-Z][A-Za-z.'’]+){0,2}$/.test(rest)) name=rest;
+  return {name, phone, email, address};
+}
 
 function main(workbook: ExcelScript.Workbook): Ord[] {
   const SHEET="RBW 2026", YEAR=2026;
@@ -51,12 +66,13 @@ function main(workbook: ExcelScript.Workbook): Ord[] {
 
     const sales=cSales!==undefined?String(vals[r][cSales]).trim():"";
     const notes=cNotes!==undefined?String(vals[r][cNotes]).trim():"";
-    const address=(notes && /\d{2,}\s+[A-Za-z]/.test(notes))?notes:"";
+    const p=parseNote(notes);   // address / phone / email / contact name from the Notes cell
     const isQ=/^q/i.test(order);
     const so=(!isQ&&order)?order:"", quote=isQ?order:"";
 
     const uid=`${iso}|${venue}`.toLowerCase(); if(seen[uid])continue; seen[uid]=true;
-    out.push({venue, customer:venue, customerId:custId, so, quote, address, date:iso, salesperson:sales});
+    out.push({venue, customer:venue, customerId:custId, so, quote,
+              address:p.address, contactName:p.name, contactCell:p.phone, contactEmail:p.email, date:iso, salesperson:sales});
   }
 
   const payload={generated:`${YEAR}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`, orders:out};
