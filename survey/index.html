@@ -166,7 +166,7 @@ function loadProj(id){ try{return JSON.parse(localStorage.getItem(pKey(id)));}ca
 
 function fresh(){
   return {
-    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",projName:""},
+    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",so:"",customerId:"",customerName:"",salesperson:"",projName:""},
     job:"",
     venueFrame:"",
     prosc:{present:false, openW:"", openH:"", stations:[]},
@@ -210,6 +210,32 @@ function parseFeet(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”
   m=s.match(/^(\d+(?:\.\d+)?)\s*'$/); if(m) return parseFloat(m[1]);
   m=s.match(/^(\d+(?:\.\d+)?)$/); if(m) return parseFloat(m[1]);
   return null; }
+
+/* ============ PENDING ORDERS (feed from RBW; sample fallback) ============ */
+const PENDKEY="rb_pending_orders_v1";
+const PEND_SAMPLE=[
+  {venue:"Troubador Theater",customer:"Troubadour",customerId:"CUST-0001",so:"",quote:"",address:"",date:"2026-07-21",salesperson:"Alicia"},
+  {venue:"Knott's Berry Farm — Independence Hall",customer:"Knott's Berry Farm",customerId:"CUST-0044",so:"766652",quote:"",address:"",date:"2026-07-22",salesperson:"Jacob/Drew"},
+  {venue:"Rosemead HS",customer:"Rosemead School District",customerId:"CUST-0107",so:"",quote:"Q#423917,423950",address:"",date:"2026-07-22",salesperson:"Lisa C."},
+  {venue:"Pen Music Group",customer:"Pen Music Group",customerId:"CUST-0210",so:"",quote:"",address:"12456 Ventura Blvd, Studio City",date:"2026-07-24",salesperson:"Mariana"},
+  {venue:"Mayfield Junior School",customer:"Mayfield Junior School",customerId:"CUST-0311",so:"",quote:"Q#286590",address:"405 S. Euclid Ave, Pasadena",date:"2026-07-24",salesperson:"Mariana"},
+  {venue:"Placentia-Yorba Linda USD",customer:"Placentia-Yorba Linda USD",customerId:"CUST-0356",so:"",quote:"Q#419339",address:"24695 Paseo de Toronto, Yorba Linda",date:"2026-08-15",salesperson:"Zach"},
+  {venue:"Modern Pacific",customer:"Modern Pacific",customerId:"CUST-0402",so:"768752",quote:"",address:"1633 East Ave, Hayward, CA 94541",date:"2026-08-18",salesperson:"Zach"},
+  {venue:"Antelope Valley School District",customer:"Antelope Valley SD",customerId:"CUST-0455",so:"",quote:"Q#417633",address:"5 schools — Lancaster",date:"2026-08-26",salesperson:"Susan"}
+];
+let PENDING=[], PEND_STAMP="";
+function loadPending(){ try{const c=JSON.parse(localStorage.getItem(PENDKEY)); if(c&&Array.isArray(c.orders)&&c.orders.length){PENDING=c.orders;PEND_STAMP=c.stamp||"";return;}}catch(e){} PENDING=PEND_SAMPLE; PEND_STAMP="sample"; }
+function fetchPending(){ return fetch("orders.json",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{ const orders=Array.isArray(j)?j:((j&&j.orders)||[]); if(!orders.length)return false; const stamp=(j&&j.generated)||"live"; PENDING=orders; PEND_STAMP=stamp; localStorage.setItem(PENDKEY,JSON.stringify({orders,stamp})); return true; }).catch(()=>false); }
+function pendLabel(o){ return [o.date,o.venue||o.customer,(o.so||o.quote||"")].filter(Boolean).join("  ·  "); }
+function pendOptions(){ if(!PENDING.length)return `<option value="">No pending orders loaded</option>`;
+  return `<option value="">Load from pending order…</option>`+PENDING.map((o,i)=>`<option value="${i}">${esc(pendLabel(o))}</option>`).join(""); }
+function applyPending(o){ if(!o)return; const m=S.meta;
+  if(o.venue)m.venue=o.venue; if(o.customer)m.customerName=o.customer; if(o.customerId)m.customerId=o.customerId;
+  if(o.so)m.so=o.so; if(o.quote)m.quote=o.quote; if(o.address)m.address=o.address; if(o.date)m.date=o.date; if(o.salesperson)m.salesperson=o.salesperson;
+  if(!m.projName||!m.projName.trim())m.projName=o.venue||o.customer||"";
+  flushSave(); render();
+  const c=document.getElementById("savechip"); if(c){ c.textContent="Loaded ✓"; setTimeout(()=>{c.textContent="Saved";},1300); } }
+loadPending();
 
 /* ============ SCHEMAS ============ */
 const JOB_TYPES=[["new","New install"],["replace","Replacement"],["repair","Repair / refurbish"],["addon","Add-on"]];
@@ -406,12 +432,20 @@ function render(){
 
   // SECTION 1: Job & Venue
   h+=`<div class="sect"><h2><span class="n">1</span> Job &amp; Venue</h2><div class="body">
+    <label class="f"><span>Load from pending order <span class="sub">(auto-fills order #, customer, date)</span></span>
+      <select id="pendsel">`+pendOptions()+`</select></label>
+    <div class="hint" style="padding:3px 0 2px">${PEND_STAMP==="sample"?"Showing sample data — live RBW feed not wired yet":("Pending list "+(PEND_STAMP&&PEND_STAMP!=="live"?"as of "+esc(PEND_STAMP):"loaded"))} · <a href="#" id="pendrefresh" style="color:var(--accent);font-weight:700;text-decoration:none">refresh</a></div>
     <label class="f"><span>Job type</span></label>
     <div class="seg" id="jobseg">`+JOB_TYPES.map(j=>`<button data-job="${j[0]}" class="${S.job===j[0]?"on":""}">${j[1]}</button>`).join("")+`</div>
     <div class="grid2">
       ${miniField("venue","Venue name")}
       ${miniField("quote","Quote # (blank until Citrix)")}
     </div>
+    <div class="grid2">
+      ${miniField("so","SO #")}
+      ${miniField("customerId","Customer ID")}
+    </div>
+    ${miniField("customerName","Customer name")}
     ${miniField("address","Address")}
     ${miniField("date","Date")}
     <label class="f"><span>Surveyor</span></label>
@@ -517,6 +551,8 @@ function bind(){
   app.querySelectorAll("[data-surveyor]").forEach(b=>b.onclick=()=>{S.meta.surveyor=b.dataset.surveyor;save();render();});
   // meta
   app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue"||i.dataset.meta==="projName")document.getElementById("hdrsub").textContent=projName(S);});
+  const psel=document.getElementById("pendsel"); if(psel)psel.onchange=()=>{ if(psel.value==="")return; applyPending(PENDING[+psel.value]); };
+  const pref=document.getElementById("pendrefresh"); if(pref)pref.onclick=(e)=>{ e.preventDefault(); pref.textContent="refreshing…"; fetchPending().then(()=>{ render(); }); };
   // frame
   const fr=document.getElementById("frame"); if(fr)fr.onchange=()=>{S.venueFrame=fr.value;save();};
   const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
@@ -583,7 +619,8 @@ function ftxt(t){
 function kineticSheet(){
   const m=S.meta;
   let o=`ROSE BRAND — SITE SURVEY → KINETIC QUOTE\n`;
-  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:"  ·  Quote # __________"}\n`;
+  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:""}${m.so?"  ·  SO "+m.so:""}${(!m.quote&&!m.so)?"  ·  Quote/SO # __________":""}\n`;
+  if(m.customerName||m.customerId||m.salesperson)o+=`Customer: ${m.customerName||""}${m.customerId?"  (ID "+m.customerId+")":""}${m.salesperson?"  ·  Sales "+m.salesperson:""}\n`;
   o+=`${m.address||""}\n`;
   o+=`Date ${m.date||"—"}  ·  Surveyor ${m.surveyor||"—"}\n`;
   o+=`Job: ${(JOB_TYPES.find(j=>j[0]===S.job)||["","—"])[1]}  ·  Frame: ${(FRAMES.find(f=>f[0]===S.venueFrame)||["","—"])[1]}\n`;
@@ -906,6 +943,7 @@ document.getElementById("projlist").onclick=(e)=>{
 })();
 window.__rerender=render;
 render();
+fetchPending().then(ok=>{ if(ok)render(); });
 </script>
 </body>
 </html>
