@@ -277,10 +277,12 @@ const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weig
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","14\"","16\"","24\""];
-const TRACKS=["ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc"];
-const TRACK_MODEL_LIST=["","ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc","Other"];
-const TRACK_OVERLAP={"ADC 140 Rig-I-Flex":"12\"","ADC 220 Trak-Eze":"12\"","ADC 220-N Trak-Eze":"24\"","ADC 280 Silent Steel":"12\""}; // verified from ADC catalog; 170/500 TBD -> stay manual
-const TRACK_DROP={"ADC 170 Besteel":"3-7/8\""}; // hardware drop = top of track -> drape attach point (Gio-verified); other models TBD
+// ADC Catalog 52 (2011), read from the dimensioned cross-sections. 3-digit = track SYSTEM, 4-digit in ()=channel part #.
+// overlap = total center overlap (single-track overlap master carrier). drop = top of track -> bottom of hook/snap, SUSPENDED mount.
+const TRACKS=["ADC 113 Specifine (1100)","ADC 132 Flex-I-Trac (1300)","ADC 140 Rig-I-Flex (1400)","ADC 170 Besteel (1700)","ADC 220 Trak-Eze (2200)","ADC 220-N Trak-Eze","ADC 280 Silent Steel (2800)","ADC 500 Patriarc (5000)"];
+const TRACK_MODEL_LIST=["","ADC 113 Specifine (1100)","ADC 132 Flex-I-Trac (1300)","ADC 140 Rig-I-Flex (1400)","ADC 170 Besteel (1700)","ADC 220 Trak-Eze (2200)","ADC 220-N Trak-Eze","ADC 280 Silent Steel (2800)","ADC 500 Patriarc (5000)","Other"];
+const TRACK_OVERLAP={"ADC 113 Specifine (1100)":"8\"","ADC 132 Flex-I-Trac (1300)":"12\"","ADC 170 Besteel (1700)":"17\"","ADC 220 Trak-Eze (2200)":"12\"","ADC 220-N Trak-Eze":"24\"","ADC 280 Silent Steel (2800)":"12\"","ADC 500 Patriarc (5000)":"20\""}; // 140 NOT auto-filled: catalog text ambiguous (1'+1' vs arm-length 12"), confirm by measuring a 1402A arm
+const TRACK_DROP={"ADC 113 Specifine (1100)":"3\"","ADC 132 Flex-I-Trac (1300)":"4-1/2\"","ADC 140 Rig-I-Flex (1400)":"5-3/4\"","ADC 170 Besteel (1700)":"3-7/8\"","ADC 220 Trak-Eze (2200)":"4-1/2\"","ADC 220-N Trak-Eze":"4-1/2\"","ADC 280 Silent Steel (2800)":"12-5/16\"","ADC 500 Patriarc (5000)":"9-1/2\""}; // 280 drop = MAX (adjustable trim chain); 220-N derived from 220 (same 2200 channel)
 const CORDING=["Hand line (rope)","Continuous cord loop","Bead / ball chain","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
