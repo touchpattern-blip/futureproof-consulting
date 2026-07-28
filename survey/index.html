@@ -398,12 +398,12 @@ function panelBoxInner(t){
   if(W==null||W<=0) return "Enter the opening / track width above to compute each panel.";
   const O=parseFeet(F.overlap)||0; const draw=F.draw||"";
   let panels, each, extra;
-  if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O; extra=`&frac12; of ${fmtFeet(W)} (${fmtFeet(W/2)})${O?" + "+fmtFeet(O)+" overlap":""}`; }
+  if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O/2; extra=`&frac12; of ${fmtFeet(W)} (${fmtFeet(W/2)})${O?" + &frac12; the "+fmtFeet(O)+" overlap ("+fmtFeet(O/2)+")":""}`; }
   else if(/One-way/i.test(draw)){ panels=1; each=W+O; extra=`${fmtFeet(W)}${O?" + "+fmtFeet(O)+" overlap":""}`; }
   else { panels=1; each=W; extra="full width &mdash; pick a draw style for the overlap math"; }
   const total=each*panels;
   return `<b>Each panel (d):</b> ${panels}&times; @ <b>${fmtFeet(each)}</b>`+
-    `<br><span style="color:#7a8088">${extra} &middot; total fabric ${fmtFeet(total)}${(O&&panels>1)?" (opening + "+fmtFeet(2*O)+" total overlap)":""}</span>`;
+    `<br><span style="color:#7a8088">${extra} &middot; total fabric ${fmtFeet(total)}${(O&&/Bi-part|One-way/i.test(draw))?" (opening + "+fmtFeet(O)+" overlap)":""}</span>`;
 }
 function treatmentCard(t,i){
   const fam=typeFamily(t.type);
@@ -623,7 +623,7 @@ function ftxt(t){
   if(fins.length)parts.push(fins.join(", "));
   if(F.draw)parts.push("draw: "+F.draw);
   if(F.overlap)parts.push("overlap "+F.overlap);
-  if(fam==="drawn"){ const _W=parseFeet(F.w); if(_W>0){ const _O=parseFeet(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtFeet(_W/2+_O)+" (½W+"+fmtFeet(_O)+" ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtFeet(_W+_O)); } }
+  if(fam==="drawn"){ const _W=parseFeet(F.w); if(_W>0){ const _O=parseFeet(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtFeet(_W/2+_O/2)+" (½W+½ ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtFeet(_W+_O)); } }
   if(F.profile)parts.push("profile: "+F.profile);
   if(F.seamless)parts.push("seamless");
   if(F.oneSided)parts.push("one-sided");
