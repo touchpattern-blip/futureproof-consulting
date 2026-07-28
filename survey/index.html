@@ -629,7 +629,7 @@ function bind(){
   }));
   // track model auto-fills the standard center overlap (verified ADC catalog values)
   app.querySelectorAll('[data-k="trackModel"]').forEach(s=>{ const t=T((s.dataset.t||"").replace("_op","")); if(!t)return;
-    s.addEventListener("change",()=>{ const ov=TRACK_OVERLAP[s.value]; if(ov)t.fields.overlap=ov; const dp=TRACK_DROP[s.value]; if(dp)t.fields.hardwareDrop=dp; if(ov||dp){ save(); render(); } }); });
+    s.addEventListener("change",()=>{ if(s.value&&s.value!=="Other"){ t.fields.overlap=TRACK_OVERLAP[s.value]||""; t.fields.hardwareDrop=TRACK_DROP[s.value]||""; save(); render(); } }); });
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
