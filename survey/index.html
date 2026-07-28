@@ -280,6 +280,7 @@ const OVERLAP=["12\"","14\"","16\"","24\""];
 const TRACKS=["ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc"];
 const TRACK_MODEL_LIST=["","ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc","Other"];
 const TRACK_OVERLAP={"ADC 140 Rig-I-Flex":"12\"","ADC 220 Trak-Eze":"12\"","ADC 220-N Trak-Eze":"24\"","ADC 280 Silent Steel":"12\""}; // verified from ADC catalog; 170/500 TBD -> stay manual
+const TRACK_DROP={"ADC 170 Besteel":"3-7/8\""}; // hardware drop = top of track -> drape attach point (Gio-verified); other models TBD
 const CORDING=["Hand line (rope)","Continuous cord loop","Bead / ball chain","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
@@ -289,14 +290,15 @@ function drawnFields(){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
   ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
-  ["h","Height","text",null,"finished, e.g. 20'-0\""],
+  ["h","Opening height","text",null,"floor to top of track / mount"],
   ["w","Width","text",null,"opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["draw","Draw style","select",["",...DRAW],""],
-  ["trackModel","Track model","select",TRACK_MODEL_LIST,"auto-fills standard overlap"],
-  ["overlap","Center overlap","datalist",OVERLAP,"total; auto from track model"]
+  ["trackModel","Track model","select",TRACK_MODEL_LIST,"auto-fills overlap + hardware drop"],
+  ["overlap","Center overlap","datalist",OVERLAP,"total; auto from track model"],
+  ["hardwareDrop","Hardware drop","text",null,"track top → drape; auto from track model"]
 ];}
 function valanceFields(){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
@@ -395,18 +397,39 @@ function field(f,val,onkey){
   return `<label class="f"><span>${esc(label)}${subhtml}</span>${control}</label>`;
 }
 
-function fmtFeet(x){ if(x==null||isNaN(x))return ""; const s=x<0?"-":""; x=Math.abs(x); let ft=Math.floor(x+1e-9), inch=Math.round((x-ft)*12); if(inch===12){ft++;inch=0;} return `${s}${ft}'-${inch}"`; }
+function gcd(a,b){ return b?gcd(b,a%b):a; }
+function parseLen(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”″]/g,'"').replace(/[‘’′]/g,"'"); if(!s) return null;
+  const inchTok=(tok)=>{ tok=tok.trim().replace(/"$/,'').trim(); if(!tok) return 0; let m;
+    if(m=tok.match(/^(\d+)\s+(\d+)\/(\d+)$/)) return +m[1]+(+m[2])/(+m[3]);   // 8 1/8
+    if(m=tok.match(/^(\d+)-(\d+)\/(\d+)$/))  return +m[1]+(+m[2])/(+m[3]);    // 8-1/8, 3-7/8
+    if(m=tok.match(/^(\d+)\/(\d+)$/))         return (+m[1])/(+m[2]);        // 7/8
+    if(m=tok.match(/^(\d+(?:\.\d+)?)$/))      return +m[1];                   // 8, 8.5
+    return NaN; };
+  let m=s.match(/^(\d+(?:\.\d+)?)\s*'(.*)$/);                                 // feet + inches
+  if(m){ const ft=+m[1]; let rest=m[2].trim().replace(/^-/,'').trim(); const iv=rest?inchTok(rest):0; return isNaN(iv)?null:ft+iv/12; }
+  if(/"/.test(s)){ const iv=inchTok(s); return isNaN(iv)?null:iv/12; }        // inches
+  if(/^\d+(?:\.\d+)?$/.test(s)) return +s;                                    // bare = feet
+  const iv=inchTok(s); return isNaN(iv)?null:iv/12; }                         // bare fraction = inches
+function fmtLen(x){ if(x==null||isNaN(x))return ""; let neg=x<0?"-":""; x=Math.abs(x);
+  let e=Math.round(x*96), ft=Math.floor(e/96), rem=e-ft*96, inch=Math.floor(rem/8), fr=rem%8;   // nearest 1/8"
+  let inStr = fr===0 ? inch+'"' : ((g)=>((inch?inch+" ":"")+(fr/g)+"/"+(8/g)+'"'))(gcd(fr,8));
+  return `${neg}${ft}'-${inStr}`; }
 function panelBoxInner(t){
-  const F=t.fields||{}; const W=parseFeet(F.w);
-  if(W==null||W<=0) return "Enter the opening / track width above to compute each panel.";
-  const O=parseFeet(F.overlap)||0; const draw=F.draw||"";
-  let panels, each, extra;
-  if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O/2; extra=`&frac12; of ${fmtFeet(W)} (${fmtFeet(W/2)})${O?" + &frac12; the "+fmtFeet(O)+" overlap ("+fmtFeet(O/2)+")":""}`; }
-  else if(/One-way/i.test(draw)){ panels=1; each=W+O; extra=`${fmtFeet(W)}${O?" + "+fmtFeet(O)+" overlap":""}`; }
-  else { panels=1; each=W; extra="full width &mdash; pick a draw style for the overlap math"; }
-  const total=each*panels;
-  return `<b>Each panel (d):</b> ${panels}&times; @ <b>${fmtFeet(each)}</b>`+
-    `<br><span style="color:#7a8088">${extra} &middot; total fabric ${fmtFeet(total)}${(O&&/Bi-part|One-way/i.test(draw))?" (opening + "+fmtFeet(O)+" overlap)":""}</span>`;
+  const F=t.fields||{}; const out=[];
+  const H=parseLen(F.h), D=parseLen(F.hardwareDrop);
+  if(H!=null&&H>0){
+    if(D!=null&&D>0) out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(F.hardwareDrop)} hardware = <b>${fmtLen(H-D)}</b>`);
+    else out.push(`<b>Finished height:</b> ${fmtLen(H)} <span style="color:#7a8088">(pick a track model to subtract its hardware drop)</span>`);
+  }
+  const W=parseLen(F.w);
+  if(W!=null&&W>0){
+    const O=parseLen(F.overlap)||0; const draw=F.draw||""; let panels, each, extra;
+    if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O/2; extra=`&frac12; of ${fmtLen(W)} + &frac12; the ${esc(F.overlap||fmtLen(O))} overlap`; }
+    else if(/One-way/i.test(draw)){ panels=1; each=W+O; extra=`${fmtLen(W)}${O?" + "+fmtLen(O)+" overlap":""}`; }
+    else { panels=1; each=W; extra="full width &mdash; pick a draw style"; }
+    out.push(`<b>Each panel (d):</b> ${panels}&times; @ <b>${fmtLen(each)}</b> <span style="color:#7a8088">(${extra})</span>`);
+  }
+  return out.length? out.join("<br>") : "Enter opening height and/or width to compute the drape.";
 }
 function treatmentCard(t,i){
   const fam=typeFamily(t.type);
@@ -597,14 +620,14 @@ function bind(){
     inp.oninput=handler; inp.onchange=handler;
   });
   // live panel-width calc for drawn curtains (updates the derived box without a full re-render)
-  ["w","overlap","draw"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
+  ["w","overlap","draw","h","hardwareDrop"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
     const t=T((inp.dataset.t||"").replace("_op","")); if(!t||typeFamily(t.type)!=="drawn")return;
     const upd=()=>{ const box=document.getElementById("pbox_"+t.id); if(box)box.innerHTML=panelBoxInner(t); };
     inp.addEventListener("input",upd); inp.addEventListener("change",upd);
   }));
   // track model auto-fills the standard center overlap (verified ADC catalog values)
   app.querySelectorAll('[data-k="trackModel"]').forEach(s=>{ const t=T((s.dataset.t||"").replace("_op","")); if(!t)return;
-    s.addEventListener("change",()=>{ const ov=TRACK_OVERLAP[s.value]; if(ov){ t.fields.overlap=ov; save(); render(); } }); });
+    s.addEventListener("change",()=>{ const ov=TRACK_OVERLAP[s.value]; if(ov)t.fields.overlap=ov; const dp=TRACK_DROP[s.value]; if(dp)t.fields.hardwareDrop=dp; if(ov||dp){ save(); render(); } }); });
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
@@ -629,8 +652,9 @@ function ftxt(t){
   if(fins.length)parts.push(fins.join(", "));
   if(F.draw)parts.push("draw: "+F.draw);
   if(F.overlap)parts.push("overlap "+F.overlap);
+  if(fam==="drawn"){ const _H=parseLen(F.h), _D=parseLen(F.hardwareDrop); if(_H>0&&_D>0) parts.push("finished H "+fmtLen(_H-_D)+" (opening "+F.h+" − "+F.hardwareDrop+" hw)"); }
   if(fam==="drawn"&&F.trackModel)parts.push("track "+F.trackModel);
-  if(fam==="drawn"){ const _W=parseFeet(F.w); if(_W>0){ const _O=parseFeet(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtFeet(_W/2+_O/2)+" (½W+½ ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtFeet(_W+_O)); } }
+  if(fam==="drawn"){ const _W=parseLen(F.w); if(_W>0){ const _O=parseLen(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtLen(_W/2+_O/2)+" (½W+½ ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtLen(_W+_O)); } }
   if(F.profile)parts.push("profile: "+F.profile);
   if(F.seamless)parts.push("seamless");
   if(F.oneSided)parts.push("one-sided");
