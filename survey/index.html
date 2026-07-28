@@ -277,7 +277,9 @@ const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weig
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","14\"","16\"","24\""];
-const TRACKS=["ADC 1300","ADC 1400","ADC 1700","ADC 2800"];
+const TRACKS=["ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc"];
+const TRACK_MODEL_LIST=["","ADC 140 Rig-I-Flex","ADC 170 Besteel","ADC 220 Trak-Eze","ADC 220-N Trak-Eze","ADC 280 Silent Steel","ADC 500 Patriarc","Other"];
+const TRACK_OVERLAP={"ADC 140 Rig-I-Flex":"12\"","ADC 220 Trak-Eze":"12\"","ADC 220-N Trak-Eze":"24\"","ADC 280 Silent Steel":"12\""}; // verified from ADC catalog; 170/500 TBD -> stay manual
 const CORDING=["Hand line (rope)","Continuous cord loop","Bead / ball chain","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
@@ -293,7 +295,8 @@ function drawnFields(){return [
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["draw","Draw style","select",["",...DRAW],""],
-  ["overlap","Center overlap","datalist",OVERLAP,"per panel, e.g. 1' or 2'"]
+  ["trackModel","Track model","select",TRACK_MODEL_LIST,"auto-fills standard overlap"],
+  ["overlap","Center overlap","datalist",OVERLAP,"total; auto from track model"]
 ];}
 function valanceFields(){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
@@ -599,6 +602,9 @@ function bind(){
     const upd=()=>{ const box=document.getElementById("pbox_"+t.id); if(box)box.innerHTML=panelBoxInner(t); };
     inp.addEventListener("input",upd); inp.addEventListener("change",upd);
   }));
+  // track model auto-fills the standard center overlap (verified ADC catalog values)
+  app.querySelectorAll('[data-k="trackModel"]').forEach(s=>{ const t=T((s.dataset.t||"").replace("_op","")); if(!t)return;
+    s.addEventListener("change",()=>{ const ov=TRACK_OVERLAP[s.value]; if(ov){ t.fields.overlap=ov; save(); render(); } }); });
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
@@ -623,6 +629,7 @@ function ftxt(t){
   if(fins.length)parts.push(fins.join(", "));
   if(F.draw)parts.push("draw: "+F.draw);
   if(F.overlap)parts.push("overlap "+F.overlap);
+  if(fam==="drawn"&&F.trackModel)parts.push("track "+F.trackModel);
   if(fam==="drawn"){ const _W=parseFeet(F.w); if(_W>0){ const _O=parseFeet(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtFeet(_W/2+_O/2)+" (½W+½ ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtFeet(_W+_O)); } }
   if(F.profile)parts.push("profile: "+F.profile);
   if(F.seamless)parts.push("seamless");
