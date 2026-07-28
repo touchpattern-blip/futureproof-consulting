@@ -288,11 +288,12 @@ function drawnFields(){return [
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
   ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
   ["h","Height","text",null,"finished, e.g. 20'-0\""],
-  ["w","Width","text",null,"finished / opening"],
+  ["w","Width","text",null,"opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
-  ["draw","Draw style","select",["",...DRAW],""]
+  ["draw","Draw style","select",["",...DRAW],""],
+  ["overlap","Center overlap","datalist",OVERLAP,"per panel, e.g. 1' or 2'"]
 ];}
 function valanceFields(){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
@@ -391,6 +392,19 @@ function field(f,val,onkey){
   return `<label class="f"><span>${esc(label)}${subhtml}</span>${control}</label>`;
 }
 
+function fmtFeet(x){ if(x==null||isNaN(x))return ""; const s=x<0?"-":""; x=Math.abs(x); let ft=Math.floor(x+1e-9), inch=Math.round((x-ft)*12); if(inch===12){ft++;inch=0;} return `${s}${ft}'-${inch}"`; }
+function panelBoxInner(t){
+  const F=t.fields||{}; const W=parseFeet(F.w);
+  if(W==null||W<=0) return "Enter the opening / track width above to compute each panel.";
+  const O=parseFeet(F.overlap)||0; const draw=F.draw||"";
+  let panels, each, extra;
+  if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O; extra=`&frac12; of ${fmtFeet(W)} (${fmtFeet(W/2)})${O?" + "+fmtFeet(O)+" overlap":""}`; }
+  else if(/One-way/i.test(draw)){ panels=1; each=W+O; extra=`${fmtFeet(W)}${O?" + "+fmtFeet(O)+" overlap":""}`; }
+  else { panels=1; each=W; extra="full width &mdash; pick a draw style for the overlap math"; }
+  const total=each*panels;
+  return `<b>Each panel (d):</b> ${panels}&times; @ <b>${fmtFeet(each)}</b>`+
+    `<br><span style="color:#7a8088">${extra} &middot; total fabric ${fmtFeet(total)}${(O&&panels>1)?" (opening + "+fmtFeet(2*O)+" total overlap)":""}</span>`;
+}
 function treatmentCard(t,i){
   const fam=typeFamily(t.type);
   const showOp=MOVABLE.has(fam);
@@ -421,6 +435,7 @@ function treatmentCard(t,i){
       ${t.type?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
       ${t.type?`<span class="fam">${fam} goods</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
+      ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
       ${opHtml}
       ${t.type?`<div class="toggle tbdtog"><span>&#9888; Needs engineering / TBD</span><label class="sw"><input type="checkbox" data-tbd="${t.id}" ${t.tbd?"checked":""}><span class="track"></span></label></div>`:""}
       ${t.tbd?`<label class="f"><span>What's unresolved <span class="sub">(carries to handoff)</span></span><input type="text" data-tbdnote="${t.id}" value="${esc(t.tbdNote||"")}" placeholder="e.g. pipe attachment HW TBD"></label>`:""}
@@ -578,6 +593,12 @@ function bind(){
     const handler=()=>{const t=T(inp.dataset.t.replace("_op",""));const bucket=inp.dataset.t.endsWith("_op")?t.opFields:t.fields;bucket[inp.dataset.k]=(inp.type==="checkbox")?inp.checked:inp.value;save();};
     inp.oninput=handler; inp.onchange=handler;
   });
+  // live panel-width calc for drawn curtains (updates the derived box without a full re-render)
+  ["w","overlap","draw"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
+    const t=T((inp.dataset.t||"").replace("_op","")); if(!t||typeFamily(t.type)!=="drawn")return;
+    const upd=()=>{ const box=document.getElementById("pbox_"+t.id); if(box)box.innerHTML=panelBoxInner(t); };
+    inp.addEventListener("input",upd); inp.addEventListener("change",upd);
+  }));
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
@@ -602,6 +623,7 @@ function ftxt(t){
   if(fins.length)parts.push(fins.join(", "));
   if(F.draw)parts.push("draw: "+F.draw);
   if(F.overlap)parts.push("overlap "+F.overlap);
+  if(fam==="drawn"){ const _W=parseFeet(F.w); if(_W>0){ const _O=parseFeet(F.overlap)||0; if(/Bi-part/i.test(F.draw||"")) parts.push("panels: 2 @ "+fmtFeet(_W/2+_O)+" (½W+"+fmtFeet(_O)+" ovl)"); else if(/One-way/i.test(F.draw||"")) parts.push("panel: "+fmtFeet(_W+_O)); } }
   if(F.profile)parts.push("profile: "+F.profile);
   if(F.seamless)parts.push("seamless");
   if(F.oneSided)parts.push("one-sided");
