@@ -424,7 +424,7 @@ function panelBoxInner(t){
   const W=parseLen(F.w);
   if(W!=null&&W>0){
     const O=parseLen(F.overlap)||0; const draw=F.draw||""; let panels, each, extra;
-    if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O/2; extra=`&frac12; of ${fmtLen(W)} + &frac12; the ${esc(F.overlap||fmtLen(O))} overlap`; }
+    if(/Bi-part/i.test(draw)){ panels=2; each=W/2+O/2; extra=`&frac12; of ${fmtLen(W)}${O?" + &frac12; the "+esc(F.overlap||fmtLen(O))+" overlap":""}`; }
     else if(/One-way/i.test(draw)){ panels=1; each=W+O; extra=`${fmtLen(W)}${O?" + "+fmtLen(O)+" overlap":""}`; }
     else { panels=1; each=W; extra="full width &mdash; pick a draw style"; }
     out.push(`<b>Each panel (d):</b> ${panels}&times; @ <b>${fmtLen(each)}</b> <span style="color:#7a8088">(${extra})</span>`);
