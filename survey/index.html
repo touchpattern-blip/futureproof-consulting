@@ -130,6 +130,14 @@
     <div class="phead"><h3>Saved Surveys</h3><button class="x" id="projx">&times;</button></div>
     <div class="pbody">
       <button class="primary" id="projnew" style="width:100%;font-weight:700;padding:12px;border-radius:10px;border:none;color:#fff;background:var(--rb);cursor:pointer;margin-bottom:14px;">+ New survey</button>
+      <details id="importwrap" style="margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
+        <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Import scope <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(paste or drop a survey JSON)</span></summary>
+        <div id="importdrop" style="padding:2px 12px 12px;">
+          <textarea id="importbox" placeholder="Paste survey JSON here..." style="min-height:110px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;"></textarea>
+          <button id="importbtn" style="width:100%;margin-top:9px;font-size:14px;font-weight:700;padding:11px;border-radius:9px;border:1.5px solid var(--rb);background:#fff;color:var(--rb);cursor:pointer;">Import</button>
+          <div id="importstatus" style="font-size:12px;font-weight:600;margin-top:7px;min-height:15px;"></div>
+        </div>
+      </details>
       <div id="projlist"></div>
     </div>
   </div>
@@ -916,6 +924,79 @@ document.getElementById("projlist").onclick=(e)=>{
   else if(b.dataset.ren){ const id=b.dataset.ren; const cur=projName((id===IDX.activeId)?S:loadProj(id)); const nn=prompt("Survey name:",cur); if(nn!=null){ renameProject(id,nn.trim()); if(id===IDX.activeId)render(); renderProjList(); } }
   else if(b.dataset.del){ const id=b.dataset.del; const d=(id===IDX.activeId)?S:loadProj(id); if(confirm('Delete "'+projName(d)+'"?  This cannot be undone.')){ delProject(id); renderProjList(); } }
 };
+
+/* ---- Import scope: paste (or drop) a full survey JSON -> becomes a NEW saved project ---- */
+function importStatus(msg,ok){ const el=document.getElementById("importstatus"); if(el){ el.textContent=msg; el.style.color=ok?"var(--ok)":"#c0392b"; } }
+function numToStr(o){ if(o&&typeof o==="object"&&!Array.isArray(o))Object.keys(o).forEach(k=>{ if(typeof o[k]==="number")o[k]=String(o[k]); }); return o; }
+function importScope(){
+  const box=document.getElementById("importbox");
+  const txt=((box&&box.value)||"").trim();
+  if(!txt){ importStatus("Paste survey JSON first.",false); return; }
+  let data;
+  try{ data=JSON.parse(txt); }catch(e){ importStatus("Not valid JSON.",false); return; }
+  if(!data||typeof data!=="object"||Array.isArray(data)||!(Array.isArray(data.treatments)||(data.meta&&typeof data.meta==="object"&&!Array.isArray(data.meta)))){
+    importStatus("Doesn't look like a survey scope.",false); return; }
+  try{
+    const imp=JSON.parse(JSON.stringify(data));                    // deep clone; never mutate the parse source
+    imp.treatments=Array.isArray(imp.treatments)?imp.treatments.filter(t=>t&&typeof t==="object"&&!Array.isArray(t)):[];
+    const seen=new Set();                                          // unique ids: regenerate if missing or duplicated within the import
+    imp.treatments.forEach(t=>{ if(!t.id||typeof t.id!=="string"||seen.has(t.id))t.id=uid(); seen.add(t.id); });
+    if(!imp.meta||typeof imp.meta!=="object"||Array.isArray(imp.meta))imp.meta={};
+    if(!imp.meta.projName||!(""+imp.meta.projName).trim())imp.meta.projName=(imp.meta.venue&&(""+imp.meta.venue).trim())||"Imported scope";
+    const mig=migrateSurvey(imp)||imp;                             // any version (incl. missing v) lands at SCHEMA_V
+    // structural fill from fresh(): render() assumes meta/prosc/install/loadin exist, so a sparse import must never crash it
+    const out=Object.assign(fresh(),mig);
+    out.meta=numToStr(Object.assign(fresh().meta,(mig.meta&&typeof mig.meta==="object")?mig.meta:{}));
+    out.prosc=numToStr(Object.assign({present:false,openW:"",openH:"",stations:[]},(mig.prosc&&typeof mig.prosc==="object"&&!Array.isArray(mig.prosc))?mig.prosc:{}));
+    if(!Array.isArray(out.prosc.stations))out.prosc.stations=[];
+    out.prosc.stations=out.prosc.stations.filter(s=>s&&typeof s==="object").map(s=>numToStr(s));
+    const mIn=(mig.install&&typeof mig.install==="object"&&!Array.isArray(mig.install))?mig.install:{};
+    out.install=Object.assign(fresh().install,mIn);
+    out.install.loadin=numToStr(Object.assign(fresh().install.loadin,(mIn.loadin&&typeof mIn.loadin==="object")?mIn.loadin:{}));
+    if(typeof out.job!=="string")out.job="";
+    if(typeof out.venueFrame!=="string")out.venueFrame="";
+    if(typeof out.generalNotes!=="string")out.generalNotes=(out.generalNotes==null)?"":String(out.generalNotes);
+    out.treatments.forEach(t=>{
+      t.fields=numToStr((t.fields&&typeof t.fields==="object"&&!Array.isArray(t.fields))?t.fields:{});
+      t.opFields=numToStr((t.opFields&&typeof t.opFields==="object"&&!Array.isArray(t.opFields))?t.opFields:{});
+      t.track=numToStr((t.track&&typeof t.track==="object"&&!Array.isArray(t.track))?t.track:{});
+      ["model","overlap","drop","lead"].forEach(k=>{ if(typeof t.track[k]!=="string")t.track[k]=(t.track[k]==null)?"":String(t.track[k]); });
+      if(typeof t.type!=="string")t.type="";
+      if(typeof t.label!=="string")t.label=(t.label==null)?"":String(t.label);
+      if(typeof t.basis!=="string")t.basis="";
+      if(typeof t.operation!=="string")t.operation="";
+      if(typeof t.engNotes!=="string")t.engNotes=(t.engNotes==null)?"":String(t.engNotes);
+      if(typeof t.qty!=="string")t.qty=(t.qty==null||t.qty==="")?"1":String(t.qty);
+    });
+    flushSave();                                                   // persist the survey being edited FIRST, never lose it
+    const id=pid();
+    try{ localStorage.setItem(pKey(id),JSON.stringify(out)); }
+    catch(e){ importStatus("Storage full: import not saved. Delete an old survey and retry.",false); return; }
+    IDX.order.unshift(id); IDX.activeId=id; saveIndex();
+    S=out;
+    if(box)box.value="";
+    importStatus("Imported: "+projName(S)+" ("+S.treatments.length+" treatments)",true);
+    closeProjModal();
+    render();
+  }catch(e){ importStatus("Import failed: "+((e&&e.message)||e),false); }
+}
+document.getElementById("importbtn").onclick=importScope;
+// nice-to-have: drop a .json file onto the import area and its text lands in the box
+(function(){
+  const dz=document.getElementById("importdrop"), box=document.getElementById("importbox");
+  if(!dz||!box)return;
+  ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.outline="2px dashed var(--accent)"; }));
+  ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.outline=""; }));
+  dz.addEventListener("drop",e=>{
+    try{
+      const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f)return;
+      const r=new FileReader();
+      r.onload=()=>{ box.value=""+r.result; const w=document.getElementById("importwrap"); if(w)w.open=true; importStatus('Loaded "'+f.name+'". Tap Import.',true); };
+      r.onerror=()=>importStatus("Could not read the dropped file.",false);
+      r.readAsText(f);
+    }catch(err){ importStatus("Could not read the dropped file.",false); }
+  });
+})();
 
 /* ================= SKETCH PAD v1 (offline draw + Stage-1 snap + dims) ================= */
 (function(){
