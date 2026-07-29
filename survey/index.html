@@ -162,10 +162,19 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-function loadProj(id){ try{return JSON.parse(localStorage.getItem(pKey(id)));}catch(e){return null;} }
+const SCHEMA_V=1;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+function migrateSurvey(d){
+  if(!d||typeof d!=="object") return d;
+  let v=d.v||1;
+  // --- migration blocks land here per build pass; v1 = baseline (no-op) ---
+  if(d.v!==v) d.v=v;
+  return d;
+}
+function loadProj(id){ try{return migrateSurvey(JSON.parse(localStorage.getItem(pKey(id))));}catch(e){return null;} }
 
 function fresh(){
   return {
+    v:SCHEMA_V,
     meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",so:"",customerId:"",customerName:"",salesperson:"",projName:""},
     job:"",
     venueFrame:"",
@@ -186,15 +195,18 @@ if(!IDX || !Array.isArray(IDX.order)){          // first run under the projects 
 if(!IDX.activeId || !IDX.order.includes(IDX.activeId)) IDX.activeId = IDX.order[0]||"";
 if(!IDX.activeId){ const id=pid(); localStorage.setItem(pKey(id),JSON.stringify(fresh())); IDX={activeId:id,order:[id]}; saveIndex(); }
 
+// one-time forward-migration sweep: stamp/upgrade every saved survey before use (idempotent; writes only when the version changes)
+IDX.order.forEach(id=>{ const raw=localStorage.getItem(pKey(id)); if(!raw)return; try{ const before=JSON.parse(raw); const v0=before&&before.v; const d=migrateSurvey(before); if(d&&d.v!==v0) localStorage.setItem(pKey(id),JSON.stringify(d)); }catch(e){} });
+
 let S = loadProj(IDX.activeId) || fresh();
 
 let saveT;
 function save(){
   clearTimeout(saveT);
   document.getElementById("savechip").textContent="Saving…";
-  saveT=setTimeout(()=>{ localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; },250);
+  saveT=setTimeout(()=>{ try{ localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); document.getElementById("savechip").textContent="Saved"; }catch(e){ document.getElementById("savechip").textContent="⚠ storage full, not saved"; } },250);
 }
-function flushSave(){ clearTimeout(saveT); localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); }
+function flushSave(){ clearTimeout(saveT); try{ localStorage.setItem(pKey(IDX.activeId),JSON.stringify(S)); }catch(e){ const c=document.getElementById("savechip"); if(c)c.textContent="⚠ storage full, not saved"; } }
 
 /* ---- project operations (never lose the current survey) ---- */
 function projName(d){ const m=(d&&d.meta)||{}; return (m.projName&&m.projName.trim())||(m.venue&&m.venue.trim())||"Untitled survey"; }
@@ -213,15 +225,11 @@ function parseFeet(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”
 
 /* ============ PENDING ORDERS (feed from RBW; sample fallback) ============ */
 const PENDKEY="rb_pending_orders_v1";
+// Offline fallback only (shown when the live orders.json feed is unreachable). Fully generic demo data; NO real customer records in source.
 const PEND_SAMPLE=[
-  {venue:"Troubador Theater",customer:"Troubadour",customerId:"CUST-0001",so:"",quote:"",address:"",date:"2026-07-21",salesperson:"Alicia"},
-  {venue:"Knott's Berry Farm — Independence Hall",customer:"Knott's Berry Farm",customerId:"CUST-0044",so:"766652",quote:"",address:"",date:"2026-07-22",salesperson:"Jacob/Drew"},
-  {venue:"Rosemead HS",customer:"Rosemead School District",customerId:"CUST-0107",so:"",quote:"Q#423917,423950",address:"",date:"2026-07-22",salesperson:"Lisa C."},
-  {venue:"Pen Music Group",customer:"Pen Music Group",customerId:"CUST-0210",so:"",quote:"",address:"12456 Ventura Blvd, Studio City",date:"2026-07-24",salesperson:"Mariana"},
-  {venue:"Mayfield Junior School",customer:"Mayfield Junior School",customerId:"CUST-0311",so:"",quote:"Q#286590",address:"405 S. Euclid Ave, Pasadena",date:"2026-07-24",salesperson:"Mariana"},
-  {venue:"Placentia-Yorba Linda USD",customer:"Placentia-Yorba Linda USD",customerId:"CUST-0356",so:"",quote:"Q#419339",address:"24695 Paseo de Toronto, Yorba Linda",date:"2026-08-15",salesperson:"Zach"},
-  {venue:"Modern Pacific",customer:"Modern Pacific",customerId:"CUST-0402",so:"768752",quote:"",address:"1633 East Ave, Hayward, CA 94541",date:"2026-08-18",salesperson:"Zach"},
-  {venue:"Antelope Valley School District",customer:"Antelope Valley SD",customerId:"CUST-0455",so:"",quote:"Q#417633",address:"5 schools — Lancaster",date:"2026-08-26",salesperson:"Susan"}
+  {venue:"Sample Theater (demo)",customer:"Demo Customer",customerId:"000000",so:"",quote:"",address:"",date:"2026-01-15",salesperson:"Sample"},
+  {venue:"Example High School Auditorium",customer:"Example USD",customerId:"000001",so:"100001",quote:"",address:"",date:"2026-01-16",salesperson:"Demo"},
+  {venue:"Demo Event Center",customer:"Demo Events",customerId:"000002",so:"",quote:"Q#000123",address:"",date:"2026-01-20",salesperson:"Sample"}
 ];
 let PENDING=[], PEND_STAMP="";
 function loadPending(){ try{const c=JSON.parse(localStorage.getItem(PENDKEY)); if(c&&Array.isArray(c.orders)&&c.orders.length){PENDING=c.orders;PEND_STAMP=c.stamp||"";return;}}catch(e){} PENDING=PEND_SAMPLE; PEND_STAMP="sample"; }
@@ -531,6 +539,7 @@ function render(){
   document.getElementById("hdrsub").textContent = projName(S);
   bind();
 }
+function safeRender(){ const a=document.activeElement; if(a&&a.closest&&a.closest("#app")&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return; render(); }
 
 function miniField(k,label){
   return `<label class="f"><span>${label}</span><input type="text" data-meta="${k}" value="${esc(S.meta[k]||"")}"></label>`;
@@ -610,7 +619,7 @@ function bind(){
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
-  app.querySelectorAll("[data-label]").forEach(i=>i.oninput=()=>{T(i.dataset.label).label=i.value;save();document.querySelectorAll(`[data-del]`);});
+  app.querySelectorAll("[data-label]").forEach(i=>i.oninput=()=>{T(i.dataset.label).label=i.value;save();});
   app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
   app.querySelectorAll("[data-qty]").forEach(i=>i.oninput=()=>{T(i.dataset.qty).qty=i.value;save();});
   app.querySelectorAll("[data-op]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.op);t.operation=s.value;t.opFields={};save();render();});
@@ -999,8 +1008,10 @@ document.getElementById("projlist").onclick=(e)=>{
     document.getElementById("skwrap").classList.add("show"); requestAnimationFrame(()=>{ sizeCanvas(); render(); }); };
 })();
 window.__rerender=render;
+window.addEventListener("pagehide",flushSave);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden")flushSave(); });
 render();
-fetchPending().then(ok=>{ if(ok)render(); });
+fetchPending().then(ok=>{ if(ok)safeRender(); });
 </script>
 </body>
 </html>
