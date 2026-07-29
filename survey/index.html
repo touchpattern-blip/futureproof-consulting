@@ -162,11 +162,12 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=1;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=2;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
   let v=d.v||1;
-  // --- migration blocks land here per build pass; v1 = baseline (no-op) ---
+  // v2 (Pass 1a): retire the TBD toggle -> permanent per-treatment engNotes; fold any old tbd flag forward so nothing vanishes from a handoff
+  if(v<2){ (d.treatments||[]).forEach(t=>{ if(t.engNotes===undefined)t.engNotes=""; if(t.tbd)t.engNotes=["TBD: "+(t.tbdNote||"needs engineering"),t.engNotes].filter(Boolean).join(" · "); delete t.tbd; delete t.tbdNote; }); v=2; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -473,8 +474,7 @@ function treatmentCard(t,i){
       ${fieldsHtml}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
       ${opHtml}
-      ${t.type?`<div class="toggle tbdtog"><span>&#9888; Needs engineering / TBD</span><label class="sw"><input type="checkbox" data-tbd="${t.id}" ${t.tbd?"checked":""}><span class="track"></span></label></div>`:""}
-      ${t.tbd?`<label class="f"><span>What's unresolved <span class="sub">(carries to handoff)</span></span><input type="text" data-tbdnote="${t.id}" value="${esc(t.tbdNote||"")}" placeholder="e.g. pipe attachment HW TBD"></label>`:""}
+      ${t.type?`<label class="f"><span>&#9888; Engineering / field notes <span class="sub">(carries to handoff)</span></span><textarea data-engnotes="${t.id}" placeholder="anything unresolved / TBD / needs engineering (pipe attach, load check, non-standard finish)">${esc(t.engNotes||"")}</textarea></label>`:""}
     </div>
   </div>`;
 }
@@ -615,7 +615,7 @@ function bind(){
   app.querySelectorAll("[data-stnx]").forEach(b=>b.onclick=()=>{S.prosc.stations.splice(+b.dataset.stnx,1);save();render();});
   app.querySelectorAll("[data-stn]").forEach(inp=>inp.oninput=()=>{S.prosc.stations[+inp.dataset.si][inp.dataset.stn]=inp.value;save();updateDerived();});
   // treatments
-  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},tbd:false,tbdNote:""});save();render();};
+  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},engNotes:""});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
@@ -623,8 +623,7 @@ function bind(){
   app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
   app.querySelectorAll("[data-qty]").forEach(i=>i.oninput=()=>{T(i.dataset.qty).qty=i.value;save();});
   app.querySelectorAll("[data-op]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.op);t.operation=s.value;t.opFields={};save();render();});
-  app.querySelectorAll("[data-tbd]").forEach(c=>c.onchange=()=>{const t=T(c.dataset.tbd);t.tbd=c.checked;save();render();});
-  app.querySelectorAll("[data-tbdnote]").forEach(i=>i.oninput=()=>{T(i.dataset.tbdnote).tbdNote=i.value;save();});
+  app.querySelectorAll("[data-engnotes]").forEach(i=>i.oninput=()=>{T(i.dataset.engnotes).engNotes=i.value;save();});
   // treatment fields (data-k + data-t)
   app.querySelectorAll("[data-k]").forEach(inp=>{
     const handler=()=>{const t=T(inp.dataset.t.replace("_op",""));const bucket=inp.dataset.t.endsWith("_op")?t.opFields:t.fields;bucket[inp.dataset.k]=(inp.type==="checkbox")?inp.checked:inp.value;save();};
@@ -698,10 +697,10 @@ function kineticSheet(){
     const line=ftxt(t);
     if(line)o+=`    ${line}\n`;
     if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
-    if(t.tbd)o+=`    ⚠ TBD / needs engineering${t.tbdNote?": "+t.tbdNote:""}\n`;
+    if(t.engNotes&&t.engNotes.trim())o+=`    ⚠ ENG: ${t.engNotes.trim()}\n`;
   });
-  const tbds=S.treatments.filter(t=>t.tbd);
-  if(tbds.length)o+=`   ⚠ ${tbds.length} item(s) flagged TBD / needs engineering — see above.\n`;
+  const engs=S.treatments.filter(t=>t.engNotes&&t.engNotes.trim());
+  if(engs.length)o+=`   ⚠ ${engs.length} item(s) with engineering / field notes, see above.\n`;
   if(S.install.responsibility==="rb"){
     const L=S.install.loadin;
     const li=[L.doorW&&("door "+L.doorW+"×"+(L.doorH||"")),L.freight&&("freight "+(L.freightW||"")+"×"+(L.freightH||"")+"×"+(L.freightL||"")),L.access&&("access "+L.access),L.union&&"union",L.parking&&"parking",L.multiLevel&&"multi-level"].filter(Boolean).join(", ");
@@ -729,6 +728,7 @@ function fullSummary(){
     const F=t.fields||{};
     Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
     if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
+    if(t.engNotes&&t.engNotes.trim())o+=`   eng notes: ${t.engNotes.trim()}\n`;
   });
   return o;
 }
