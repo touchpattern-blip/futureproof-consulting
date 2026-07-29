@@ -162,7 +162,7 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=3;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=4;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
   let v=d.v||1;
@@ -173,6 +173,18 @@ function migrateSurvey(d){
     if(!t.track) t.track={ model:F.trackModel||O.track||"", overlap:F.overlap||O.overlap||"", drop:F.hardwareDrop||"" };
     if(t.track.lead===undefined) t.track.lead="";
     delete F.trackModel; delete F.overlap; delete F.hardwareDrop; delete O.track; delete O.overlap; }); v=3; }
+  // v4 (Pass 1c): taxonomy fold. traveler->main (lossless, same drawn keys, t.track untouched); border/tab->masking with role +
+  // "(was x)" label breadcrumb; pipedrape->other with a readable desc note. New meta fields (customerType/pw) defaulted.
+  if(v<4){ (d.treatments||[]).forEach(t=>{
+    t.fields=t.fields||{};
+    if(t.type==="traveler") t.type="main";
+    if(t.type==="border"||t.type==="tab"){ const was=t.type; t.label=["(was "+was+")",t.label||""].filter(Boolean).join(" "); t.type="masking"; if(!t.fields.role)t.fields.role=was; }
+    if(t.type==="pipedrape"){ const F=t.fields;
+      const legacy=["panel "+(F.panelW||"?")+" x "+(F.panelH||"?"),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType),F.crossbars&&("crossbars "+F.crossbars),F.fabric&&("fabric "+F.fabric)].filter(Boolean).join(", ");
+      t.type="other"; F.desc=[F.desc,"[migrated pipe & drape] "+legacy].filter(Boolean).join("\n"); }
+    if(t.type==="masking"&&t.fields.role===undefined)t.fields.role="";
+  });
+  d.meta=d.meta||{}; if(d.meta.customerType===undefined)d.meta.customerType=""; if(d.meta.pw===undefined)d.meta.pw=false; v=4; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -181,7 +193,7 @@ function loadProj(id){ try{return migrateSurvey(JSON.parse(localStorage.getItem(
 function fresh(){
   return {
     v:SCHEMA_V,
-    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",so:"",customerId:"",customerName:"",salesperson:"",projName:""},
+    meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",so:"",customerId:"",customerName:"",salesperson:"",projName:"",customerType:"",pw:false},
     job:"",
     venueFrame:"",
     prosc:{present:false, openW:"", openH:"", stations:[]},
@@ -256,29 +268,37 @@ loadPending();
 /* ============ SCHEMAS ============ */
 const JOB_TYPES=[["new","New install"],["replace","Replacement"],["repair","Repair / refurbish"],["addon","Add-on"]];
 const SURVEYORS=["Adam","Manny","Brandon","Gio","Angie"];
-const FRAMES=[["","Select…"],["proscenium","Proscenium theatre"],["gym","Gymnatorium / flat stage"],["blackbox","Black box"],["auditorium","Auditorium"],["worship","House of worship"],["ballroom","Ballroom / event"],["studio","Studio (cyc)"],["other","Other"]];
+const FRAMES=[["","Select…"],["proscenium","Proscenium theatre"],["gym","Gymnatorium / flat stage"],["blackbox","Black box"],["auditorium","Auditorium"],["worship","House of worship"],["ballroom","Ballroom / event"],["studio","Studio (cyc)"],["studio_nocyc","Studio (no cyc)"],["warehouse","Warehouse"],["museum","Museum"],["ride","Amusement park ride"],["outdoor","Outdoor space"],["other","Other"]];
+// Prevailing wage keys off CUSTOMER TYPE, not venue frame (PW follows public funding, not the room)
+const CUSTOMER_TYPES=[["","Select…"],["private","Private"],["public","Public agency"],["school","School district"],["gov","Government"],["other","Other"]];
+const PW_TYPES=new Set(["public","school","gov"]);
 
 // Treatment type -> field family
 const TYPES=[
   ["","Select type…",""],
-  ["main","Main / Front curtain","drawn"],
-  ["traveler","Traveler curtain","drawn"],
+  ["main","Main / Traveler curtain","drawn"],
   ["valance","Valance","valance"],
   ["leg","Leg","flat"],
-  ["border","Border / Teaser","flat"],
-  ["tab","Tab","flat"],
+  ["masking","Masking","masking"],
+  ["trackonly","Track only (no soft goods)","trackonly"],
   ["cyc","Cyclorama","backdrop"],
   ["scrim","Scrim","backdrop"],
   ["drop","Backdrop / Drop","backdrop"],
-  ["pipedrape","Pipe & Drape","pipedrape"],
   ["arch","Architectural / Window drape","arch"],
   ["hardware","Installation hardware / material","hardware"],
   ["other","Other","other"]
 ];
-const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[2]:"";};
-const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);return r?r[1]:"";};
+// Legacy types removed from the picker (v4 migration folds them forward) but kept resolvable so any
+// un-migrated survey still renders instead of typeFamily()==="" blanking the card.
+const LEGACY_TYPES={traveler:["Traveler curtain","drawn"],border:["Border / Teaser","flat"],tab:["Tab","flat"],pipedrape:["Pipe & Drape","pipedrape"]};
+const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[2];return LEGACY_TYPES[t]?LEGACY_TYPES[t][1]:"";};
+const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[1];return LEGACY_TYPES[t]?LEGACY_TYPES[t][0]:"";};
 
 const FABRICS=["Velour IFR","Commando cloth","IFR muslin","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Encore velour","Other (type)"];
+// RB catalog hints (vault Reference/rosebrand-catalog.md). All OPTIONAL - blank allowed, free text passes.
+const COLORS=["Black","White","Natural / unbleached","Grey","Navy","Royal blue","Red","Burgundy","Green","Gold","Chroma key green","Chroma key blue","Other (type)"];
+const WEIGHTS=["8 oz","12 oz","15 oz","16 oz","21 oz","22 oz","25 oz","32 oz (linear = 21 oz/sqyd)"];
+const CERTS=["","IFR","FR-treated","NFR","Unknown"];
 const PLEATS=["Shirred","Box","Pinch","Knife","Pleater tape","Flat (none)"];
 const TOPFIN=[
   "3\" webbing + snap hooks flush","4\" webbing + snap hooks flush",
@@ -314,24 +334,39 @@ const TRACK_TABLE=[
 ];
 const trackByLabel=s=>s?(TRACK_TABLE.find(r=>r.enabled&&r.label===s)||null):null;   // join by label (saved-survey strings)
 const trackById=id=>TRACK_TABLE.find(r=>r.id===id)||null;                            // join by id (rename-proof)
-const CORDING=["Hand line (rope)","Continuous cord loop","Bead / ball chain","Sash cord"];
+const CORDING=["Hand line (rope)","Continuous cord loop","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
-const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Manual hand-draw"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
+// internal key "manual" is a saved-data key - display label only says Walk-along
+const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Walk-along"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
+// ADC controller strings (vault Reference/adc-track-specs.md, researched S119 - real products, nothing invented)
+const CONTROLLERS=["Axis1 Touch Controller - Rackmount","Axis1 Touch Controller - Handheld/Pendant","Axis1 Touch Controller - Wall Station","LogiStop (programmable multi-stop)","Standard push-button / magnetic (24 VAC)","DMX512 / show-control interface","Other"];
 
-// field builders return [key,label,control,opts,sub]
-function drawnFields(){return [
+// field builders return [key,label,control,opts,sub]; optionally take current t.fields for conditional rows (lined -> lining)
+const FABRIC_SPEC=F=>[
+  ["color","Color","datalist",COLORS,"optional"],
+  ["weight","Fabric weight","datalist",WEIGHTS,"oz, optional"],
+  ["cert","Flame cert","select",CERTS,"IFR permanent / FR treated"]
+];
+const LINED_ROWS=F=>[
+  ["lined","Lined?","toggle",null,""],
+  ...(F&&F.lined?[["lining","Lining fabric","text",null,"e.g. black commando"]]:[])
+];
+function drawnFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
   ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
-  ["h","Opening height","text",null,"floor to top of track / mount"],
+  ["h","Floor to track top","text",null,"floor to TOP of track / mount"],
   ["w","Width","text",null,"opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
-  ["draw","Draw style","select",["",...DRAW],""]
+  ["draw","Draw style","select",["",...DRAW],""],
+  ...LINED_ROWS(F)
 ];}
-function valanceFields(){return [
+function valanceFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
   ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
   ["profile","Profile / shape","text",null,"e.g. pointed, straight, arched"],
@@ -339,24 +374,46 @@ function valanceFields(){return [
   ["w","Width (developed)","text",null,"along face / arc"],
   ["topFin","Top finish","datalist",TOPFIN,"e.g. 4\" webbing stapled"],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
-  ["oneSided","One-sided?","toggle",null,""]
+  ["oneSided","One-sided?","toggle",null,""],
+  ...LINED_ROWS(F)
 ];}
-function flatFields(){return [
+function flatFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
   ["h","Height","text",null,""],
   ["w","Width","text",null,""],
   ["topFin","Top finish","datalist",TOPFIN,""],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
-  ["sideFin","Side finish","datalist",SIDEFIN,""]
+  ["sideFin","Side finish","datalist",SIDEFIN,""],
+  ...LINED_ROWS(F)
 ];}
-function backdropFields(){return [
+function maskingFields(F){return [
+  ["role","Role","select",[["","Select…"],["leg","Leg"],["border","Border"],["teaser","Teaser"],["tab","Tab"],["blackout","Full blackout"],["other","Other"]],"what it masks"],
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
+  ["h","Height","text",null,"build-to-cover"],
+  ["w","Width","text",null,"build-to-cover"],
+  ["topFin","Top finish","datalist",TOPFIN,""],
+  ["botFin","Bottom finish","datalist",BOTFIN,""],
+  ["sideFin","Side finish","datalist",SIDEFIN,""],
+  ["mount","Mount","datalist",MOUNTS,"or type other"],
+  ...LINED_ROWS(F)
+];}
+function trackonlyFields(){return [
+  ["trackLen","Track length","text",null,"total run incl curves"],
+  ["mount","Mount","datalist",MOUNTS,"or type other"],
+  ["notes","Notes","textarea",null,"curves / radius / drops / attachment"]
+];}
+function backdropFields(F){return [
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
   ["h","Height","text",null,""],
   ["w","Width","text",null,""],
   ["seamless","Seamless?","toggle",null,""],
   ["topFin","Top finish","datalist",["Pipe pocket","Webbing + ties","Grommets"],""],
   ["botFin","Bottom finish","datalist",["Chain pocket","Pipe pocket","Plain hem"],""],
-  ["sideFin","Side finish","datalist",["Ties","Plain","Webbing"],""]
+  ["sideFin","Side finish","datalist",["Ties","Plain","Webbing"],""],
+  ...LINED_ROWS(F)
 ];}
 function pipedrapeFields(){return [
   ["panelH","Panel height","text",null,""],
@@ -389,15 +446,15 @@ function hardwareFields(){return [
   ["unitPrice","Unit price","text",null,"$ (optional)"],
   ["notes","Notes / attachment","textarea",null,"how it mounts / attaches"]
 ];}
-const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
-const MOVABLE=new Set(["drawn","valance","flat"]); // can have an operation
+const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,masking:maskingFields,trackonly:trackonlyFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
+const MOVABLE=new Set(["drawn","valance","flat","masking"]); // can have an operation
 
 function opFields(op){
   switch(op){
     case "fixed": return [["hang","Hang method","text",null,"e.g. tie-line to pipe"]];
     case "manual": return [["carrier","Master carrier","text",null,""],["mount","Mount","datalist",MOUNTS,"or type other"],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
     case "cord": return [["cording","Cording type","datalist",CORDING,"or type other"],["mount","Mount","datalist",MOUNTS,"or type other"],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
-    case "motor": return [["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Control","text",null,"switch / relay / DMX"],["powerLoc","Power location","text",null,""],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
+    case "motor": return [["motor","Motor type","text",null,""],["power","Voltage / phase","text",null,"e.g. 230V 1φ"],["control","Controller","datalist",CONTROLLERS,"or type other"],["powerLoc","Power location","text",null,""],["limitOpen","Limit switch - open","text",null,"set / needs setting"],["limitClose","Limit switch - close","text",null,"set / needs setting"],["cabling","Cabling length(s)","text",null,"motor to controller / power runs"],["rigPath","Mount / rigging detail","text",null,"e.g. strut brackets on beam → track drop"]];
     case "fly": return [["batten","Batten / pipe","text",null,""],["trimHi","Trim - high","text",null,""],["trimLo","Trim - low","text",null,""],["arbor","Counterweight / arbor","text",null,""],["rig","Rigging notes","textarea",null,""]];
     default: return [];
   }
@@ -493,7 +550,7 @@ function treatmentCard(t,i){
   const showOp=MOVABLE.has(fam);
   let fieldsHtml="";
   if(fam && FAMILY_FIELDS[fam]){
-    const fs=FAMILY_FIELDS[fam]();
+    const fs=FAMILY_FIELDS[fam](t.fields||{});
     // 2-col grid for compact fields
     fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)).join("")+`</div>`;
   }
@@ -515,10 +572,10 @@ function treatmentCard(t,i){
         <label class="f"><span>Type</span><select data-type="${t.id}">`+TYPES.map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
         <label class="f"><span>Label / location <span class="sub">(optional)</span></span><input type="text" data-label="${t.id}" value="${esc(t.label||"")}"></label>
       </div>
-      ${t.type?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
-      ${t.type?`<span class="fam">${fam} goods</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
+      ${t.type?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option><option value="existing" ${t.basis==="existing"?"selected":""}>Existing track (verified) - 1:1 replacement</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
+      ${t.type?`<span class="fam">${fam==="trackonly"?"track hardware · ADK0001":fam+" goods"}</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
-      ${fam==="drawn"?trackBlock(t):""}
+      ${(fam==="drawn"||fam==="trackonly")?trackBlock(t):""}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
       ${opHtml}
       ${t.type?`<label class="f"><span>&#9888; Engineering / field notes <span class="sub">(carries to handoff)</span></span><textarea data-engnotes="${t.id}" placeholder="anything unresolved / TBD / needs engineering (pipe attach, load check, non-standard finish)">${esc(t.engNotes||"")}</textarea></label>`:""}
@@ -546,6 +603,9 @@ function render(){
       ${miniField("customerId","Customer ID")}
     </div>
     ${miniField("customerName","Customer name")}
+    <label class="f"><span>Customer type <span class="sub">(drives prevailing-wage check)</span></span>
+      <select id="custtype">`+CUSTOMER_TYPES.map(c=>`<option value="${c[0]}" ${S.meta.customerType===c[0]?"selected":""}>${c[1]}</option>`).join("")+`</select></label>
+    ${PW_TYPES.has(S.meta.customerType)?`<div class="toggle"><span>Prevailing wage? <span class="sub">(verify - public funding)</span></span><label class="sw"><input type="checkbox" id="pwchk" ${S.meta.pw?"checked":""}><span class="track"></span></label></div>`:""}
     ${miniField("address","Address")}
     ${miniField("date","Date")}
     <label class="f"><span>Surveyor</span></label>
@@ -656,6 +716,9 @@ function bind(){
   const pref=document.getElementById("pendrefresh"); if(pref)pref.onclick=(e)=>{ e.preventDefault(); pref.textContent="refreshing…"; fetchPending().then(()=>{ render(); }); };
   // frame
   const fr=document.getElementById("frame"); if(fr)fr.onchange=()=>{S.venueFrame=fr.value;save();};
+  // customer type -> prevailing-wage reminder (select-driven visibility; re-render is fine, no text input involved)
+  const ct=document.getElementById("custtype"); if(ct)ct.onchange=()=>{S.meta.customerType=ct.value; if(!PW_TYPES.has(ct.value))S.meta.pw=false; save(); render();};
+  const pw=document.getElementById("pwchk"); if(pw)pw.onchange=()=>{S.meta.pw=pw.checked;save();};
   const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
   app.querySelectorAll("[data-prosc]").forEach(i=>i.oninput=()=>{S.prosc[i.dataset.prosc]=i.value;save();});
   const astn=document.getElementById("addStn"); if(astn)astn.onclick=()=>{S.prosc.stations=S.prosc.stations||[]; const last=S.prosc.stations[S.prosc.stations.length-1]; const lp=last?parseFeet(last.pos):null; const np=(S.prosc.stations.length===0)?"0":(lp!=null?String(lp+5):""); S.prosc.stations.push({pos:np,h:""});save();render();};
@@ -676,6 +739,8 @@ function bind(){
     const handler=()=>{const t=T(inp.dataset.t.replace("_op",""));const bucket=inp.dataset.t.endsWith("_op")?t.opFields:t.fields;bucket[inp.dataset.k]=(inp.type==="checkbox")?inp.checked:inp.value;save();};
     inp.oninput=handler; inp.onchange=handler;
   });
+  // lined toggle reveals the lining-fabric row (checkbox = safe to re-render; state already saved by the generic handler)
+  app.querySelectorAll('[data-k="lined"]').forEach(inp=>inp.addEventListener("change",()=>render()));
   // live panel-width calc for drawn curtains (updates the derived box without a full re-render)
   ["w","draw","h"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
     const t=T((inp.dataset.t||"").replace("_op","")); if(!t||typeFamily(t.type)!=="drawn")return;
@@ -715,9 +780,12 @@ function ftxt(t){
     return [F.desc, (t.qty&&t.qty!=="1")?("qty "+t.qty+(F.unit?" "+F.unit:"")):"", F.source&&("["+F.source+"]"), F.partNo&&("#"+F.partNo), F.unitPrice&&("@ "+F.unitPrice), F.notes&&("— "+F.notes)].filter(Boolean).join(" · ");
   }
   const parts=[];
+  if(fam==="masking"&&F.role)parts.push("role: "+({leg:"Leg",border:"Border",teaser:"Teaser",tab:"Tab",blackout:"Full blackout",other:"Other"}[F.role]||F.role));
   const dims=[F.w?("W "+F.w):"",F.h?("H "+F.h):""].filter(Boolean).join(" × ");
   if(dims)parts.push(dims);
   if(F.fabric)parts.push(F.fabric);
+  { const fs=[F.color,F.weight,F.cert&&("cert "+F.cert)].filter(Boolean); if(fs.length)parts.push(fs.join(" · ")); }
+  if(F.lined)parts.push("LINED"+(F.lining?" ("+F.lining+")":""));
   if(F.pleat||F.fullness)parts.push([F.pleat,F.fullness].filter(Boolean).join(" "));
   const fins=[F.topFin&&("top: "+F.topFin),F.botFin&&("btm: "+F.botFin),F.sideFin&&("side: "+F.sideFin)].filter(Boolean);
   if(fins.length)parts.push(fins.join(", "));
@@ -731,6 +799,9 @@ function ftxt(t){
   if(F.profile)parts.push("profile: "+F.profile);
   if(F.seamless)parts.push("seamless");
   if(F.oneSided)parts.push("one-sided");
+  if(F.mount)parts.push("mount "+F.mount);
+  if(fam==="trackonly"){ if(F.trackLen)parts.push("track length "+F.trackLen); if(F.notes)parts.push(F.notes); }
+  if(fam==="other"&&F.desc)parts.push(F.desc.replace(/\n/g," / "));
   if(fam==="pipedrape")parts.push([F.panelW&&("panel "+F.panelW+"×"+(F.panelH||"")),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType)].filter(Boolean).join(", "));
   if(t.operation){
     const opLabel=(OPS.find(o=>o[0]===t.operation)||[])[1]||t.operation;
@@ -738,6 +809,8 @@ function ftxt(t){
     if(O.motor)opBits.push("motor "+O.motor);
     if(O.power)opBits.push(O.power);
     if(O.control)opBits.push("ctrl "+O.control);
+    if(O.limitOpen||O.limitClose)opBits.push("limits "+[O.limitOpen&&("open: "+O.limitOpen),O.limitClose&&("close: "+O.limitClose)].filter(Boolean).join(" / "));
+    if(O.cabling)opBits.push("cabling "+O.cabling);
     if(O.batten)opBits.push("batten "+O.batten);
     parts.push("["+opBits.join(", ")+"]");
   }
@@ -748,6 +821,7 @@ function kineticSheet(){
   let o=`ROSE BRAND — SITE SURVEY → KINETIC QUOTE\n`;
   o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:""}${m.so?"  ·  SO "+m.so:""}${(!m.quote&&!m.so)?"  ·  Quote/SO # __________":""}\n`;
   if(m.customerName||m.customerId||m.salesperson)o+=`Customer: ${m.customerName||""}${m.customerId?"  (ID "+m.customerId+")":""}${m.salesperson?"  ·  Sales "+m.salesperson:""}\n`;
+  if(m.customerType)o+=`Customer type: ${(CUSTOMER_TYPES.find(c=>c[0]===m.customerType)||["",m.customerType])[1]}${m.pw?"  ·  ⚠ PREVAILING WAGE (verify)":""}\n`;
   o+=`${m.address||""}\n`;
   o+=`Date ${m.date||"—"}  ·  Surveyor ${m.surveyor||"—"}\n`;
   o+=`Job: ${(JOB_TYPES.find(j=>j[0]===S.job)||["","—"])[1]}  ·  Frame: ${(FRAMES.find(f=>f[0]===S.venueFrame)||["","—"])[1]}\n`;
@@ -755,7 +829,7 @@ function kineticSheet(){
   o+=`${"—".repeat(46)}\nLINE ITEMS\n`;
   if(!S.treatments.length)o+=`  (none)\n`;
   S.treatments.forEach((t,i)=>{
-    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+(t.basis==="match"?"match existing":"new from opening")+")":""}\n`;
+    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${t.type==="trackonly"?"[ADK0001] ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+({match:"match existing",new:"new from opening",existing:"existing track (verified) - 1:1 replacement"}[t.basis]||t.basis)+")":""}\n`;
     const line=ftxt(t);
     if(line)o+=`    ${line}\n`;
     if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
