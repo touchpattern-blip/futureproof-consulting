@@ -170,7 +170,7 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=5;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=6;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
@@ -207,6 +207,15 @@ function migrateSurvey(d){
     delete d.prosc;
     (d.treatments||[]).forEach(t=>{ if(!t.conform||typeof t.conform!=="object"||Array.isArray(t.conform))t.conform=cfmDefault(); });
     v=5; }
+  // v6 (Pass 1d): mount-aware drop + floor clearance. t.track.mount = "suspended"|"ceiling" defaults suspended
+  // (every pre-v6 drop was captured as a suspended value); drawn-family fields gain clearance (blank = brush floor = 0).
+  if(v<6){ (d.treatments||[]).forEach(t=>{
+    if(!t.track||typeof t.track!=="object"||Array.isArray(t.track)) t.track={model:"",overlap:"",drop:"",lead:""};
+    if(t.track.mount!=="ceiling"&&t.track.mount!=="suspended") t.track.mount="suspended";
+    if(t.track.lead===undefined) t.track.lead="";
+    t.fields=t.fields||{};
+    if(t.fields.clearance===undefined) t.fields.clearance="";
+  }); v=6; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -332,29 +341,34 @@ const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weig
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","14\"","16\"","24\""];
+// floor-clearance presets (keep strings STABLE, saved surveys hold them verbatim). Brush/blank = 0; puddle = negative (adds length).
+const CLEARANCES=["Brush floor (0)","+1\" clear","+2\" clear","Puddle (-)"];
 // Unified track reference table (Pass 1b). One row per pickable track; replaces the old TRACKS / TRACK_MODEL_LIST / TRACK_OVERLAP / TRACK_DROP parallel structures.
 // Provenance: ADC = Catalog 52 (2011) dimensioned cross-sections (vault Reference/adc-track-specs.md); TripleE = triplee.ltd research S119.
-// overlap = TOTAL center bypass (single-track overlap master carrier). drop = top of track -> bottom of hook/snap, SUSPENDED mount.
+// overlap = TOTAL center bypass (single-track overlap master carrier). drop = top of track -> bottom of hook/snap, SUSPENDED mount;
+// ceilingDrop = same dimension CEILING-mounted (ADC Catalog 52 second value; TripleE not published).
 // null = not published / unconfirmed: NEVER auto-filled, surveyor enters field truth. Keep label strings stable (saved surveys join on them).
 const TRACK_TABLE=[
-  {id:"adc113",  label:"ADC 113 Specifine (1100)",   vendor:"ADC", overlap:"8\"",  drop:"3\"",       source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
-  {id:"adc132",  label:"ADC 132 Flex-I-Trac (1300)", vendor:"ADC", overlap:"12\"", drop:"4-1/2\"",   source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
-  {id:"adc140",  label:"ADC 140 Rig-I-Flex (1400)",  vendor:"ADC", overlap:null,   drop:"5-3/4\"",   source:"ADC Catalog 52", verified:false, caveat:"overlap unconfirmed (12\" vs 24\"): measure a 1402A arm before trusting", enabled:true},
-  {id:"adc170",  label:"ADC 170 Besteel (1700)",     vendor:"ADC", overlap:"17\"", drop:"3-7/8\"",   source:"ADC Catalog 52 + field-verified", verified:true, caveat:"", enabled:true},
-  {id:"adc220",  label:"ADC 220 Trak-Eze (2200)",    vendor:"ADC", overlap:"12\"", drop:"4-1/2\"",   source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
-  {id:"adc220n", label:"ADC 220-N Trak-Eze",         vendor:"ADC", overlap:"24\"", drop:"4-1/2\"",   source:"ADC Catalog 52", verified:true,  caveat:"drop derived from 220 (same 2200 channel)", enabled:true},
-  {id:"adc280",  label:"ADC 280 Silent Steel (2800)",vendor:"ADC", overlap:"12\"", drop:"12-5/16\"", source:"ADC Catalog 52", verified:true,  caveat:"drop = MAX, adjustable shorter via trim chain", enabled:true},
-  {id:"adc500",  label:"ADC 500 Patriarc (5000)",    vendor:"ADC", overlap:"20\"", drop:"9-1/2\"",   source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
-  {id:"ee_erail6",  label:"TripleE Erail (6\" arm ERL8004)",      vendor:"TripleE", overlap:"6\"",  drop:null, source:"triplee.ltd", verified:true,  caveat:"drop not published, measure in field", enabled:true},
-  {id:"ee_erail20", label:"TripleE Erail (20\" arms 2x ERL8001)", vendor:"TripleE", overlap:"20\"", drop:null, source:"triplee.ltd", verified:true,  caveat:"drop not published, measure in field", enabled:true},
-  {id:"ee_2way",    label:"TripleE 2Way",      vendor:"TripleE", overlap:null, drop:null, source:"triplee.ltd", verified:false, caveat:"overlap arm dim + drop not published", enabled:true},
-  {id:"ee_unitrack",label:"TripleE UniTrack",  vendor:"TripleE", overlap:null, drop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
-  {id:"ee_unibeam", label:"TripleE UniBeam",   vendor:"TripleE", overlap:null, drop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
-  {id:"ee_chaintrack",label:"TripleE ChainTrack",vendor:"TripleE", overlap:null, drop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
-  {id:"other",   label:"Other", vendor:"", overlap:null, drop:null, source:"", verified:false, caveat:"type the actual model into the field", enabled:true}
+  {id:"adc113",  label:"ADC 113 Specifine (1100)",   vendor:"ADC", overlap:"8\"",  drop:"3\"",       ceilingDrop:"2-5/16\"",  source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
+  {id:"adc132",  label:"ADC 132 Flex-I-Trac (1300)", vendor:"ADC", overlap:"12\"", drop:"4-1/2\"",   ceilingDrop:"3-9/16\"",  source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
+  {id:"adc140",  label:"ADC 140 Rig-I-Flex (1400)",  vendor:"ADC", overlap:null,   drop:"5-3/4\"",   ceilingDrop:"4-5/8\"",   source:"ADC Catalog 52", verified:false, caveat:"overlap unconfirmed (12\" vs 24\"): measure a 1402A arm before trusting", enabled:true},
+  {id:"adc170",  label:"ADC 170 Besteel (1700)",     vendor:"ADC", overlap:"17\"", drop:"3-7/8\"",   ceilingDrop:"3-7/8\"",   source:"ADC Catalog 52 + field-verified", verified:true, caveat:"", enabled:true},
+  {id:"adc220",  label:"ADC 220 Trak-Eze (2200)",    vendor:"ADC", overlap:"12\"", drop:"4-1/2\"",   ceilingDrop:"3-1/8\"",   source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
+  {id:"adc220n", label:"ADC 220-N Trak-Eze",         vendor:"ADC", overlap:"24\"", drop:"4-1/2\"",   ceilingDrop:"3-1/8\"",   source:"ADC Catalog 52", verified:true,  caveat:"drop derived from 220 (same 2200 channel)", enabled:true},
+  {id:"adc280",  label:"ADC 280 Silent Steel (2800)",vendor:"ADC", overlap:"12\"", drop:"12-5/16\"", ceilingDrop:"12-5/16\"", source:"ADC Catalog 52", verified:true,  caveat:"drop = MAX, adjustable shorter via trim chain", enabled:true},
+  {id:"adc500",  label:"ADC 500 Patriarc (5000)",    vendor:"ADC", overlap:"20\"", drop:"9-1/2\"",   ceilingDrop:"10-3/16\"", source:"ADC Catalog 52", verified:true,  caveat:"", enabled:true},
+  {id:"ee_erail6",  label:"TripleE Erail (6\" arm ERL8004)",      vendor:"TripleE", overlap:"6\"",  drop:null, ceilingDrop:null, source:"triplee.ltd", verified:true,  caveat:"drop not published, measure in field", enabled:true},
+  {id:"ee_erail20", label:"TripleE Erail (20\" arms 2x ERL8001)", vendor:"TripleE", overlap:"20\"", drop:null, ceilingDrop:null, source:"triplee.ltd", verified:true,  caveat:"drop not published, measure in field", enabled:true},
+  {id:"ee_2way",    label:"TripleE 2Way",      vendor:"TripleE", overlap:null, drop:null, ceilingDrop:null, source:"triplee.ltd", verified:false, caveat:"overlap arm dim + drop not published", enabled:true},
+  {id:"ee_unitrack",label:"TripleE UniTrack",  vendor:"TripleE", overlap:null, drop:null, ceilingDrop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
+  {id:"ee_unibeam", label:"TripleE UniBeam",   vendor:"TripleE", overlap:null, drop:null, ceilingDrop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
+  {id:"ee_chaintrack",label:"TripleE ChainTrack",vendor:"TripleE", overlap:null, drop:null, ceilingDrop:null, source:"triplee.ltd", verified:false, caveat:"overlap/drop not published", enabled:true},
+  {id:"other",   label:"Other", vendor:"", overlap:null, drop:null, ceilingDrop:null, source:"", verified:false, caveat:"type the actual model into the field", enabled:true}
 ];
 const trackByLabel=s=>s?(TRACK_TABLE.find(r=>r.enabled&&r.label===s)||null):null;   // join by label (saved-survey strings)
 const trackById=id=>TRACK_TABLE.find(r=>r.id===id)||null;                            // join by id (rename-proof)
+// mount-aware auto-fill: suspended pulls row.drop, ceiling pulls row.ceilingDrop; unknown = "" (surveyor measures, never fabricated)
+const dropForMount=(row,mount)=>row?((mount==="ceiling")?(row.ceilingDrop||""):(row.drop||"")):"";
 const CORDING=["Hand line (rope)","Continuous cord loop","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 // internal key "manual" is a saved-data key - display label only says Walk-along
@@ -383,6 +397,7 @@ function drawnFields(F){return [
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["draw","Draw style","select",["",...DRAW],""],
+  ["clearance","Floor clearance","datalist",CLEARANCES,"brush/blank = 0 · bare number = inches · puddle = negative"],
   ...LINED_ROWS(F)
 ];}
 function valanceFields(F){return [
@@ -528,13 +543,34 @@ function fmtLen(x){ if(x==null||isNaN(x))return ""; let neg=x<0?"-":""; x=Math.a
   let e=Math.round(x*96), ft=Math.floor(e/96), rem=e-ft*96, inch=Math.floor(rem/8), fr=rem%8;   // nearest 1/8"
   let inStr = fr===0 ? inch+'"' : ((g)=>((inch?inch+" ":"")+(fr/g)+"/"+(8/g)+'"'))(gcd(fr,8));
   return `${neg}${ft}'-${inStr}`; }
+function fmtIn(x){ if(x==null||isNaN(x))return ""; const e=Math.round(Math.abs(x)*8), w=Math.floor(e/8), fr=e%8, g=fr?gcd(fr,8):1;   // inches -> 1", 2 1/2"
+  return (fr===0?String(w):((w?w+" ":"")+(fr/g)+"/"+(8/g)))+'"'; }
+// floor-clearance parser: ""/"Brush floor (0)" = 0; "+1\" clear" = 1"; "Puddle"/negative = NEGATIVE feet (adds length);
+// bare number = inches (parseInches grammar). Returns FEET, or null when no number can be read (e.g. bare "Puddle (-)").
+function parseClearance(s){ if(s==null)return 0; const str=(""+s).trim(); if(!str)return 0;
+  if(/^brush/i.test(str))return 0;
+  const puddle=/puddle/i.test(str);
+  const m=str.replace(/^\+/,"").match(/-?\d[\d\s\/.'"″”-]*/);
+  if(!m)return null;
+  let tok=m[0].trim(); const neg=tok.charAt(0)==="-";
+  if(neg)tok=tok.slice(1).trim();
+  const v=parseInches(tok);
+  if(v==null)return null;
+  return (neg||puddle)?-Math.abs(v):v; }
 function panelBoxInner(t){
   const F=t.fields||{}, TR=t.track||{}; const out=[];
   const H=parseLen(F.h), D=parseInches(TR.drop);   // drop: bare number = INCHES (the 5.75-feet bug fix)
+  const C=parseClearance(F.clearance);             // feet; 0 = brush floor; negative = puddle; null = unreadable
   if(H!=null&&H>0){
-    if(D!=null&&D>0) out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware = <b>${fmtLen(H-D)}</b>`);
+    if(D!=null&&D>0){
+      const mtag=(TR.mount==="ceiling")?" (ceiling mount)":"";
+      if(C!=null&&C!==0) out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} ${C>0?"&minus; "+fmtIn(C*12)+" clearance":"+ "+fmtIn(-C*12)+" puddle"} = <b>${fmtLen(H-D-C)}</b>`);
+      else out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} = <b>${fmtLen(H-D)}</b> <span style="color:#7a8088">${C===null?`(clearance &quot;${esc(F.clearance)}&quot; not a number - enter inches, e.g. -2 for a 2&quot; puddle)`:"(brush floor, 0 clearance)"}</span>`);
+    }
     else out.push(`<b>Finished height:</b> ${fmtLen(H)} <span style="color:#7a8088">(pick a track model to subtract its hardware drop)</span>`);
   }
+  { const row=trackByLabel((TR.model||"").trim());
+    if(row&&row.id==="adc280") out.push(`<b style="color:var(--warn)">&#9888; 280 Silent Steel:</b> <span style="color:var(--warn)">drop 12-5/16&quot; = MAX, adjustable shorter via trim chain - confirm before cut.</span>`); }
   const W=parseLen(F.w), draw=F.draw||"", O=parseInches(TR.overlap);
   const biBlank=/Bi-part/i.test(draw)&&!(O>0);
   if(biBlank) out.push(`<b style="color:var(--warn)">&#9888; Overlap not set.</b> <span style="color:var(--warn)">Bi-part with no center overlap = center light-gap. Enter the TOTAL bypass or pick a track model.</span>`);
@@ -557,6 +593,11 @@ function trackBlock(t){
     <label class="f"><span>Track model <span class="sub">(preset auto-fills overlap + drop; or type your own)</span></span>
       <input type="text" list="${dl}" data-track="model" data-tid="${t.id}" value="${esc(tr.model||"")}">
       <datalist id="${dl}">`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">`).join("")+`</datalist></label>
+    <label class="f"><span>Mount <span class="sub">(suspended vs ceiling changes the drop)</span></span>
+      <select data-track="mount" data-tid="${t.id}">
+        <option value="suspended" ${tr.mount!=="ceiling"?"selected":""}>Suspended</option>
+        <option value="ceiling" ${tr.mount==="ceiling"?"selected":""}>Ceiling-mount</option>
+      </select></label>
     <label class="f"><span>Center overlap <span class="sub">(TOTAL bypass; bare number = inches)</span></span>
       <input type="text" list="${dl}_ov" data-track="overlap" data-tid="${t.id}" value="${esc(tr.overlap||"")}">
       <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist></label>
@@ -752,7 +793,7 @@ function bind(){
   app.querySelectorAll("[data-cfmdel]").forEach(b=>b.onclick=()=>{const ix=b.dataset.cfmdel.lastIndexOf(":"); const t=T(b.dataset.cfmdel.slice(0,ix)); if(!t||!t.conform)return; t.conform.stations.splice(+b.dataset.cfmdel.slice(ix+1),1); save(); render();});
   app.querySelectorAll("[data-cfm]").forEach(inp=>inp.oninput=()=>{const t=T(inp.dataset.ct); if(!t||!t.conform)return; t.conform.stations[+inp.dataset.ci][inp.dataset.cfm]=inp.value; save(); refreshConform(t);});
   // treatments
-  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},track:{model:"",overlap:"",drop:"",lead:""},conform:cfmDefault(),engNotes:""});save();render();};
+  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},track:{model:"",overlap:"",drop:"",lead:"",mount:"suspended"},conform:cfmDefault(),engNotes:""});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
@@ -769,7 +810,7 @@ function bind(){
   // lined toggle reveals the lining-fabric row (checkbox = safe to re-render; state already saved by the generic handler)
   app.querySelectorAll('[data-k="lined"]').forEach(inp=>inp.addEventListener("change",()=>render()));
   // live panel-width calc for drawn curtains (updates the derived box without a full re-render)
-  ["w","draw","h"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
+  ["w","draw","h","clearance"].forEach(k=>app.querySelectorAll(`[data-k="${k}"]`).forEach(inp=>{
     const t=T((inp.dataset.t||"").replace("_op","")); if(!t||typeFamily(t.type)!=="drawn")return;
     const upd=()=>refreshDerived(t);
     inp.addEventListener("input",upd); inp.addEventListener("change",upd);
@@ -779,11 +820,13 @@ function bind(){
   app.querySelectorAll("[data-track]").forEach(inp=>{
     const t=T(inp.dataset.tid); if(!t)return;
     const handler=()=>{
-      if(!t.track)t.track={model:"",overlap:"",drop:"",lead:""};
+      if(!t.track)t.track={model:"",overlap:"",drop:"",lead:"",mount:"suspended"};
       t.track[inp.dataset.track]=inp.value;
-      if(inp.dataset.track==="model"){
-        const row=trackByLabel(inp.value.trim());
-        if(row&&row.id!=="other"){ t.track.overlap=row.overlap||""; t.track.drop=row.drop||"";
+      if(inp.dataset.track==="model"||inp.dataset.track==="mount"){   // model pick OR mount toggle re-fills the drop for the active mount
+        const row=trackByLabel((t.track.model||"").trim());
+        if(row&&row.id!=="other"){
+          if(inp.dataset.track==="model") t.track.overlap=row.overlap||"";
+          t.track.drop=dropForMount(row,t.track.mount);
           app.querySelectorAll(`[data-track][data-tid="${t.id}"]`).forEach(s=>{ if(s.dataset.track==="overlap")s.value=t.track.overlap; if(s.dataset.track==="drop")s.value=t.track.drop; });
         }
       }
@@ -818,8 +861,11 @@ function ftxt(t){
   if(fins.length)parts.push(fins.join(", "));
   if(F.draw)parts.push("draw: "+F.draw);
   const TR=t.track||{};   // unified track: printed EXACTLY ONCE, from the one source
-  { const trk=[TR.model&&("track "+TR.model), TR.overlap&&("overlap "+TR.overlap+" total"), TR.drop&&("hw drop "+TR.drop)].filter(Boolean); if(trk.length)parts.push(trk.join(", ")); }
-  if(fam==="drawn"){ const _H=parseLen(F.h), _D=parseInches(TR.drop); if(_H>0&&_D>0) parts.push("finished H "+fmtLen(_H-_D)+" (opening "+F.h+" − "+TR.drop+" hw)"); }
+  { const trk=[TR.model&&("track "+TR.model), (TR.mount==="ceiling")&&"ceiling mount", TR.overlap&&("overlap "+TR.overlap+" total"), TR.drop&&("hw drop "+TR.drop)].filter(Boolean); if(trk.length)parts.push(trk.join(", ")); }
+  { const row=trackByLabel((TR.model||"").trim()); if(row&&row.id==="adc280") parts.push("⚠ 280: drop = MAX, adjustable shorter via trim chain - confirm before cut"); }
+  if(fam==="drawn"){ const _H=parseLen(F.h), _D=parseInches(TR.drop); if(_H>0&&_D>0){ const _C=parseClearance(F.clearance);
+    if(_C!=null&&_C!==0) parts.push("finished H "+fmtLen(_H-_D-_C)+" (opening "+F.h+" − "+TR.drop+" hw "+(_C>0?("− "+fmtIn(_C*12)+" clearance"):("+ "+fmtIn(-_C*12)+" puddle"))+")");
+    else parts.push("finished H "+fmtLen(_H-_D)+" (opening "+F.h+" − "+TR.drop+" hw"+(_C===null?("; ⚠ clearance \""+F.clearance+"\" unreadable, shown at brush"):"; brush floor")+")"); } }
   if(fam==="drawn"){ const _W=parseLen(F.w); if(_W>0){ const _O=parseInches(TR.overlap);
     if(/Bi-part/i.test(F.draw||"")){ parts.push((_O>0)?("panels: 2 @ "+fmtLen(_W/2+_O/2)+" (½W+½ ovl)"):"⚠ OVERLAP NOT SET (bi-part needs the total center bypass; panel math blocked)"); }
     else if(/One-way/i.test(F.draw||"")){ const _L=parseInches(TR.lead); parts.push("panel: "+fmtLen(_W+(_L>0?_L:0))+(_L>0?" (W + "+TR.lead+" lead)":"")); } } }
@@ -975,7 +1021,8 @@ function importScope(){
       t.fields=numToStr((t.fields&&typeof t.fields==="object"&&!Array.isArray(t.fields))?t.fields:{});
       t.opFields=numToStr((t.opFields&&typeof t.opFields==="object"&&!Array.isArray(t.opFields))?t.opFields:{});
       t.track=numToStr((t.track&&typeof t.track==="object"&&!Array.isArray(t.track))?t.track:{});
-      ["model","overlap","drop","lead"].forEach(k=>{ if(typeof t.track[k]!=="string")t.track[k]=(t.track[k]==null)?"":String(t.track[k]); });
+      ["model","overlap","drop","lead","mount"].forEach(k=>{ if(typeof t.track[k]!=="string")t.track[k]=(t.track[k]==null)?"":String(t.track[k]); });
+      t.track.mount=(t.track.mount==="ceiling")?"ceiling":"suspended";   // v6: only the two real values survive an import
       t.conform=(t.conform&&typeof t.conform==="object"&&!Array.isArray(t.conform))?t.conform:cfmDefault();
       t.conform.on=!!t.conform.on;
       ["openW","openH"].forEach(k=>{ if(typeof t.conform[k]!=="string")t.conform[k]=(t.conform[k]==null)?"":String(t.conform[k]); });
