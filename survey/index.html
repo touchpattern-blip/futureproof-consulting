@@ -146,6 +146,14 @@
           <div id="importstatus" style="font-size:12px;font-weight:600;margin-top:7px;min-height:15px;"></div>
         </div>
       </details>
+      <details id="pdfwrap" style="margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
+        <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Import Rose Brand quote <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(drop the quote PDF, builds the scope)</span></summary>
+        <div style="padding:2px 12px 12px;">
+          <div id="pdfdrop" style="border:1.5px dashed var(--line);border-radius:9px;padding:20px 12px;text-align:center;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;background:#fff;">Drop a Rose Brand quote PDF here<br>or tap to choose the file</div>
+          <input type="file" id="pdffile" accept=".pdf,application/pdf" style="display:none">
+          <div id="pdfstatus" style="font-size:12px;font-weight:600;margin-top:7px;min-height:15px;"></div>
+        </div>
+      </details>
       <div id="projlist"></div>
     </div>
   </div>
@@ -1336,8 +1344,13 @@ function importScope(){
   if(!txt){ importStatus("Paste survey JSON first.",false); return; }
   let data;
   try{ data=JSON.parse(txt); }catch(e){ importStatus("Not valid JSON.",false); return; }
+  if(importSurveyObject(data,importStatus)&&box)box.value="";
+}
+// core import: takes an already-parsed survey OBJECT (JSON paste OR the quote-PDF parser), returns true on success.
+function importSurveyObject(data,status){
+  status=status||importStatus;
   if(!data||typeof data!=="object"||Array.isArray(data)||!(Array.isArray(data.treatments)||(data.meta&&typeof data.meta==="object"&&!Array.isArray(data.meta)))){
-    importStatus("Doesn't look like a survey scope.",false); return; }
+    status("Doesn't look like a survey scope.",false); return false; }
   try{
     const imp=JSON.parse(JSON.stringify(data));                    // deep clone; never mutate the parse source
     imp.treatments=Array.isArray(imp.treatments)?imp.treatments.filter(t=>t&&typeof t==="object"&&!Array.isArray(t)):[];
@@ -1393,14 +1406,14 @@ function importScope(){
     flushSave();                                                   // persist the survey being edited FIRST, never lose it
     const id=pid();
     try{ localStorage.setItem(pKey(id),JSON.stringify(out)); }
-    catch(e){ importStatus("Storage full: import not saved. Delete an old survey and retry.",false); return; }
+    catch(e){ status("Storage full: import not saved. Delete an old survey and retry.",false); return false; }
     IDX.order.unshift(id); IDX.activeId=id; saveIndex();
     S=out;
-    if(box)box.value="";
-    importStatus("Imported: "+projName(S)+" ("+S.treatments.length+" treatments)",true);
+    status("Imported: "+projName(S)+" ("+S.treatments.length+" treatments)",true);
     closeProjModal();
     render();
-  }catch(e){ importStatus("Import failed: "+((e&&e.message)||e),false); }
+    return true;
+  }catch(e){ status("Import failed: "+((e&&e.message)||e),false); return false; }
 }
 document.getElementById("importbtn").onclick=importScope;
 // nice-to-have: drop a .json file onto the import area and its text lands in the box
@@ -1418,6 +1431,290 @@ document.getElementById("importbtn").onclick=importScope;
       r.readAsText(f);
     }catch(err){ importStatus("Could not read the dropped file.",false); }
   });
+})();
+
+/* ============ RB QUOTE PDF IMPORT (Pass PDF-A) ============ */
+/* Deterministic OFFLINE parser for Rose Brand's fixed quote-PDF template -> a survey scope.
+   pdf.js v3.11.174 (legacy UMD, Apache-2.0) is VENDORED locally (pdf.min.js + pdf.worker.min.js
+   next to index.html) and lazy-loaded on first use: no CDN, no AI, works for non-admin users.
+   Part codes: DRAP0001 = soft good, ADCK0001 / "ADC Track Kit" = trackonly, INST0001 = install,
+   RDRU* = roll drum (attaches to the roll-drop treatment). Anything else lands in generalNotes.
+   HEURISTIC auto-check: each drape pairs with its NAMED track line (e.g. "MAIN & MID-STAGE TRACK")
+   and drawn drapes take fields.w/h from that track's "W Feet wide x H Feet high", so the derived
+   panel box computes panels from the real opening and surfaces discrepancies vs the quoted panel
+   widths (the quoted per-panel size is preserved in engNotes for the comparison). */
+function pdfStatus(msg,ok){ const el=document.getElementById("pdfstatus"); if(el){ el.textContent=msg; el.style.color=ok?"var(--ok)":"#c0392b"; } }
+let PDFJS_LOADING=null;
+function loadPdfjs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(!PDFJS_LOADING) PDFJS_LOADING=new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src="pdf.min.js";
+    s.onload=()=>{ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc="pdf.worker.min.js"; res(window.pdfjsLib); }catch(e){ rej(e); } };
+    s.onerror=()=>{ PDFJS_LOADING=null; rej(new Error("pdf.min.js not found next to index.html")); };
+    document.head.appendChild(s);
+  });
+  return PDFJS_LOADING;
+}
+function fileToU8(f){ const p=(typeof f.arrayBuffer==="function")?f.arrayBuffer():new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error||new Error("file read failed")); r.readAsArrayBuffer(f); });
+  return p.then(b=>new Uint8Array(b)); }
+// pdf.js text items -> per-page reading-order lines [{y, items:[{x,str}], text}] (y groups within 2.5 units)
+async function pdfPageLines(file){
+  const data=await fileToU8(file); const lib=await loadPdfjs();
+  const doc=await lib.getDocument({data}).promise;
+  const pages=[];
+  try{
+    for(let p=1;p<=doc.numPages;p++){
+      const tc=await (await doc.getPage(p)).getTextContent();
+      const rows=[];
+      tc.items.forEach(it=>{ if(!it.str||!it.str.trim())return; const x=it.transform[4],y=it.transform[5];
+        let row=null; for(let i=0;i<rows.length;i++){ if(Math.abs(rows[i].y-y)<=2.5){ row=rows[i]; break; } }
+        if(!row){ row={y:y,items:[]}; rows.push(row); } row.items.push({x:x,str:it.str}); });
+      rows.sort((a,b)=>b.y-a.y); rows.forEach(r=>r.items.sort((a,b)=>a.x-b.x));
+      pages.push(rows.map(r=>({y:r.y,items:r.items,text:r.items.map(i=>i.str).join(" ").replace(/\s+/g," ").trim()})));
+    }
+  } finally { try{ doc.destroy(); }catch(_){} }
+  return pages;
+}
+/* ---- template grammar ---- */
+const RBQ_ITEM=/^(\d+)\s+([A-Z][A-Z0-9]{3,})\s+([\d,]+\.\d{3})\s+(\S+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;   // "1 DRAP0001 2.000 Each $1,695.00 $3,390.00"
+const RBQ_NOISE=[/^Quote$/i,/^Quote Number:/i,/^Date:\s/i,/^Terms:/i,/^Line\s+Part\s+Quantity/i,/^Page\s+\d+\s+of\s+\d+$/i,/^Kit Seq\./i];
+const RBQ_DIM=/(\d+(?:\.\d+)?)\s*feet\s*-\s*(\d+(?:\.\d+)?)\s*inch(?:es)?\s*high\s*x\s*(\d+(?:\.\d+)?)\s*feet\s*-\s*(\d+(?:\.\d+)?)\s*inch(?:es)?\s*wide/i;
+function rbFtIn(ft,inch){ return fmtLen((parseFloat(ft)||0)+((parseFloat(inch)||0)/12)); }
+function rbMoney(s){ const c=parseMoney(s); return c==null?("$"+s):fmtMoney(c); }   // integer cents in the middle, formatted out
+function rbNorm(s){ return (" "+(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ")+" ").replace(/\s+/g," "); }
+// label keyword -> treatment type. Specific families (leg/valance/cyc/scrim/drop) BEFORE main so "Main Leg" = leg.
+function rbType(label){ const s=rbNorm(label);
+  if(/ legs? /.test(s)) return "leg";
+  if(/ valance /.test(s)) return "valance";
+  if(/ cyc/.test(s)) return "cyc";
+  if(/ scrims? /.test(s)) return "scrim";
+  if(/ roll ?drops? | drops? /.test(s)) return "drop";
+  if(/ travell?er /.test(s)) return "main";
+  if(/ main /.test(s)) return "main";
+  if(/ border | teaser | masking | tab /.test(s)) return "masking";
+  return ""; }
+/* header block (page 1 above the first line item): quote #, date, customer id, Quote To (LEFT column
+   only - the Ship To column is split off by the x position of the "Ship To:" label), phone/email, S/P */
+function rbHeader(page1,firstItemIdx){
+  const H={quote:"",date:"",customerId:"",contactName:"",customerName:"",address:"",contactCell:"",contactEmail:"",salesperson:""};
+  const lines=page1.slice(0,firstItemIdx<0?page1.length:firstItemIdx);
+  let qi=-1,shipX=1e9;
+  lines.forEach((ln,i)=>{ const s=ln.text; let m;
+    if(m=s.match(/Quote Number:\s*([A-Za-z0-9-]+)/i))H.quote=m[1];
+    else if(m=s.match(/^Date:\s*([0-9/.-]+)/i))H.date=m[1];
+    else if(m=s.match(/^Customer ID:\s*(\S+)/i))H.customerId=m[1];
+    else if(/^Quote To:/i.test(s)){ qi=i; ln.items.forEach(it=>{ if(/^Ship To:/i.test((it.str||"").trim()))shipX=it.x; }); }
+    else if(m=s.match(/^Phone:\s*(.+)$/i))H.contactCell=m[1].trim();
+    else if(m=s.match(/^Email:\s*(\S+)/i))H.contactEmail=m[1];
+    else if(m=s.match(/^S\/P Name:\s*(.*?)(?:\s+PO Number:.*)?$/i))H.salesperson=m[1].trim();
+  });
+  if(qi>=0){
+    const left=[];
+    for(let i=qi+1;i<lines.length;i++){ const s=lines[i].text;
+      if(/^(Phone:|Email:|S\/P|Line\s)/i.test(s))break;
+      const t=lines[i].items.filter(it=>it.x<shipX-4).map(it=>it.str).join(" ").replace(/\s+/g," ").trim();
+      if(t)left.push(t);
+    }
+    let a=-1; for(let i=0;i<left.length;i++){ if(/\d/.test(left[i])){a=i;break;} } if(a<0)a=left.length;
+    if(a>=2){ H.contactName=left[0]; H.customerName=left.slice(1,a).join(", "); }
+    else if(a===1){ H.customerName=left[0]; }
+    H.address=left.slice(a).join(", ");
+  }
+  return H;
+}
+/* DRAP0001 body -> field family. Sequential classifier so wrapped lines rejoin their block and
+   anything unrecognized (e.g. "6IN MC SPACING") is captured, never dropped. */
+function rbDrape(cur){
+  const F={}; const extras=[]; const fins={top:"",bottom:"",sr:"",sl:""};
+  const FINKEY={"top":"top","bottom":"bottom","stage right":"sr","stage left":"sl"};
+  let construction="", mat=null, matDone=false, finKey=null, mcIn=null, qh="", qw="";
+  cur.body.forEach(raw=>{ const s=(""+raw).replace(/\s+/g," ").trim(); if(!s)return; let m;
+    if(m=s.match(/^Material:\s*(.*)$/i)){ mat=[m[1]]; matDone=false; finKey=null; return; }
+    if(m=s.match(RBQ_DIM)){ qh=rbFtIn(m[1],m[2]); qw=rbFtIn(m[3],m[4]); F.h=qh; F.w=qw; matDone=true; finKey=null; return; }
+    if(m=s.match(/^With\s+(\d+(?:\.\d+)?)\s*%\s*Added\s*Fullness(?:\s*via\s*([A-Za-z]+)\s*pleats?)?(.*)$/i)){
+      F.fullness=m[1]+"%";
+      if(m[2]){ const P={box:"Box",pinch:"Pinch",knife:"Knife",shirred:"Shirred"}[m[2].toLowerCase()]; if(P)F.pleat=P; else extras.push("pleats: "+m[2]); }
+      if(/\bLined\b/i.test(m[3]||"")&&!/\bUnlined\b/i.test(m[3]||""))F.lined=true;
+      matDone=true; finKey=null; return; }
+    if(m=s.match(/^(Top|Bottom|Stage Right|Stage Left)\s*:\s*(.*)$/i)){ finKey=FINKEY[m[1].toLowerCase()]; fins[finKey]=m[2]; matDone=true; return; }
+    if(/^(Drape|Drop|Seamless Drop) with\b/i.test(s)){ construction=s; if(/^Seamless/i.test(s))F.seamless=true; return; }
+    if(m=s.match(/^(\d+(?:\.\d+)?)\s*IN\.?\s*MC\s*SPACING\b/i)){ mcIn=m[1]; return; }
+    if(mat&&!matDone){ mat.push(s); return; }
+    if(finKey){ fins[finKey]+=" "+s; return; }
+    extras.push(s);
+  });
+  const matStr=mat?mat.join(" ").trim():"";
+  if(matStr){ F.fabric=matStr;
+    let m=matStr.match(/(\d+(?:\.\d+)?)\s*oz\b/i); if(m)F.weight=m[1]+" oz";
+    if(/\bIFR\b/.test(matStr))F.cert="IFR"; else if(/\bNFR\b/.test(matStr))F.cert="NFR"; else if(/\bFR\b/.test(matStr))F.cert="FR-treated";
+    const tail=matStr.replace(/,?\s*Nap\s+(Down|Up)\s*$/i,"");
+    m=tail.match(/\b(Black|White|Rouge|Red|Grey|Gray|Navy|Royal Blue|Blue|Green|Gold|Natural|Burgundy|Ivory|Cream|Silver|Beige|Chroma Key Green|Chroma Key Blue)\s*$/i);
+    if(m)F.color=m[1];
+  }
+  if(fins.top)F.topFin=fins.top.trim();
+  if(fins.bottom)F.botFin=fins.bottom.trim();
+  const sr=fins.sr.trim(), sl=fins.sl.trim();
+  if(sr&&sr===sl)F.sideFin=sr; else if(sr||sl)F.sideFin=[sr&&("SR: "+sr),sl&&("SL: "+sl)].filter(Boolean).join(" / ");
+  return {F:F,construction:construction,mcIn:mcIn,qh:qh,qw:qw,extras:extras};
+}
+/* ADCK0001 / track-kit item. Handles the template's glued "Model\n27310.00 Feet wide" case by
+   extracting the 3-digit model FIRST, then reading dims from the remainder. 170 Besteel is detected
+   from the kit's TR170xxx part numbers / 1700-channel / BESTEEL text, never guessed from the kit label. */
+function rbTrack(cur){
+  const all=[cur.label].concat(cur.body,cur.kit).join("\n");
+  let kitModel="", rest=all, m;
+  if(m=all.match(/Model\s*(\d{3})/i)){ kitModel=m[1]; rest=all.slice(0,m.index)+all.slice(m.index+m[0].length); }
+  const dm=rest.match(/(\d+(?:\.\d+)?)\s*Feet\s*wide(?:\s*x\s*(\d+(?:\.\d+)?)\s*Feet\s*high)?/i);
+  return {
+    label:((cur.label||"").replace(/\s*ADC Track Kit.*$/i,"").trim())||("Track kit L"+cur.line),
+    kitModel:kitModel,
+    w:dm?parseFloat(dm[1]):null, h:(dm&&dm[2])?parseFloat(dm[2]):null,
+    biPart:/Overlap-track/i.test(all), oneWay:/One-way-draw/i.test(all),
+    is170:/TR170\d/i.test(all)||/\b170\d\b/.test(all)||/BESTEEL/i.test(all),
+    extras:cur.body.filter(s=>!/Feet\s*wide|ADC Track Kit|Model\s*\d/i.test(s))
+  };
+}
+function rbParseQuote(pages){
+  if(!pages||!pages.length) throw new Error("empty PDF");
+  const items=[]; const freight=[]; let cur=null,inKit=false,ended=false,quoteTotal="",firstItemIdx=-1;
+  pages.forEach((pg,pi)=>{ pg.forEach((ln,li)=>{ const s=ln.text; if(!s)return; let m;
+    if(m=s.match(/QUOTE TOTAL:\s*\$([\d,]+\.\d{2})/i)){ quoteTotal="$"+m[1]; return; }
+    if(ended)return;
+    if(RBQ_NOISE.some(rx=>rx.test(s)))return;
+    if(/^\*\* Quote may not include|^Sales Tax is based/i.test(s)){ ended=true; cur=null; return; }
+    if(m=s.match(RBQ_ITEM)){ cur={line:+m[1],part:m[2],qty:m[3],unit:m[4],unitPrice:m[5],extPrice:m[6],label:"",body:[],kit:[]}; inKit=false; items.push(cur); if(firstItemIdx<0&&pi===0)firstItemIdx=li; return; }
+    if(!cur)return;
+    if(/Kit Components/i.test(s)){ inKit=true; return; }
+    if(m=s.match(/^Details:\s*(.*)$/i)){ cur.label=m[1].trim(); return; }
+    if(m=s.match(/^Freight for Lines?\s+(.*?)\s+\$([\d,]+\.\d{2})$/i)){ freight.push("Freight for lines "+m[1]+": "+rbMoney(m[2])); return; }
+    (inKit?cur.kit:cur.body).push(s);
+  }); });
+  if(!items.length) throw new Error("no quote line items found (Line/Part/Quantity table missing)");
+  const H=rbHeader(pages[0],firstItemIdx);
+  const qno=H.quote||"?";
+  // classify line items
+  const drapes=[],tracks=[],installLines=[],other=[];
+  items.forEach(it=>{
+    const isTrack=/^ADCK/i.test(it.part)||/ADC Track Kit|Track Kit/i.test([it.label].concat(it.body).join(" "));
+    if(isTrack){ const trk=rbTrack(it); trk.item=it; tracks.push(trk); return; }
+    if(/^DRAP/i.test(it.part)){ const d={item:it,type:rbType(it.label)||"other",parsed:rbDrape(it)}; drapes.push(d); return; }
+    if(/^INST/i.test(it.part)){ installLines.push(it); return; }
+    other.push(it);
+  });
+  // token pairing: track label ("MAIN & MID-STAGE TRACK") -> tokens -> best drape per drape.
+  // A token that itself NAMES the drape's type (leg->leg) outranks a bare substring hit, so
+  // "Main Leg" pairs with the LEG track, not the main's.
+  tracks.forEach(trk=>{ trk.tokens=trk.label.replace(/\btracks?\b/gi," ").split(/[&\/,+]/).map(x=>rbNorm(x).trim()).filter(x=>x.length>2); });
+  drapes.forEach(d=>{
+    const nl=rbNorm(d.item.label); let best=null,bs=0;
+    tracks.forEach(trk=>trk.tokens.forEach(tok=>{
+      if(!tok||nl.indexOf(tok)<0)return;
+      let sc=1+tok.length/100;
+      const tt=rbType(tok); if(tt&&tt===d.type)sc+=4;
+      if(sc>bs){bs=sc;best=trk;}
+    }));
+    d.trk=best;
+  });
+  // build treatments (quote order preserved via the line number)
+  const built=[];
+  const mkTrack=()=>({model:"",overlap:"",drop:"",lead:"",mount:"suspended"});
+  drapes.forEach(d=>{
+    const it=d.item,P=d.parsed;
+    const qty=String(parseFloat(it.qty)||1);
+    const eng=["[quote "+qno+" L"+it.line+"] "+qty+" @ "+rbMoney(it.unitPrice)+" ea (ext "+rbMoney(it.extPrice)+")"];
+    if(P.qh||P.qw)eng.push("quoted panel: "+(P.qw||"?")+" w x "+(P.qh||"?")+" h"+(qty!=="1"?" each":""));
+    if(P.construction)eng.push(P.construction);
+    if(P.mcIn)eng.push(P.mcIn+"\" MC spacing on the quote (used as total center overlap - verify)");
+    P.extras.forEach(x=>eng.push(x));
+    const t={id:uid(),label:it.label,type:d.type,basis:"new",qty:qty,fields:P.F,operation:"",opFields:{},track:mkTrack(),conform:cfmDefault(),engNotes:""};
+    if(d.type==="other")t.fields.desc="[unrecognized soft-good label - set the right type] "+it.label;
+    if(P.mcIn)t.track.overlap=P.mcIn+"\"";
+    const trk=d.trk;
+    if(trk){
+      const row=trk.is170?trackById("adc170"):null;
+      const modelStr=row?row.label:(trk.kitModel?("ADC Track Kit Model "+trk.kitModel):"");
+      if(typeFamily(t.type)==="drawn"){
+        if(trk.w)t.fields.w=fmtLen(trk.w);
+        if(trk.h)t.fields.h=fmtLen(trk.h);
+        if(trk.biPart)t.fields.draw="Bi-part (center)";
+        if(modelStr)t.track.model=modelStr;
+        if(!t.track.overlap&&row&&row.overlap)t.track.overlap=row.overlap;
+        if(row)t.track.drop=dropForMount(row,"suspended");
+        eng.push("opening W/H set from track \""+trk.label+"\" ("+(trk.w?fmtLen(trk.w):"?")+" w"+(trk.h?" x "+fmtLen(trk.h)+" h":"")+"): check the derived panel vs the quoted panel width");
+        if(trk.oneWay)eng.push("track is one-way draw (side not on the quote - set Draw style)");
+      }else{
+        eng.push("rides track \""+trk.label+"\""+(modelStr?" ("+modelStr+")":"")+(trk.oneWay?", one-way draw":"")+(trk.biPart?", bi-part":""));
+        if(modelStr&&!t.track.model)t.track.model=modelStr;
+        if(trk.is170){ const row2=trackById("adc170"); if(row2){ if(!t.track.overlap)t.track.overlap=row2.overlap||""; t.track.drop=dropForMount(row2,"suspended"); } }
+      }
+    }
+    d.t=t; d.eng=eng;
+    built.push({line:it.line,t:t});
+  });
+  tracks.forEach(trk=>{
+    const it=trk.item; const qty=String(parseFloat(it.qty)||1);
+    const row=trk.is170?trackById("adc170"):null;
+    const eng=["[quote "+qno+" L"+it.line+"] "+qty+" @ "+rbMoney(it.unitPrice)+" ea (ext "+rbMoney(it.extPrice)+")"];
+    if(trk.is170)eng.push("kit components are 170 Besteel (TR170xx / 1700 channel)"+(trk.kitModel?" though the kit is labeled Model "+trk.kitModel:""));
+    const notes=[trk.kitModel?("ADC Track Kit Model "+trk.kitModel):"",
+      trk.w?(fmtLen(trk.w)+" wide"+(trk.h?" x "+fmtLen(trk.h)+" high":"")+(qty!=="1"?" each":"")):"",
+      trk.biPart?"bi-part (overlap track)":"", trk.oneWay?"one-way draw":""].concat(trk.extras).filter(Boolean).join(" · ");
+    built.push({line:it.line,t:{id:uid(),label:trk.label,type:"trackonly",basis:"new",qty:qty,
+      fields:{trackLen:trk.w?fmtLen(trk.w):"",mount:"",notes:notes},
+      operation:"",opFields:{},
+      track:{model:row?row.label:"",overlap:(row&&row.overlap)||"",drop:row?dropForMount(row,"suspended"):"",lead:"",mount:"suspended"},
+      conform:cfmDefault(),engNotes:eng.join(" · ")}});
+  });
+  // unmapped line items: RDRU (roll drum) attaches to the roll-drop treatment; the rest -> generalNotes
+  const unmapped=[];
+  other.forEach(it=>{
+    const lbl=[it.label].concat(it.body).join(" ").replace(/\s+/g," ").trim();
+    const desc="L"+it.line+" "+it.part+" \""+lbl+"\" "+String(parseFloat(it.qty)||1)+" @ "+rbMoney(it.unitPrice)+" (ext "+rbMoney(it.extPrice)+")";
+    if(/^RDRU/i.test(it.part)){
+      const host=drapes.filter(d=>d.type==="drop"&&d.eng).sort((a,b)=>(/ roll/.test(rbNorm(b.item.label))?1:0)-(/ roll/.test(rbNorm(a.item.label))?1:0))[0];
+      if(host){ host.eng.push("roll drum on the quote: "+desc); return; }
+    }
+    unmapped.push(desc);
+  });
+  drapes.forEach(d=>{ if(d.t)d.t.engNotes=d.eng.join(" · "); });
+  built.sort((a,b)=>a.line-b.line);
+  const treatments=built.map(b=>b.t);
+  const gn=[];
+  gn.push("Imported from Rose Brand quote PDF "+qno+(H.date?" dated "+H.date:"")+(quoteTotal?" · QUOTE TOTAL "+quoteTotal:"")+" · verify every line on site.");
+  if(installLines.length)gn.push("Install on the quote: "+installLines.map(it=>"INST0001 L"+it.line+" \""+[it.label].concat(it.body).join(" ").replace(/\s+/g," ").trim()+"\" "+String(parseFloat(it.qty)||1)+" @ "+rbMoney(it.unitPrice)).join(" · "));
+  freight.forEach(f=>gn.push(f));
+  if(unmapped.length)gn.push("Quote lines not auto-mapped (fold into hardware bundles / labor as needed):\n"+unmapped.map(u=>"  - "+u).join("\n"));
+  const survey={ v:SCHEMA_V,
+    meta:{ venue:H.customerName, address:H.address, date:H.date, surveyor:"", contactName:H.contactName, contactTitle:"",
+      contactEmail:H.contactEmail, contactCell:H.contactCell, quote:H.quote, so:"", customerId:H.customerId,
+      customerName:H.customerName, salesperson:H.salesperson,
+      projName:((H.customerName?H.customerName+" ":"")+(H.quote?"Q"+H.quote:"quote import")).trim(),
+      customerType:"", pw:false },
+    job:"new", venueFrame:"", treatments:treatments,
+    install:{ responsibility:installLines.length?"rb":"", loadin:{}, labor:laborDefault() },
+    generalNotes:gn.join("\n\n") };
+  return {survey:survey, counts:{treatments:treatments.length, unmapped:unmapped.length}};
+}
+window._rbParseQuote=rbParseQuote;   // exposed for headless verification
+async function handleQuotePdf(file){
+  if(!file)return;
+  if(!/\.pdf$/i.test(file.name||"")&&file.type!=="application/pdf"){ pdfStatus("That is not a PDF file.",false); return; }
+  const w=document.getElementById("pdfwrap"); if(w)w.open=true;
+  pdfStatus("Reading "+(file.name||"quote")+" ...",true);
+  try{
+    const pages=await pdfPageLines(file);
+    const r=rbParseQuote(pages);
+    importSurveyObject(r.survey,pdfStatus);   // sets its own success/failure status via pdfStatus
+  }catch(e){ pdfStatus("PDF import failed: "+((e&&e.message)||e),false); }
+}
+(function(){
+  const dz=document.getElementById("pdfdrop"), fi=document.getElementById("pdffile");
+  if(!dz||!fi)return;
+  dz.onclick=()=>fi.click();
+  fi.onchange=()=>{ const f=fi.files&&fi.files[0]; if(f)handleQuotePdf(f); fi.value=""; };
+  ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.borderColor="var(--accent)"; }));
+  ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.borderColor=""; }));
+  dz.addEventListener("drop",e=>{ const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f)handleQuotePdf(f); });
 })();
 
 /* ================= SKETCH PAD v1 (offline draw + Stage-1 snap + dims) ================= */
