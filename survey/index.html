@@ -170,7 +170,8 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=4;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=5;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
   let v=d.v||1;
@@ -193,6 +194,19 @@ function migrateSurvey(d){
     if(t.type==="masking"&&t.fields.role===undefined)t.fields.role="";
   });
   d.meta=d.meta||{}; if(d.meta.customerType===undefined)d.meta.customerType=""; if(d.meta.pw===undefined)d.meta.pw=false; v=4; }
+  // v5 (Pass 2a): the arch/shaped-top capture moves from venue level INTO the treatment (t.conform on drawn/valance/masking).
+  // Real venue-level prosc data is archived (d.legacyProsc + a readable generalNotes line), then d.prosc is deleted.
+  if(v<5){
+    if(d.prosc&&(d.prosc.present||(Array.isArray(d.prosc.stations)&&d.prosc.stations.length))){
+      d.legacyProsc=d.legacyProsc||d.prosc;
+      const p=d.prosc, stTxt=(p.stations||[]).map(s=>(s.pos||"?")+"'="+(s.h||"?")).join(", ");
+      const line="[migrated proscenium/arch] opening "+(p.openW||"?")+" x "+(p.openH||"?")+(stTxt?"; stations "+stTxt:"")+" (was a venue-level capture; re-enter under the specific treatment's Shaped-top toggle if still needed)";
+      if(typeof d.generalNotes!=="string")d.generalNotes=(d.generalNotes==null)?"":String(d.generalNotes);
+      if(!d.generalNotes.includes("[migrated proscenium/arch]"))d.generalNotes=[d.generalNotes,line].filter(Boolean).join("\n");
+    }
+    delete d.prosc;
+    (d.treatments||[]).forEach(t=>{ if(!t.conform||typeof t.conform!=="object"||Array.isArray(t.conform))t.conform=cfmDefault(); });
+    v=5; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -204,7 +218,6 @@ function fresh(){
     meta:{venue:"",address:"",date:"",surveyor:"",contactName:"",contactTitle:"",contactEmail:"",contactCell:"",quote:"",so:"",customerId:"",customerName:"",salesperson:"",projName:"",customerType:"",pw:false},
     job:"",
     venueFrame:"",
-    prosc:{present:false, openW:"", openH:"", stations:[]},
     treatments:[],
     install:{responsibility:"", loadin:{doorH:"",doorW:"",path:"",obstructions:"",freight:false,freightH:"",freightW:"",freightL:"",access:"",accessBy:"",union:false,parking:false,multiLevel:false,notes:""}},
     generalNotes:""
@@ -585,6 +598,7 @@ function treatmentCard(t,i){
       ${fieldsHtml}
       ${(fam==="drawn"||fam==="trackonly")?trackBlock(t):""}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
+      ${CONFORM_FAMS.has(fam)?conformBlock(t):""}
       ${opHtml}
       ${t.type?`<label class="f"><span>&#9888; Engineering / field notes <span class="sub">(carries to handoff)</span></span><textarea data-engnotes="${t.id}" placeholder="anything unresolved / TBD / needs engineering (pipe attach, load check, non-standard finish)">${esc(t.engNotes||"")}</textarea></label>`:""}
     </div>
@@ -622,8 +636,6 @@ function render(){
     <div class="grid2">${miniField("contactEmail","Contact email")}${miniField("contactCell","Contact cell")}</div>
     <label class="f" style="margin-top:14px"><span>Venue frame</span>
       <select id="frame">`+FRAMES.map(f=>`<option value="${f[0]}" ${S.venueFrame===f[0]?"selected":""}>${f[1]}</option>`).join("")+`</select></label>
-    <div class="toggle"><span>Proscenium arch present?</span><label class="sw"><input type="checkbox" id="proscTog" ${S.prosc.present?"checked":""}><span class="track"></span></label></div>
-    ${S.prosc.present?proscBlock():""}
   </div></div>`;
 
   // SECTION 2: Treatments
@@ -659,42 +671,48 @@ function safeRender(){ const a=document.activeElement; if(a&&a.closest&&a.closes
 function miniField(k,label){
   return `<label class="f"><span>${label}</span><input type="text" data-meta="${k}" value="${esc(S.meta[k]||"")}"></label>`;
 }
-function proscBlock(){
-  const p=S.prosc; p.stations=p.stations||[];
-  const rows=p.stations.length? p.stations.map((st,i)=>`
-    <div class="stnrow">
-      <input type="text" data-stn="pos" data-si="${i}" inputmode="decimal" placeholder="pos ft (0,5,10…)" value="${esc(st.pos||"")}">
-      <input type="text" data-stn="h" data-si="${i}" placeholder="floor → track ht" value="${esc(st.h||"")}">
-      <button class="stnx" data-stnx="${i}">&times;</button>
-    </div>`).join("") : `<div class="empty">No stations yet — add one per measured point across the opening.</div>`;
-  return `<div class="reveal">
-    <div class="hint" style="padding:0 0 4px">Floor-to-track height at stations across the opening (measure L&rarr;R). The app derives the track angle from these.</div>
-    <div class="grid2">
-      <label class="f"><span>Opening width <span class="sub">(ref)</span></span><input type="text" data-prosc="openW" value="${esc(p.openW||"")}"></label>
-      <label class="f"><span>Opening height <span class="sub">(ref, center)</span></span><input type="text" data-prosc="openH" value="${esc(p.openH||"")}"></label>
-    </div>
-    <div class="stnhdr"><span>Station pos</span><span>Floor &rarr; track height</span><span></span></div>
-    ${rows}
-    <button class="addstn" id="addStn">+ Add station</button>
-    <div class="derived" id="proscDerivedBox">${proscDerivedInner()}</div>
-  </div>`;
+/* ---- per-treatment shaped/arched-top capture (Pass 2a; relocated from the old venue-level prosc block) ---- */
+const CONFORM_FAMS=new Set(["drawn","valance","masking"]);   // only tops that must conform to an arch / raked wall
+function conformBlock(t){
+  const c=t.conform||(t.conform=cfmDefault()); c.stations=c.stations||[];
+  let inner="";
+  if(c.on){
+    const rows=c.stations.length? c.stations.map((st,i)=>`
+      <div class="stnrow">
+        <input type="text" data-cfm="pos" data-ct="${t.id}" data-ci="${i}" inputmode="decimal" placeholder="pos ft (0,5,10…)" value="${esc(st.pos||"")}">
+        <input type="text" data-cfm="h" data-ct="${t.id}" data-ci="${i}" placeholder="floor → top ht" value="${esc(st.h||"")}">
+        <button class="stnx" data-cfmdel="${t.id}:${i}">&times;</button>
+      </div>`).join("") : `<div class="empty">No stations yet — add one per measured point across the opening.</div>`;
+    inner=`<div class="reveal">
+      <div class="hint" style="padding:0 0 4px">Floor-to-top height at stations across the opening (measure L&rarr;R). The app derives the top line from these.</div>
+      <div class="grid2">
+        <label class="f"><span>Opening width <span class="sub">(ref)</span></span><input type="text" data-cfmref="openW" data-ct="${t.id}" value="${esc(c.openW||"")}"></label>
+        <label class="f"><span>Opening height <span class="sub">(ref, center)</span></span><input type="text" data-cfmref="openH" data-ct="${t.id}" value="${esc(c.openH||"")}"></label>
+      </div>
+      <div class="stnhdr"><span>Station pos</span><span>Floor &rarr; top height</span><span></span></div>
+      ${rows}
+      <button class="addstn" data-cfmadd="${t.id}">+ Add station</button>
+      <div class="derived" id="conform_${t.id}">${conformDerivedInner(t)}</div>
+    </div>`;
+  }
+  return `<div class="toggle"><span>Shaped / arched top? <span class="sub">(top conforms to an arch / raked wall)</span></span><label class="sw"><input type="checkbox" data-cfmtog="${t.id}" ${c.on?"checked":""}><span class="track"></span></label></div>${inner}`;
 }
-function proscStations(){ return (S.prosc.stations||[]).map(s=>({pos:parseFeet(s.pos),h:parseFeet(s.h)})).filter(s=>s.pos!==null&&s.h!==null).sort((a,b)=>a.pos-b.pos); }
-function proscDerivedInner(){
-  const sts=proscStations();
-  if(sts.length<2) return "Add 2+ stations with position + height to auto-compute the track angle.";
+function conformStations(t){ return (((t.conform||{}).stations)||[]).map(s=>({pos:parseFeet(s.pos),h:parseFeet(s.h)})).filter(s=>s.pos!==null&&s.h!==null).sort((a,b)=>a.pos-b.pos); }
+function conformDerivedInner(t){
+  const sts=conformStations(t);
+  if(sts.length<2) return "Add 2+ stations with position + height to auto-compute the top line.";
   let segs=[]; for(let i=1;i<sts.length;i++){ const dp=sts[i].pos-sts[i-1].pos, dh=sts[i].h-sts[i-1].h; if(dp<=0) continue; const ang=Math.atan2(dh,dp)*180/Math.PI; segs.push(`${sts[i-1].pos}&rarr;${sts[i].pos}′: ${dh>=0?"+":""}${(dh*12).toFixed(1)}″ = <b>${ang.toFixed(1)}°</b>`); }
   const f=sts[0],o=sts[sts.length-1]; const overall=Math.atan2(o.h-f.h,o.pos-f.pos)*180/Math.PI; const level=Math.abs(overall)<0.3;
-  return `<b>Derived (d):</b> ${level?"track reads <b>LEVEL</b> ":"overall <b>"+overall.toFixed(1)+"°</b> "}across ${(o.pos-f.pos).toFixed(0)}′ (${((o.h-f.h)*12).toFixed(1)}″ rise)`+(segs.length?`<br>segments — ${segs.join(" · ")}`:"");
+  return `<b>Derived (d):</b> ${level?"top reads <b>LEVEL</b> ":"overall <b>"+overall.toFixed(1)+"°</b> "}across ${(o.pos-f.pos).toFixed(0)}′ (${((o.h-f.h)*12).toFixed(1)}″ rise)`+(segs.length?`<br>segments — ${segs.join(" · ")}`:"");
 }
-function proscDerivedText(){
-  const sts=proscStations();
-  if(sts.length<2) return "(add 2+ stations for angle)";
+function conformDerivedText(t){
+  const sts=conformStations(t);
+  if(sts.length<2) return "(add 2+ stations for top line)";
   const f=sts[0],o=sts[sts.length-1]; const overall=Math.atan2(o.h-f.h,o.pos-f.pos)*180/Math.PI;
   let segs=[]; for(let i=1;i<sts.length;i++){const dp=sts[i].pos-sts[i-1].pos,dh=sts[i].h-sts[i-1].h; if(dp<=0)continue; const a=Math.atan2(dh,dp)*180/Math.PI; segs.push(`${sts[i-1].pos}->${sts[i].pos}':${a>=0?"+":""}${a.toFixed(1)}deg`);}
-  return `(d) overall ${overall.toFixed(1)}deg across ${(o.pos-f.pos).toFixed(0)}' · segs ${segs.join(", ")}`;
+  return `(d) overall ${overall.toFixed(1)}deg / ${((o.h-f.h)*12).toFixed(1)}in rise across ${(o.pos-f.pos).toFixed(0)}' · segs ${segs.join(", ")}`;
 }
-function updateDerived(){ const d=document.getElementById("proscDerivedBox"); if(d) d.innerHTML=proscDerivedInner(); }
+function refreshConform(t){ const d=document.getElementById("conform_"+t.id); if(d) d.innerHTML=conformDerivedInner(t); }
 function loadinBlock(){
   const L=S.install.loadin;
   const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-loadin="${k}" value="${esc(L[k]||"")}"></label>`;
@@ -727,13 +745,14 @@ function bind(){
   // customer type -> prevailing-wage reminder (select-driven visibility; re-render is fine, no text input involved)
   const ct=document.getElementById("custtype"); if(ct)ct.onchange=()=>{S.meta.customerType=ct.value; if(!PW_TYPES.has(ct.value))S.meta.pw=false; save(); render();};
   const pw=document.getElementById("pwchk"); if(pw)pw.onchange=()=>{S.meta.pw=pw.checked;save();};
-  const pt=document.getElementById("proscTog"); if(pt)pt.onchange=()=>{S.prosc.present=pt.checked;save();render();};
-  app.querySelectorAll("[data-prosc]").forEach(i=>i.oninput=()=>{S.prosc[i.dataset.prosc]=i.value;save();});
-  const astn=document.getElementById("addStn"); if(astn)astn.onclick=()=>{S.prosc.stations=S.prosc.stations||[]; const last=S.prosc.stations[S.prosc.stations.length-1]; const lp=last?parseFeet(last.pos):null; const np=(S.prosc.stations.length===0)?"0":(lp!=null?String(lp+5):""); S.prosc.stations.push({pos:np,h:""});save();render();};
-  app.querySelectorAll("[data-stnx]").forEach(b=>b.onclick=()=>{S.prosc.stations.splice(+b.dataset.stnx,1);save();render();});
-  app.querySelectorAll("[data-stn]").forEach(inp=>inp.oninput=()=>{S.prosc.stations[+inp.dataset.si][inp.dataset.stn]=inp.value;save();updateDerived();});
+  // per-treatment shaped/arched-top capture (conform). Station text inputs patch ONLY the conform_<id> box - never a full render (iOS keyboard focus).
+  app.querySelectorAll("[data-cfmtog]").forEach(i=>i.onchange=()=>{const t=T(i.dataset.cfmtog); if(!t)return; if(!t.conform)t.conform=cfmDefault(); t.conform.on=i.checked; save(); render();});
+  app.querySelectorAll("[data-cfmref]").forEach(i=>i.oninput=()=>{const t=T(i.dataset.ct); if(!t)return; if(!t.conform)t.conform=cfmDefault(); t.conform[i.dataset.cfmref]=i.value; save();});
+  app.querySelectorAll("[data-cfmadd]").forEach(b=>b.onclick=()=>{const t=T(b.dataset.cfmadd); if(!t)return; if(!t.conform)t.conform=cfmDefault(); const c=t.conform; c.stations=c.stations||[]; const last=c.stations[c.stations.length-1]; const lp=last?parseFeet(last.pos):null; const np=(c.stations.length===0)?"0":(lp!=null?String(lp+5):""); c.stations.push({pos:np,h:""}); save(); render();});
+  app.querySelectorAll("[data-cfmdel]").forEach(b=>b.onclick=()=>{const ix=b.dataset.cfmdel.lastIndexOf(":"); const t=T(b.dataset.cfmdel.slice(0,ix)); if(!t||!t.conform)return; t.conform.stations.splice(+b.dataset.cfmdel.slice(ix+1),1); save(); render();});
+  app.querySelectorAll("[data-cfm]").forEach(inp=>inp.oninput=()=>{const t=T(inp.dataset.ct); if(!t||!t.conform)return; t.conform.stations[+inp.dataset.ci][inp.dataset.cfm]=inp.value; save(); refreshConform(t);});
   // treatments
-  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},track:{model:"",overlap:"",drop:"",lead:""},engNotes:""});save();render();};
+  const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},track:{model:"",overlap:"",drop:"",lead:""},conform:cfmDefault(),engNotes:""});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
@@ -811,6 +830,8 @@ function ftxt(t){
   if(fam==="trackonly"){ if(F.trackLen)parts.push("track length "+F.trackLen); if(F.notes)parts.push(F.notes); }
   if(fam==="other"&&F.desc)parts.push(F.desc.replace(/\n/g," / "));
   if(fam==="pipedrape")parts.push([F.panelW&&("panel "+F.panelW+"×"+(F.panelH||"")),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType)].filter(Boolean).join(", "));
+  if(t.conform&&t.conform.on&&(t.conform.stations||[]).length){ const c=t.conform;
+    parts.push("shaped top: opening "+(c.openW||"?")+" × "+(c.openH||"?")+", stations "+c.stations.map(s=>"@"+(s.pos||"?")+"'="+(s.h||"?")).join(", ")+" · "+conformDerivedText(t)); }
   if(t.operation){
     const opLabel=(OPS.find(o=>o[0]===t.operation)||[])[1]||t.operation;
     const opBits=[opLabel];
@@ -860,17 +881,13 @@ function fullSummary(){
   const m=S.meta;
   let o=kineticSheet()+`\n${"=".repeat(46)}\nCONTACT\n`;
   o+=`  ${m.contactName||"—"}${m.contactTitle?", "+m.contactTitle:""}\n  ${m.contactEmail||""}  ${m.contactCell||""}\n`;
-  if(S.prosc.present){
-    const p=S.prosc; const sts=(p.stations||[]);
-    o+=`${"=".repeat(46)}\nPROSCENIUM / TRACK LINE\n  opening ${p.openW||"?"} W × ${p.openH||"?"} H (ref)\n  floor→track heights (L→R):\n`;
-    if(sts.length){ sts.forEach(s=>{ o+=`    @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`  ${proscDerivedText()}\n`; }
-    else o+=`    (no stations recorded)\n`;
-  }
   o+=`${"=".repeat(46)}\nTREATMENT DETAIL\n`;
   S.treatments.forEach((t,i)=>{
     o+=`\n#${i+1} ${typeLabel(t.type)}${t.label?" — "+t.label:""}\n`;
     const F=t.fields||{};
     Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
+    if(t.conform&&t.conform.on){ const c=t.conform; o+=`   shaped top (conforms): opening ${c.openW||"?"} W × ${c.openH||"?"} H (ref)\n`; const sts=c.stations||[];
+      if(sts.length){ sts.forEach(s=>{ o+=`     @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`     ${conformDerivedText(t)}\n`; } else o+=`     (no stations recorded)\n`; }
     if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
     if(t.engNotes&&t.engNotes.trim())o+=`   eng notes: ${t.engNotes.trim()}\n`;
   });
@@ -944,12 +961,10 @@ function importScope(){
     if(!imp.meta||typeof imp.meta!=="object"||Array.isArray(imp.meta))imp.meta={};
     if(!imp.meta.projName||!(""+imp.meta.projName).trim())imp.meta.projName=(imp.meta.venue&&(""+imp.meta.venue).trim())||"Imported scope";
     const mig=migrateSurvey(imp)||imp;                             // any version (incl. missing v) lands at SCHEMA_V
-    // structural fill from fresh(): render() assumes meta/prosc/install/loadin exist, so a sparse import must never crash it
+    // structural fill from fresh(): render() assumes meta/install/loadin exist, so a sparse import must never crash it
     const out=Object.assign(fresh(),mig);
     out.meta=numToStr(Object.assign(fresh().meta,(mig.meta&&typeof mig.meta==="object")?mig.meta:{}));
-    out.prosc=numToStr(Object.assign({present:false,openW:"",openH:"",stations:[]},(mig.prosc&&typeof mig.prosc==="object"&&!Array.isArray(mig.prosc))?mig.prosc:{}));
-    if(!Array.isArray(out.prosc.stations))out.prosc.stations=[];
-    out.prosc.stations=out.prosc.stations.filter(s=>s&&typeof s==="object").map(s=>numToStr(s));
+    delete out.prosc;   // v5: venue-level prosc no longer exists (migrateSurvey archived real data; this kills any stray key from a claims-v5 import)
     const mIn=(mig.install&&typeof mig.install==="object"&&!Array.isArray(mig.install))?mig.install:{};
     out.install=Object.assign(fresh().install,mIn);
     out.install.loadin=numToStr(Object.assign(fresh().install.loadin,(mIn.loadin&&typeof mIn.loadin==="object")?mIn.loadin:{}));
@@ -961,6 +976,11 @@ function importScope(){
       t.opFields=numToStr((t.opFields&&typeof t.opFields==="object"&&!Array.isArray(t.opFields))?t.opFields:{});
       t.track=numToStr((t.track&&typeof t.track==="object"&&!Array.isArray(t.track))?t.track:{});
       ["model","overlap","drop","lead"].forEach(k=>{ if(typeof t.track[k]!=="string")t.track[k]=(t.track[k]==null)?"":String(t.track[k]); });
+      t.conform=(t.conform&&typeof t.conform==="object"&&!Array.isArray(t.conform))?t.conform:cfmDefault();
+      t.conform.on=!!t.conform.on;
+      ["openW","openH"].forEach(k=>{ if(typeof t.conform[k]!=="string")t.conform[k]=(t.conform[k]==null)?"":String(t.conform[k]); });
+      if(!Array.isArray(t.conform.stations))t.conform.stations=[];
+      t.conform.stations=t.conform.stations.filter(s=>s&&typeof s==="object").map(s=>numToStr(s));
       if(typeof t.type!=="string")t.type="";
       if(typeof t.label!=="string")t.label=(t.label==null)?"":String(t.label);
       if(typeof t.basis!=="string")t.basis="";
