@@ -56,6 +56,14 @@
   .stnrow input{padding:10px;}
   .stnrow .stnx{background:none;border:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:2px;}
   .addstn{width:100%;margin-top:10px;font-size:13.5px;font-weight:700;color:var(--rb);background:#fff;border:1.5px dashed var(--rb);border-radius:9px;padding:10px;cursor:pointer;}
+  .hwrow{border:1px solid var(--line);border-radius:9px;padding:9px;margin-top:8px;background:#fbfcfd;}
+  .hwrow .r1{display:grid;grid-template-columns:1fr 34px;gap:8px;align-items:center;}
+  .hwrow .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px;}
+  .hwrow .r3{display:grid;grid-template-columns:.7fr .7fr 1fr 1fr;gap:8px;margin-top:7px;align-items:center;}
+  .hwrow input{padding:9px 10px;font-size:15px;}
+  .hwline{font-size:13.5px;font-weight:700;color:#2a2e33;text-align:right;white-space:nowrap;}
+  .hwbtns{display:flex;gap:8px;margin-top:10px;}
+  .hwbtns button{flex:1;font-size:13px;font-weight:700;padding:10px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:#3a3f45;cursor:pointer;}
   .derived{margin-top:11px;font-size:12px;color:#7a8088;font-style:italic;background:#f7f9fb;border:1px dashed var(--line);border-radius:9px;padding:9px 11px;line-height:1.55;}
   .derived b{font-style:normal;color:#2a2e33;}
   .treat{border:1.5px solid var(--line);border-radius:11px;margin-top:12px;overflow:hidden;background:#fff;}
@@ -170,8 +178,19 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=7;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=8;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
+function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
+// Money = INTEGER CENTS everywhere. parseMoney treats strings/numbers as DOLLARS ("$12.50" -> 1250); fmtMoney(1250) -> "$12.50".
+// (function declarations: hoisted so the boot-time migration sweep can use them)
+function parseMoney(s){ if(s==null)return null; if(typeof s==="number")return isFinite(s)?Math.round(s*100):null;
+  s=(""+s).replace(/[$,\s]/g,""); if(!s)return null;
+  const m=s.match(/^(\d*)(?:\.(\d{0,2})\d*)?$/); if(!m||(m[1]===""&&!m[2]))return null;
+  return (+(m[1]||0))*100+(+(((m[2]||"")+"00").slice(0,2))); }
+function fmtMoney(c){ if(c==null||!isFinite(c))return ""; c=Math.round(c); const neg=c<0?"-":""; c=Math.abs(c);
+  return neg+"$"+Math.floor(c/100).toLocaleString("en-US")+"."+String(c%100).padStart(2,"0"); }
+function centsDec(c){ if(c==null||!isFinite(c))return ""; c=Math.round(c); const neg=c<0?"-":""; c=Math.abs(c);   // plain decimal for CSV/xlsx (Excel-friendly)
+  return neg+Math.floor(c/100)+"."+String(c%100).padStart(2,"0"); }
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
   let v=d.v||1;
@@ -219,6 +238,22 @@ function migrateSurvey(d){
   // v7 (Pass A7): Venetian / Austrian treatment type added (new vocabulary only - no reshaping of existing data;
   // the bump marks that surveys saved at v7 may contain type "venetian" with its lift-line field family).
   if(v<7){ v=7; }
+  // v8 (Pass 3): hardware type becomes a multi-row material BUNDLE at t.hw (TOP level - survives type/op changes,
+  // same pattern as t.track/t.conform). Existing single-item hardware treatments fold into one row: item from desc,
+  // qty from the treatment qty (then reset to "1"), money string -> INTEGER CENTS, notes -> bundle notes; old keys retired.
+  if(v<8){ (d.treatments||[]).forEach(t=>{
+    if(t.type!=="hardware")return;
+    if(!t.hw||typeof t.hw!=="object"||Array.isArray(t.hw))t.hw=hwDefault();
+    if(!Array.isArray(t.hw.rows))t.hw.rows=[];
+    if(typeof t.hw.notes!=="string")t.hw.notes="";
+    t.hw.expend=!!t.hw.expend;
+    const F=t.fields||{};
+    if(F.desc||F.partNo||F.source||F.unitPrice){
+      t.hw.rows.push({item:F.desc||"",source:F.source||"",partNo:F.partNo||"",qty:(t.qty!=null&&(""+t.qty).trim()!=="")?String(t.qty):"1",unit:F.unit||"ea",unitPrice:parseMoney(F.unitPrice)});
+      t.qty="1"; }
+    if(F.notes)t.hw.notes=[t.hw.notes,F.notes].filter(Boolean).join("\n");
+    ["desc","unit","source","partNo","unitPrice","notes"].forEach(k=>delete F[k]);
+  }); v=8; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -501,15 +536,10 @@ function otherFields(){return [
   ["w","Width","text",null,""],
   ["desc","Description","textarea",null,""]
 ];}
-function hardwareFields(){return [
-  ["desc","Item / description","text",null,"e.g. 20' thick-wall alum pipe"],
-  ["unit","Unit","datalist",["ea","ft","lb","set","roll","pair"],"ea"],
-  ["source","Source / vendor","datalist",["McMaster-Carr","IMS (metal supply)","Local hardware","Rose Brand catalog","Other"],"where priced from"],
-  ["partNo","Part # / spec","text",null,"catalog # or spec"],
-  ["unitPrice","Unit price","text",null,"$ (optional)"],
-  ["notes","Notes / attachment","textarea",null,"how it mounts / attaches"]
-];}
-const FAMILY_FIELDS={drawn:drawnFields,venetian:venetianFields,valance:valanceFields,flat:flatFields,masking:maskingFields,trackonly:trackonlyFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
+// hardware family renders its own multi-row bundle block (hwBlock, Pass 3) - no generic field family
+const HW_UNITS=["ea","ft","lb","set","roll","pair","box"];
+const HW_SOURCES=["McMaster-Carr","IMS (metal supply)","Local hardware","Rose Brand catalog","Other"];
+const FAMILY_FIELDS={drawn:drawnFields,venetian:venetianFields,valance:valanceFields,flat:flatFields,masking:maskingFields,trackonly:trackonlyFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,other:otherFields};
 const MOVABLE=new Set(["drawn","valance","flat","masking","venetian"]); // can have an operation
 
 function opFields(op){
@@ -661,9 +691,10 @@ function treatmentCard(t,i){
         <label class="f"><span>Type</span><select data-type="${t.id}">`+TYPES.map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
         <label class="f"><span>Label / location <span class="sub">(optional)</span></span><input type="text" data-label="${t.id}" value="${esc(t.label||"")}"></label>
       </div>
-      ${t.type?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option><option value="existing" ${t.basis==="existing"?"selected":""}>Existing track (verified) - 1:1 replacement</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
-      ${t.type?`<span class="fam">${fam==="trackonly"?"track hardware · ADK0001":fam+" goods"}</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
+      ${t.type&&fam!=="hardware"?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option><option value="existing" ${t.basis==="existing"?"selected":""}>Existing track (verified) - 1:1 replacement</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
+      ${t.type?`<span class="fam">${fam==="trackonly"?"track hardware · ADK0001":fam==="hardware"?"materials bundle · INHW0001":fam+" goods"}</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
+      ${fam==="hardware"?hwBlock(t):""}
       ${(fam==="drawn"||fam==="trackonly")?trackBlock(t):""}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
       ${CONFORM_FAMS.has(fam)?conformBlock(t):""}
@@ -781,6 +812,91 @@ function conformDerivedText(t){
   return `(d) overall ${overall.toFixed(1)}deg / ${((o.h-f.h)*12).toFixed(1)}in rise across ${(o.pos-f.pos).toFixed(0)}' · segs ${segs.join(", ")}`;
 }
 function refreshConform(t){ const d=document.getElementById("conform_"+t.id); if(d) d.innerHTML=conformDerivedInner(t); }
+/* ---- hardware materials bundle (Pass 3): repeatable rows + integer-cents rollup ---- */
+function hwCalc(t){ const hw=t.hw||hwDefault(); let sub=0;
+  const lines=(hw.rows||[]).map(r=>{ const q=parseFloat(r.qty);
+    const ok=isFinite(q)&&q>0&&typeof r.unitPrice==="number"&&isFinite(r.unitPrice);
+    const lineC=ok?Math.round(q*r.unitPrice):null; if(lineC!=null)sub+=lineC; return lineC; });
+  const expC=hw.expend?Math.round(sub/10):0;   // +10% expendables, integer cents
+  return {lines,subC:sub,expC,totC:sub+expC}; }
+function hwTotInner(t){ const hw=t.hw||hwDefault(), c=hwCalc(t); const n=(hw.rows||[]).length;
+  if(!n)return "Add material rows to build the INHW0001 bundle total.";
+  const missing=c.lines.filter(x=>x==null).length;
+  return `<b>INHW0001 materials (d):</b> ${n} row${n===1?"":"s"} · subtotal <b>${fmtMoney(c.subC)}</b>`+(hw.expend?` + 10% expendables ${fmtMoney(c.expC)}`:"")+` = <b>${fmtMoney(c.totC)}</b>`+(missing?` <span style="color:var(--warn)">(${missing} row${missing===1?"":"s"} missing qty/price - excluded)</span>`:""); }
+function refreshHw(t){ const c=hwCalc(t);   // TARGETED patch: line totals + rollup box only, never a full render (iOS keyboard focus)
+  (((t.hw||{}).rows)||[]).forEach((r,i)=>{ const el=document.getElementById("hwline_"+t.id+"_"+i); if(el)el.textContent=(c.lines[i]!=null)?fmtMoney(c.lines[i]):"—"; });
+  const box=document.getElementById("hwtot_"+t.id); if(box)box.innerHTML=hwTotInner(t); }
+function hwBlock(t){ const hw=t.hw||(t.hw=hwDefault()); hw.rows=hw.rows||[]; const c=hwCalc(t);
+  const rows=hw.rows.length? hw.rows.map((r,i)=>`
+    <div class="hwrow">
+      <div class="r1"><input type="text" data-hwk="item" data-hwt="${t.id}" data-hwi="${i}" placeholder="Item / description" value="${esc(r.item||"")}"><button class="stnx" data-hwdel="${t.id}:${i}">&times;</button></div>
+      <div class="r2"><input type="text" list="hwsrc_${t.id}" data-hwk="source" data-hwt="${t.id}" data-hwi="${i}" placeholder="Source / vendor" value="${esc(r.source||"")}"><input type="text" data-hwk="partNo" data-hwt="${t.id}" data-hwi="${i}" placeholder="Part # / spec" value="${esc(r.partNo||"")}"></div>
+      <div class="r3"><input type="text" inputmode="decimal" data-hwk="qty" data-hwt="${t.id}" data-hwi="${i}" placeholder="Qty" value="${esc(r.qty||"")}"><input type="text" list="hwunit_${t.id}" data-hwk="unit" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit" value="${esc(r.unit||"")}"><input type="text" inputmode="decimal" data-hwk="unitPrice" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit $" value="${r.unitPrice!=null?esc(fmtMoney(r.unitPrice)):""}"><span class="hwline" id="hwline_${t.id}_${i}">${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}</span></div>
+    </div>`).join("") : `<div class="empty">No materials yet — add one row per item.</div>`;
+  return `<datalist id="hwsrc_${t.id}">${HW_SOURCES.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
+    <datalist id="hwunit_${t.id}">${HW_UNITS.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
+    <div class="stnhdr" style="grid-template-columns:1fr"><span>Materials — one row per item · qty × unit price rolls up below</span></div>
+    ${rows}
+    <button class="addstn" data-hwadd="${t.id}">+ Add material</button>
+    <div class="toggle"><span>+10% expendables <span class="sub">(fasteners / consumables pad)</span></span><label class="sw"><input type="checkbox" data-hwexp="${t.id}" ${hw.expend?"checked":""}><span class="track"></span></label></div>
+    <div class="derived" id="hwtot_${t.id}">${hwTotInner(t)}</div>
+    <div class="hwbtns"><button data-hwcsv="${t.id}">Download materials CSV</button><button data-hwxlsx="${t.id}">Download .xlsx</button></div>
+    <label class="f"><span>Notes / attachment</span><textarea data-hwnotes="${t.id}" placeholder="how it mounts / attaches">${esc(hw.notes||"")}</textarea></label>`; }
+function hwDetail(t){ const hw=t.hw||hwDefault(), c=hwCalc(t); let o="";
+  o+=`   INHW0001 — installation materials bundle\n`;
+  if(!(hw.rows||[]).length)o+=`   (no material rows)\n`;
+  (hw.rows||[]).forEach((r,i)=>{ o+=`   ${i+1}. ${r.item||"(item?)"}${r.source?"  ["+r.source+"]":""}${r.partNo?"  #"+r.partNo:""}  ·  ${r.qty||"?"} ${r.unit||"ea"} @ ${r.unitPrice!=null?fmtMoney(r.unitPrice):"$?"}  =  ${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}\n`; });
+  if((hw.rows||[]).length){ o+=`   subtotal ${fmtMoney(c.subC)}\n`; if(hw.expend)o+=`   +10% expendables ${fmtMoney(c.expC)}\n`; o+=`   TOTAL ${fmtMoney(c.totC)}${hw.expend?"  (incl. 10% expendables)":""}\n`; }
+  if(hw.notes&&hw.notes.trim())o+=`   notes: ${hw.notes.trim()}\n`;
+  return o; }
+function hwGrid(t){ const hw=t.hw||hwDefault(), c=hwCalc(t);
+  const g=[["Item","Source","Part #","Qty","Unit","Unit Price","Line Total"]];
+  (hw.rows||[]).forEach((r,i)=>g.push([r.item||"",r.source||"",r.partNo||"",r.qty||"",r.unit||"",centsDec(r.unitPrice),centsDec(c.lines[i])]));
+  g.push([]);
+  g.push(["","","","","","Subtotal",centsDec(c.subC)]);
+  if(hw.expend)g.push(["","","","","","Expendables 10%",centsDec(c.expC)]);
+  g.push(["","","","","","TOTAL",centsDec(c.totC)]);
+  return g; }
+function hwCSV(t){ const q=v=>{ v=(v==null)?"":String(v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  return hwGrid(t).map(r=>r.map(q).join(",")).join("\r\n")+"\r\n"; }
+/* ---- minimal STORED-zip writer (no libs) - just enough container for a .xlsx ---- */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){ const enc=new TextEncoder(); const parts=[]; const cd=[]; let off=0;
+  files.forEach(f=>{ const name=enc.encode(f.name), data=enc.encode(f.text), crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));                       // local file header (method 0 = stored)
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(12,0x21,true);
+    h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true);
+    h.setUint16(26,name.length,true);
+    parts.push(new Uint8Array(h.buffer),name,data);
+    cd.push({name,crc,size:data.length,off}); off+=30+name.length+data.length; });
+  let cdLen=0; const cdp=[];
+  cd.forEach(e=>{ const h=new DataView(new ArrayBuffer(46));         // central directory entry
+    h.setUint32(0,0x02014b50,true); h.setUint16(4,20,true); h.setUint16(6,20,true); h.setUint16(14,0x21,true);
+    h.setUint32(16,e.crc,true); h.setUint32(20,e.size,true); h.setUint32(24,e.size,true);
+    h.setUint16(28,e.name.length,true); h.setUint32(42,e.off,true);
+    cdp.push(new Uint8Array(h.buffer),e.name); cdLen+=46+e.name.length; });
+  const eo=new DataView(new ArrayBuffer(22));                        // end of central directory
+  eo.setUint32(0,0x06054b50,true); eo.setUint16(8,cd.length,true); eo.setUint16(10,cd.length,true);
+  eo.setUint32(12,cdLen,true); eo.setUint32(16,off,true);
+  parts.push(...cdp,new Uint8Array(eo.buffer));
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}); }
+function xmlEsc(s){ return (""+s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function hwXlsx(t){ const cols=["A","B","C","D","E","F","G"]; const numCols=new Set([3,5,6]);   // Qty, Unit Price, Line Total
+  const rowsXml=hwGrid(t).map((r,ri)=>{ const cells=r.map((v,ci)=>{ if(v===""||v==null)return "";
+      const ref=cols[ci]+(ri+1);
+      return (numCols.has(ci)&&/^-?\d+(\.\d+)?$/.test(""+v))?`<c r="${ref}" t="n"><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`; }).join("");
+    return `<row r="${ri+1}">${cells}</row>`; }).join("");
+  return zipStore([
+    {name:"[Content_Types].xml",text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`},
+    {name:"_rels/.rels",text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:"xl/workbook.xml",text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Materials" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+    {name:"xl/_rels/workbook.xml.rels",text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`},
+    {name:"xl/worksheets/sheet1.xml",text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rowsXml}</sheetData></worksheet>`}
+  ]); }
+function dlBlob(name,blob){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },900); }
+function hwFileBase(t){ const nm=([projName(S),t.label].filter(Boolean).join(" ")).trim();
+  return ("materials-"+(nm||"bundle")).replace(/[^\w.-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60); }
 function loadinBlock(){
   const L=S.install.loadin;
   const f=(k,l,sub)=>`<label class="f"><span>${l}${sub?` <span class="sub">(${sub})</span>`:""}</span><input type="text" data-loadin="${k}" value="${esc(L[k]||"")}"></label>`;
@@ -861,6 +977,19 @@ function bind(){
     };
     inp.addEventListener("input",handler); inp.addEventListener("change",handler);
   });
+  // hardware materials bundle (Pass 3). Row TEXT inputs recompute totals via TARGETED patch (hwline_/hwtot_) - never a
+  // full render (iOS keyboard focus). Add/delete-row buttons and the expendables checkbox are safe to re-render/patch.
+  app.querySelectorAll("[data-hwadd]").forEach(b=>b.onclick=()=>{const t=T(b.dataset.hwadd); if(!t)return; if(!t.hw)t.hw=hwDefault(); t.hw.rows=t.hw.rows||[]; t.hw.rows.push({item:"",source:"",partNo:"",qty:"1",unit:"ea",unitPrice:null}); save(); render();});
+  app.querySelectorAll("[data-hwdel]").forEach(b=>b.onclick=()=>{const ix=b.dataset.hwdel.lastIndexOf(":"); const t=T(b.dataset.hwdel.slice(0,ix)); if(!t||!t.hw)return; (t.hw.rows||[]).splice(+b.dataset.hwdel.slice(ix+1),1); save(); render();});
+  app.querySelectorAll("[data-hwexp]").forEach(i=>i.onchange=()=>{const t=T(i.dataset.hwexp); if(!t)return; if(!t.hw)t.hw=hwDefault(); t.hw.expend=i.checked; save(); refreshHw(t);});
+  app.querySelectorAll("[data-hwnotes]").forEach(i=>i.oninput=()=>{const t=T(i.dataset.hwnotes); if(!t)return; if(!t.hw)t.hw=hwDefault(); t.hw.notes=i.value; save();});
+  app.querySelectorAll("[data-hwk]").forEach(inp=>{
+    const handler=()=>{const t=T(inp.dataset.hwt); if(!t||!t.hw)return; const r=(t.hw.rows||[])[+inp.dataset.hwi]; if(!r)return;
+      const k=inp.dataset.hwk; r[k]=(k==="unitPrice")?parseMoney(inp.value):inp.value; save(); refreshHw(t);};
+    inp.oninput=handler; inp.onchange=handler;
+  });
+  app.querySelectorAll("[data-hwcsv]").forEach(b=>b.onclick=()=>{const t=T(b.dataset.hwcsv); if(t)dlBlob(hwFileBase(t)+".csv",new Blob(["\ufeff"+hwCSV(t)],{type:"text/csv;charset=utf-8"}));});
+  app.querySelectorAll("[data-hwxlsx]").forEach(b=>b.onclick=()=>{const t=T(b.dataset.hwxlsx); if(t)dlBlob(hwFileBase(t)+".xlsx",hwXlsx(t));});
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   app.querySelectorAll("[data-loadin]").forEach(i=>i.oninput=()=>{S.install.loadin[i.dataset.loadin]=i.value;save();});
@@ -873,8 +1002,9 @@ function T(id){return S.treatments.find(t=>t.id===id);}
 function ftxt(t){
   const fam=typeFamily(t.type);
   const F=t.fields||{}, O=t.opFields||{};
-  if(fam==="hardware"){
-    return [F.desc, (t.qty&&t.qty!=="1")?("qty "+t.qty+(F.unit?" "+F.unit:"")):"", F.source&&("["+F.source+"]"), F.partNo&&("#"+F.partNo), F.unitPrice&&("@ "+F.unitPrice), F.notes&&("— "+F.notes)].filter(Boolean).join(" · ");
+  if(fam==="hardware"){   // KINETIC = the single rolled-up line, never the itemization (that lives in the FULL summary)
+    const c=hwCalc(t);
+    return "INHW0001  "+fmtMoney(c.totC)+((t.hw&&t.hw.expend)?"  (+10% expendables)":"");
   }
   const parts=[];
   if(fam==="masking"&&F.role)parts.push("role: "+({leg:"Leg",border:"Border",teaser:"Teaser",tab:"Tab",blackout:"Full blackout",other:"Other"}[F.role]||F.role));
@@ -972,7 +1102,11 @@ function fullSummary(){
   S.treatments.forEach((t,i)=>{
     o+=`\n#${i+1} ${typeLabel(t.type)}${t.label?" — "+t.label:""}\n`;
     const F=t.fields||{};
-    Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
+    if(typeFamily(t.type)==="hardware"){ o+=hwDetail(t); }   // FULL = the itemized breakdown + grand total
+    else Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
+    if(t.type==="trackonly"){ const TR=t.track||{};          // track hardware surfaces under its ADK0001 code alongside soft goods
+      const bits=[TR.model&&("model "+TR.model),(TR.mount==="ceiling")?"ceiling mount":"suspended",TR.overlap&&("overlap "+TR.overlap+" total"),TR.drop&&("hw drop "+TR.drop),F.trackLen&&("length "+F.trackLen)].filter(Boolean).join(", ");
+      o+=`   ADK0001 — track hardware: ${bits}\n`; }
     if(t.conform&&t.conform.on){ const c=t.conform; o+=`   shaped top (conforms): opening ${c.openW||"?"} W × ${c.openH||"?"} H (ref)\n`; const sts=c.stations||[];
       if(sts.length){ sts.forEach(s=>{ o+=`     @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`     ${conformDerivedText(t)}\n`; } else o+=`     (no stations recorded)\n`; }
     if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
@@ -1069,6 +1203,16 @@ function importScope(){
       ["openW","openH"].forEach(k=>{ if(typeof t.conform[k]!=="string")t.conform[k]=(t.conform[k]==null)?"":String(t.conform[k]); });
       if(!Array.isArray(t.conform.stations))t.conform.stations=[];
       t.conform.stations=t.conform.stations.filter(s=>s&&typeof s==="object").map(s=>numToStr(s));
+      // v8 hardware bundle: clean row shapes; unitPrice NUMBER = already cents (our own saved shape), string = dollars -> cents
+      t.hw=(t.hw&&typeof t.hw==="object"&&!Array.isArray(t.hw))?t.hw:hwDefault();
+      t.hw.expend=!!t.hw.expend;
+      if(typeof t.hw.notes!=="string")t.hw.notes=(t.hw.notes==null)?"":String(t.hw.notes);
+      if(!Array.isArray(t.hw.rows))t.hw.rows=[];
+      t.hw.rows=t.hw.rows.filter(r=>r&&typeof r==="object"&&!Array.isArray(r)).map(r=>{
+        const st=x=>(typeof x==="string")?x:((x==null)?"":String(x));
+        return {item:st(r.item),source:st(r.source),partNo:st(r.partNo),qty:st(r.qty),unit:st(r.unit),
+          unitPrice:(typeof r.unitPrice==="number"&&isFinite(r.unitPrice))?Math.round(r.unitPrice):parseMoney(r.unitPrice)};
+      });
       if(typeof t.type!=="string")t.type="";
       if(typeof t.label!=="string")t.label=(t.label==null)?"":String(t.label);
       if(typeof t.basis!=="string")t.basis="";
