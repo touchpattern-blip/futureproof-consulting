@@ -170,7 +170,7 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=6;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const SCHEMA_V=7;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function migrateSurvey(d){
   if(!d||typeof d!=="object") return d;
@@ -216,6 +216,9 @@ function migrateSurvey(d){
     t.fields=t.fields||{};
     if(t.fields.clearance===undefined) t.fields.clearance="";
   }); v=6; }
+  // v7 (Pass A7): Venetian / Austrian treatment type added (new vocabulary only - no reshaping of existing data;
+  // the bump marks that surveys saved at v7 may contain type "venetian" with its lift-line field family).
+  if(v<7){ v=7; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -307,6 +310,7 @@ const PW_TYPES=new Set(["public","school","gov"]);
 const TYPES=[
   ["","Select type…",""],
   ["main","Main / Traveler curtain","drawn"],
+  ["venetian","Venetian / Austrian","venetian"],
   ["valance","Valance","valance"],
   ["leg","Leg","flat"],
   ["masking","Masking","masking"],
@@ -468,6 +472,29 @@ function archFields(){return [
   ["mount","Mount","datalist",MOUNTS,"or type other"],
   ["stack","Stackback","text",null,""]
 ];}
+// Venetian / Austrian / Contour lift-curtain family (Pass A7; vault Reference/rosebrand-catalog.md - real RB/ADC products, nothing invented).
+// Lift ladder lightest->heaviest: hand line -> ConTour Winch 50lb -> Wahlberg DMX 110lb -> ADC T-Lift 2.0 -> Roll Drum 120lb.
+const VEN_SUBTYPES=[["","Select…"],["austrian","Austrian"],["venetian","Venetian"],["contour","Venetian Contour"]];
+const VEN_LIFTS=["Hand line","ConTour Winch 50lb","Wahlberg DMX 110lb","ADC T-Lift 2.0","Roll Drum 120lb","Other"];
+function venetianFields(F){return [
+  ["subType","Sub-type","select",VEN_SUBTYPES,"Austrian = vertical + horizontal fullness · Contour = each line independent"],
+  ["fabric","Fabric","datalist",FABRICS,"as observed"],
+  ...FABRIC_SPEC(F),
+  ["liftLines","Lift lines","number",null,"count"],
+  ["lineSpacing","Line spacing","text",null,"ring-row / lift-line spacing"],
+  ["fullness","Fullness","text",null,"as observed; sets swag size"],
+  ["variesPerLine","Fullness varies per line?","toggle",null,"Contour"],
+  ["bottomProfile","Bottom profile","select",["","Straight","Contour","Scalloped"],""],
+  ["festoons","Festoons / swags","number",null,"count"],
+  ["inTrim","In trim","text",null,"down / playing position"],
+  ["outTrim","Out trim","text",null,"raised / stored position"],
+  ["stackAllowance","Stack allowance","text",null,"~20% of height"],
+  ["liftMethod","Lift method","select",["",...VEN_LIFTS],""],
+  ["gang","Lift lines ganged?","select",["","Ganged","Independent per line"],""],
+  ["mount","Mount","datalist",MOUNTS,"or type other"],
+  ["controller","Controller","datalist",CONTROLLERS,"or type other"],
+  ...LINED_ROWS(F)
+];}
 function otherFields(){return [
   ["fabric","Fabric","datalist",FABRICS,""],
   ["h","Height","text",null,""],
@@ -482,8 +509,8 @@ function hardwareFields(){return [
   ["unitPrice","Unit price","text",null,"$ (optional)"],
   ["notes","Notes / attachment","textarea",null,"how it mounts / attaches"]
 ];}
-const FAMILY_FIELDS={drawn:drawnFields,valance:valanceFields,flat:flatFields,masking:maskingFields,trackonly:trackonlyFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
-const MOVABLE=new Set(["drawn","valance","flat","masking"]); // can have an operation
+const FAMILY_FIELDS={drawn:drawnFields,venetian:venetianFields,valance:valanceFields,flat:flatFields,masking:maskingFields,trackonly:trackonlyFields,backdrop:backdropFields,pipedrape:pipedrapeFields,arch:archFields,hardware:hardwareFields,other:otherFields};
+const MOVABLE=new Set(["drawn","valance","flat","masking","venetian"]); // can have an operation
 
 function opFields(op){
   switch(op){
@@ -621,7 +648,7 @@ function treatmentCard(t,i){
     opHtml=`<div class="reveal">
       <label class="f"><span>Operation</span>
       <select data-op="${t.id}">`+OPS.map(o=>`<option value="${o[0]}" ${t.operation===o[0]?"selected":""}>${o[1]}</option>`).join("")+`</select></label>`;
-    if(fam!=="drawn"&&TRACK_OPS.has(t.operation)) opHtml+=trackBlock(t);   // movable non-drawn riding a track gets the unified selector
+    if(fam!=="drawn"&&fam!=="venetian"&&TRACK_OPS.has(t.operation)) opHtml+=trackBlock(t);   // movable non-drawn riding a track gets the unified selector (venetians lift on lines, no draw track)
     const ofs=opFields(t.operation);
     if(ofs.length){ opHtml+=`<div class="grid2">`+ofs.map(f=>(f[2]==="textarea")?`</div>${field(f,t.opFields[f[0]],t.id+"_op")}<div class="grid2">`:field(f,t.opFields[f[0]],t.id+"_op")).join("")+`</div>`; }
     opHtml+=`</div>`;
@@ -851,6 +878,7 @@ function ftxt(t){
   }
   const parts=[];
   if(fam==="masking"&&F.role)parts.push("role: "+({leg:"Leg",border:"Border",teaser:"Teaser",tab:"Tab",blackout:"Full blackout",other:"Other"}[F.role]||F.role));
+  if(fam==="venetian"&&F.subType)parts.push(({austrian:"Austrian",venetian:"Venetian",contour:"Venetian Contour"}[F.subType])||F.subType);
   const dims=[F.w?("W "+F.w):"",F.h?("H "+F.h):""].filter(Boolean).join(" × ");
   if(dims)parts.push(dims);
   if(F.fabric)parts.push(F.fabric);
@@ -873,6 +901,19 @@ function ftxt(t){
   if(F.seamless)parts.push("seamless");
   if(F.oneSided)parts.push("one-sided");
   if(F.mount)parts.push("mount "+F.mount);
+  if(fam==="venetian"){ const ven=[
+    F.liftLines&&(F.liftLines+" lift lines"+(F.lineSpacing?" @ "+F.lineSpacing:"")),
+    (!F.liftLines&&F.lineSpacing)&&("line spacing "+F.lineSpacing),
+    F.variesPerLine&&"fullness varies per line",
+    F.bottomProfile&&("bottom "+F.bottomProfile),
+    F.festoons&&(F.festoons+" festoons"),
+    F.inTrim&&("in trim "+F.inTrim),
+    F.outTrim&&("out trim "+F.outTrim),
+    F.stackAllowance&&("stack "+F.stackAllowance),
+    F.liftMethod&&("lift: "+F.liftMethod),
+    F.gang,
+    F.controller&&("ctrl "+F.controller)
+  ].filter(Boolean); if(ven.length)parts.push(ven.join(", ")); }
   if(fam==="trackonly"){ if(F.trackLen)parts.push("track length "+F.trackLen); if(F.notes)parts.push(F.notes); }
   if(fam==="other"&&F.desc)parts.push(F.desc.replace(/\n/g," / "));
   if(fam==="pipedrape")parts.push([F.panelW&&("panel "+F.panelW+"×"+(F.panelH||"")),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType)].filter(Boolean).join(", "));
