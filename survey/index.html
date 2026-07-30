@@ -384,7 +384,7 @@ const LEGACY_TYPES={traveler:["Traveler curtain","drawn"],border:["Border / Teas
 const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[2];return LEGACY_TYPES[t]?LEGACY_TYPES[t][1]:"";};
 const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[1];return LEGACY_TYPES[t]?LEGACY_TYPES[t][0]:"";};
 
-const FABRICS=["Velour IFR","Commando cloth","IFR muslin","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Encore velour","Other (type)"];
+const FABRICS=["Charisma Velour","Encore Velour","Prestige Velour","Imperial Velour","Marvel Velour","Velour IFR","Commando cloth","Duvetyn","IFR muslin","Natural muslin (NFR)","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Other (type)"];
 // RB catalog hints (vault Reference/rosebrand-catalog.md). All OPTIONAL - blank allowed, free text passes.
 const COLORS=["Black","White","Natural / unbleached","Grey","Navy","Royal blue","Red","Burgundy","Green","Gold","Chroma key green","Chroma key blue","Other (type)"];
 const WEIGHTS=["8 oz","12 oz","15 oz","16 oz","21 oz","22 oz","25 oz","32 oz (linear = 21 oz/sqyd)"];
@@ -577,7 +577,7 @@ function opFields(op){
 /* ============ RENDER ============ */
 const app=document.getElementById("app");
 function el(html){const d=document.createElement("div");d.innerHTML=html.trim();return d.firstChild;}
-function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}   // String() coerce: a numeric value in stored data (e.g. qty:1 from a hand-built import) must never crash render
 
 function field(f,val,onkey){
   const [key,label,ctrl,opts,sub]=f;
@@ -1947,6 +1947,27 @@ window.__rerender=render;
 window.addEventListener("pagehide",flushSave);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden")flushSave(); });
 render();
+/* ---- #import= direct-load link: /survey/#import=<URL-safe base64 of the survey JSON> ----
+   The scope rides entirely in the URL fragment (never sent to any server); it is decoded, migrated
+   (migrateSurvey inside importSurveyObject) and saved as a NEW project - same path as paste/PDF import.
+   The hash is cleared afterward (success OR failure) so a reload never re-fires the import. */
+(function(){
+  const h=location.hash||"";
+  if(h.indexOf("#import=")!==0)return;
+  const clearHash=()=>{ try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){ location.hash=""; } };
+  const linkStatus=(msg,ok)=>{ importStatus(msg,ok);   // mirrored into the modal's status line
+    const c=document.getElementById("savechip"); if(c){ c.textContent=msg; setTimeout(()=>{ c.textContent="Saved"; },5000); } };
+  try{
+    let b64=h.slice(8);
+    try{ b64=decodeURIComponent(b64); }catch(e){}                 // tolerate a URI-encoded payload
+    b64=b64.replace(/-/g,"+").replace(/_/g,"/");                  // URL-safe -> standard base64
+    while(b64.length%4)b64+="=";
+    const bin=atob(b64);
+    const json=new TextDecoder("utf-8").decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
+    importSurveyObject(JSON.parse(json),linkStatus);              // sets its own success/failure status
+  }catch(e){ linkStatus("Link import failed: "+((e&&e.message)||e),false); }
+  clearHash();
+})();
 fetchPending().then(ok=>{ if(ok)safeRender(); });
 </script>
 </body>
