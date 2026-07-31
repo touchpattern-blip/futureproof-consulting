@@ -202,12 +202,12 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=11;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.96";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.97";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.78/mi fuel);
 // count keys (crew/days/milesRT) stay strings like every other numeric field. RB reimbursement policy: hotel = checkbox +
-// nights ($250/night/crew, HOTEL_NIGHTLY below), no per-diem, company reimburses meals (total $, cents-or-null) + fuel.
+// nights ($500/night per person, HOTEL_NIGHTLY below), no per-diem, company reimburses meals (total $, cents-or-null) + fuel.
 function laborDefault(){ return {crew:"",days:"",rate:120000,milesRT:"",mileRate:78,hotelStay:false,hotelNights:"",meals:null}; }
 // Money = INTEGER CENTS everywhere. parseMoney treats strings/numbers as DOLLARS ("$12.50" -> 1250); fmtMoney(1250) -> "$12.50".
 // (function declarations: hoisted so the boot-time migration sweep can use them)
@@ -778,6 +778,7 @@ function treatmentCard(t,i){
       ${t.type&&fam!=="hardware"?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="new" ${t.basis==="new"?"selected":""}>New</option><option value="replace" ${t.basis==="replace"?"selected":""}>Replace Pre-Existing</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
       ${t.type?`<span class="fam">${fam==="trackonly"?"track hardware · ADK0001":fam==="hardware"?"materials bundle · INHW0001":fam+" goods"}</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
+      ${(fam==="trackonly"&&t.basis==="replace")?field(["existBottomFloor","Existing track bottom to floor","text",null,"floor to BOTTOM of existing track"],(t.fields||{}).existBottomFloor,t.id):""}
       ${fam==="hardware"?hwBlock(t):""}
       ${(fam==="drawn"||fam==="trackonly")?trackBlock(t):""}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
@@ -1093,7 +1094,7 @@ function loadinBlock(){
   </div>`;
 }
 /* ---- install-labor calculator (Pass 4, INST0001): crew × days × rate + fuel + hotel + meals, INTEGER CENTS ---- */
-const HOTEL_NIGHTLY = 25000;   // RB reimbursement: $250/night PER CREW member (integer cents). hotel = HOTEL_NIGHTLY × nights × crew
+const HOTEL_NIGHTLY = 50000;   // RB reimbursement: $500/night per person (integer cents). hotel = HOTEL_NIGHTLY × nights × crew (person = crew member)
 function laborCalc(){ const L=(S.install&&S.install.labor)||laborDefault();
   const crew=parseFloat(L.crew), days=parseFloat(L.days), miles=parseFloat(L.milesRT);
   const laborC=(isFinite(crew)&&crew>0&&isFinite(days)&&days>0&&typeof L.rate==="number"&&isFinite(L.rate))?Math.round(crew*days*L.rate):null;
@@ -1124,8 +1125,8 @@ function laborBlock(){ const L=S.install.labor||(S.install.labor=laborDefault())
       <label class="f"><span>$ / mile <span class="sub">(fuel)</span></span><input type="text" inputmode="decimal" data-labor="mileRate" value="${L.mileRate!=null?esc(fmtMoney(L.mileRate)):""}"></label>
       <label class="f"><span>Meals <span class="sub">(total $)</span></span><input type="text" inputmode="decimal" data-labor="meals" value="${L.meals!=null?esc(fmtMoney(L.meals)):""}"></label>
     </div>
-    <div class="toggle"><span>Hotel stay? <span class="sub">($250/night per crew)</span></span><label class="sw"><input type="checkbox" data-labor="hotelStay" ${L.hotelStay?"checked":""}><span class="track"></span></label></div>
-    ${L.hotelStay?`<div class="reveal"><label class="f"><span>Nights <span class="sub">(reimbursed @ $250/night × crew)</span></span><input type="number" inputmode="numeric" data-labor="hotelNights" value="${esc(L.hotelNights||"")}"></label></div>`:""}
+    <div class="toggle"><span>Hotel stay? <span class="sub">($500/night per person)</span></span><label class="sw"><input type="checkbox" data-labor="hotelStay" ${L.hotelStay?"checked":""}><span class="track"></span></label></div>
+    ${L.hotelStay?`<div class="reveal"><label class="f"><span>Nights <span class="sub">(reimbursed @ $500/night per person)</span></span><input type="number" inputmode="numeric" data-labor="hotelNights" value="${esc(L.hotelNights||"")}"></label></div>`:""}
     <div class="derived" id="labtot">${laborTotInner()}</div>`; }
 
 /* ============ BIND ============ */
@@ -1161,7 +1162,7 @@ function bind(){
   app.querySelectorAll("[data-sketch]").forEach(b=>b.onclick=()=>window.openSketch(b.dataset.sketch));
   app.querySelectorAll("[data-type]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.type);t.type=s.value;t.fields={};t.operation="";t.opFields={};save();render();});
   app.querySelectorAll("[data-label]").forEach(i=>i.oninput=()=>{T(i.dataset.label).label=i.value;save();});
-  app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();});
+  app.querySelectorAll("[data-basis]").forEach(s=>s.onchange=()=>{T(s.dataset.basis).basis=s.value;save();render();});   // render so basis-conditional fields (e.g. trackonly existBottomFloor) toggle live
   app.querySelectorAll("[data-qty]").forEach(i=>i.oninput=()=>{T(i.dataset.qty).qty=i.value;save();});
   app.querySelectorAll("[data-op]").forEach(s=>s.onchange=()=>{const t=T(s.dataset.op);t.operation=s.value;t.opFields={};save();render();});
   app.querySelectorAll("[data-engnotes]").forEach(i=>i.oninput=()=>{T(i.dataset.engnotes).engNotes=i.value;save();});
@@ -1351,7 +1352,8 @@ function fullSummary(){
     else Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
     if(t.type==="trackonly"){ const TR=t.track||{};          // track hardware surfaces under its ADK0001 code alongside soft goods
       const bits=[TR.model&&("model "+TR.model),(TR.mount==="ceiling")?"ceiling mount":"suspended",TR.overlap&&("overlap "+TR.overlap+" total"),TR.drop&&("hw drop "+TR.drop),F.trackLen&&("length "+F.trackLen)].filter(Boolean).join(", ");
-      o+=`   ADK0001 — track hardware: ${bits}\n`; }
+      o+=`   ADK0001 — track hardware: ${bits}\n`;
+      if(F.existBottomFloor)o+=`   existing track bottom to floor: ${F.existBottomFloor}\n`; }
     if(t.conform&&t.conform.on){ const c=t.conform; o+=`   shaped top (conforms): opening ${c.openW||"?"} W × ${c.openH||"?"} H (ref)\n`; const sts=c.stations||[];
       if(sts.length){ sts.forEach(s=>{ o+=`     @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`     ${conformDerivedText(t)}\n`; } else o+=`     (no stations recorded)\n`; }
     if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
