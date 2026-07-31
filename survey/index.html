@@ -209,7 +209,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.02";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.03";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -1040,27 +1040,37 @@ function printConformTemplate(t,cv){
   setTimeout(function(){ try{w.print();}catch(_){}} ,300);
 }
 
-/* ================= ARCH PROFILER (v1.02) =================
-   A richer, standalone interactive instrument for a treatment's shaped/arched top (Wynn lift-line style).
+/* ================= ARCH PROFILER (v1.03) =================
+   Standalone interactive instrument for a treatment's shaped/arched top (Wynn lift-line style).
    Launches in a SEPARATE WINDOW via window.open + document.write(archToolHTML(seed)). Fully self-contained
    (own <style> + <script>): archRuntime holds ALL tool logic and is serialized into the child document, so it
    shares NO parent scope (generic-engine firewall). Round-trips back through localStorage['rb_arch_result_'+tid],
-   which the parent merges into t.conform on window focus / storage event. */
+   which the parent merges into t.conform on window focus / storage event.
+   v1.03: coordinate model = ABSOLUTE distance from SR (house-left) end, positions 0..span, NO negatives; bounded
+   axes (X 0..span, Y 0..peak, hard cap 100ft); symmetry MATERIALIZES real editable mirror stations; guided
+   suggestions at named distances-from-SR; each station has TWO typed+draggable fields (position X + height Y);
+   synced station LIST below the graph (two views, one model); UNDO (stack + Cmd/Ctrl+Z); CLEAR. */
+// SINGLE source of truth for the opening geometry: the treatment's real opening width/height (fields.w / fields.h) is
+// primary; the conform block's ref inputs (openW/openH) and any prior Profiler save (peak) fall back. Fixes the live bug
+// where the graph opened at a default span because it read only conform.openW (which the user left blank).
+function archOpeningWidth(t){ const F=t.fields||{}, c=(t.conform&&typeof t.conform==="object"&&!Array.isArray(t.conform))?t.conform:{};
+  const pick=[F.w,c.openW]; for(const v of pick){ if(v!=null&&String(v).trim()!=="") return String(v); } return ""; }
+function archOpeningHeight(t){ const F=t.fields||{}, c=(t.conform&&typeof t.conform==="object"&&!Array.isArray(t.conform))?t.conform:{};
+  const pick=[c.peak,c.openH,F.h]; for(const v of pick){ if(v!=null&&String(v).trim()!=="") return String(v); } return ""; }
 function seedFromConform(t){
   const c=(t.conform&&typeof t.conform==="object"&&!Array.isArray(t.conform))?t.conform:cfmDefault();
   return { tid:t.id, venue:S.meta.venue||"", label:(typeLabel(t.type)||"Treatment")+(t.label?" — "+t.label:""),
-    span:c.openW||"", peak:c.peak||"", symmetric:c.symmetric!==false, stations:(c.stations||[]).slice() };
+    span:archOpeningWidth(t), peak:archOpeningHeight(t), symmetric:c.symmetric!==false, stations:(c.stations||[]).slice() };
 }
 // The tool runtime. SEED = {tid, venue, label, span, peak, symmetric, stations:[{pos,h}]}. Runs in the child window.
 function archRuntime(SEED){
   "use strict";
   /* ---- self-contained helpers (do NOT reference parent scope) ---- */
   function parseInchTok(t){ t=(""+t).trim().replace(/"$/,"").trim(); if(t==="") return 0;
-    let m=t.match(/^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/); if(m) return parseFloat(m[1])+(+m[2])/(+m[3]);   // "10 1/2"
-    m=t.match(/^(\d+)\s*\/\s*(\d+)$/); if(m) return (+m[1])/(+m[2]);                                        // "1/2"
-    m=t.match(/^(\d+(?:\.\d+)?)$/); if(m) return parseFloat(m[1]);                                          // "10" / "10.5"
+    let m=t.match(/^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/); if(m) return parseFloat(m[1])+(+m[2])/(+m[3]);
+    m=t.match(/^(\d+)\s*\/\s*(\d+)$/); if(m) return (+m[1])/(+m[2]);
+    m=t.match(/^(\d+(?:\.\d+)?)$/); if(m) return parseFloat(m[1]);
     return null; }
-  // tolerant of feet-inches with fractions so fmtFeet output round-trips: 8'-6", 8'-6 1/2", 8' 6, 10", 1/2", bare feet.
   function parseFeet(s){ if(s==null) return null; s=(""+s).trim().replace(/[“”″]/g,'"').replace(/[‘’′]/g,"'"); if(!s) return null;
     let m=s.match(/^(-?\d+(?:\.\d+)?)\s*'\s*[-\s]?\s*(.*)$/);
     if(m){ const ft=parseFloat(m[1]), sign=ft<0?-1:1; const inch=(m[2]&&m[2].trim())?parseInchTok(m[2]):0; return inch==null?ft:ft+sign*inch/12; }
@@ -1076,7 +1086,7 @@ function archRuntime(SEED){
   function distSeg(p,a,b){ const dx=b[0]-a[0],dy=b[1]-a[1],L2=dx*dx+dy*dy; if(!L2) return Math.hypot(p[0]-a[0],p[1]-a[1]);
     let u=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2; u=Math.max(0,Math.min(1,u));
     return Math.hypot(p[0]-(a[0]+u*dx),p[1]-(a[1]+u*dy)); }
-  // centripetal Catmull-Rom (alpha 0.5, Barry-Goldman) through P=[[x,y],...] -> {poly, spans}. Same math as the survey's conformCurve.
+  // centripetal Catmull-Rom (alpha 0.5, Barry-Goldman) through P=[[x,y],...] -> {poly, spans}.
   function crCentripetal(P,SEG){ const n=P.length;
     if(n<2) return {poly:P.map(p=>p.slice()),spans:[]};
     if(n===2) return {poly:[P[0].slice(),P[1].slice()],spans:[[P[0].slice(),P[1].slice()]]};
@@ -1093,163 +1103,235 @@ function archRuntime(SEED){
       spans.push(span); }
     return {poly,spans}; }
 
+  /* ---- clamps / snaps (bounded model: 0..span horizontal, 0..100ft vertical, no negatives) ---- */
+  const HCAP=100;
+  function clampH(h){ if(h==null||isNaN(h)) return h; return Math.max(0,Math.min(HCAP,h)); }
+  function clampX(x){ if(x==null||isNaN(x)) return x; const hi=(span>0?span:1e9); return Math.max(0,Math.min(hi,x)); }
+  const snapH=v=>Math.round(v*48)/48;   // 0.25" for a height drag
+  const snapXq=v=>Math.round(v*4)/4;    // 0.25' for a position drag
+
   /* ---- state ---- */
-  let span=parseFeet(SEED.span)||0, peak=parseFeet(SEED.peak)||0, symmetric=(SEED.symmetric!==false);
-  let proposed=false;                       // true = stations are the auto-proposed starter set (span/peak edits re-propose)
-  let stations=seedStations();              // symmetric: right half only, x>=0 measured from peak. asymmetric: full set.
+  let halfMode=false;                                   // "1/2 to center": Span input = SR->center, full span = 2x
+  let span=parseFeet(SEED.span)||0;
+  let peak=clampH(parseFeet(SEED.peak)||0);
+  let symmetric=(SEED.symmetric!==false);
+  let srH=null, slH=null;                               // spring-end heights (headline anchors)
+  let stations=[];                                      // {x,h,sug,mir,ue,tag} ; x absolute feet from SR (0..span)
+  let proposed=false;                                   // true = untouched auto-proposed set (span/peak edits re-propose)
+  let undoStack=[];                                     // snapshots (model-before-mutation), capped ~30
 
-  function seedStations(){
-    let raw=(SEED.stations||[]).map(s=>({x:parseFeet(s.pos),h:parseFeet(s.h)})).filter(s=>s.x!=null&&s.h!=null).sort((a,b)=>a.x-b.x);
-    if(raw.length>=2){ proposed=false; return raw; }
-    return propose();
-  }
-  // starter set from span + peak: Chebyshev clustering (dense at peak AND spring, sparse on the straight flank) + a
-  // gentle parabolic height guess (apex = peak) the surveyor immediately overrides by typing/dragging real measurements.
-  function propose(){ proposed=true;
-    const half=(span>0?span/2:5); const riseEst=Math.max(Math.min((peak||8)*0.18,half*0.35),0.5); const N=6; const out=[];
-    for(let i=0;i<=N;i++){ const f=(1-Math.cos(Math.PI*i/N))/2; const x=half*f; const h=(peak||8)-riseEst*Math.pow(half?x/half:0,2);
-      out.push({x:Math.round(x*1000)/1000,h:Math.round(h*1000)/1000}); }
-    return symmetric?out:mirrorFull(out);
-  }
-  function mirrorFull(right){ const full=[]; right.forEach(s=>{ if(s.x>1e-9) full.push({x:-s.x,h:s.h}); }); right.forEach(s=>full.push({x:s.x,h:s.h})); return full.sort((a,b)=>a.x-b.x); }
+  /* ---- undo ---- */
+  function snapshot(){ return structuredClone({halfMode,span,peak,symmetric,srH,slH,proposed,stations}); }
+  function pushSnap(){ undoStack.push(snapshot()); if(undoStack.length>30) undoStack.shift(); updateUndoBtn(); }
+  let pendingSnap=null, pendingPushed=false;
+  function beginEdit(){ pendingSnap=snapshot(); pendingPushed=false; }
+  function commitEditIfNeeded(){ if(pendingSnap&&!pendingPushed){ undoStack.push(pendingSnap); if(undoStack.length>30) undoStack.shift(); pendingPushed=true; updateUndoBtn(); } }
+  function endEdit(){ pendingSnap=null; pendingPushed=false; }
+  function doUndo(){ if(!undoStack.length) return; const s=undoStack.pop();
+    halfMode=s.halfMode; span=s.span; peak=s.peak; symmetric=s.symmetric; srH=s.srH; slH=s.slH; proposed=s.proposed; stations=s.stations||[];
+    redraw(); }
+  function updateUndoBtn(){ const b=document.getElementById("btnUndo"); if(b) b.disabled=(undoStack.length===0); }
 
-  // full drawable point set (mirrored when symmetric): [{dx, h, src (index into stations), mirror}] sorted by dx.
-  function drawStations(){ const out=[];
-    if(symmetric){ stations.forEach((s,i)=>{ out.push({dx:s.x,h:s.h,src:i,mirror:false}); if(s.x>1e-9) out.push({dx:-s.x,h:s.h,src:i,mirror:true}); }); }
-    else { stations.forEach((s,i)=>out.push({dx:s.x,h:s.h,src:i,mirror:false})); }
-    return out.sort((a,b)=>a.dx-b.dx);
+  /* ---- proposal / guided suggestions ---- */
+  function springDefault(){ return clampH(peak>0? Math.max(peak-Math.min(peak*0.15,2),0) : 6); }
+  function estH(x){ const c=(span>0?span/2:5);
+    const sh=(x<=c ? (srH!=null?srH:springDefault()) : (symmetric?(srH!=null?srH:springDefault()):(slH!=null?slH:springDefault())));
+    const d=Math.abs(c-x)/(c||1); return clampH((peak||8)-((peak||8)-sh)*d*d); }
+  function chebInterior(a,b,N){ const out=[]; for(let i=1;i<N;i++){ const f=(1-Math.cos(Math.PI*i/N))/2; out.push(a+(b-a)*f); } return out; }
+  function buildProposed(){ proposed=true; stations=[]; const c=(span>0?span/2:5);
+    stations.push({x:0,h:(srH!=null?srH:springDefault()),sug:(srH==null),ue:false,mir:false,tag:"SR"});
+    stations.push({x:c,h:(peak||8),sug:(peak<=0),ue:false,mir:false,tag:"peak"});
+    if(symmetric){ chebInterior(0,c,6).forEach(x=>stations.push({x:Math.round(x*1000)/1000,h:estH(x),sug:true,ue:false,mir:false}));
+      applyMirror(true); }
+    else { stations.push({x:(span>0?span:2*c),h:(slH!=null?slH:springDefault()),sug:(slH==null),ue:false,mir:false,tag:"SL"});
+      chebInterior(0,c,4).forEach(x=>stations.push({x:Math.round(x*1000)/1000,h:estH(x),sug:true,ue:false,mir:false}));
+      chebInterior(c,(span>0?span:2*c),4).forEach(x=>stations.push({x:Math.round(x*1000)/1000,h:estH(x),sug:true,ue:false,mir:false})); }
   }
-  function fitCurve(){ const dp=drawStations(); const P=[]; dp.forEach(p=>{ if(!P.length||p.dx-P[P.length-1][0]>1e-9) P.push([p.dx,p.h]); });
+
+  /* ---- symmetry materialization (real editable mirror stations, then independent) ---- */
+  function nearIdx(x,exclude){ for(let i=0;i<stations.length;i++){ if(i===exclude) continue; if(Math.abs(stations[i].x-x)<0.02) return i; } return -1; }
+  function mirrorOf(si){ if(!symmetric||!(span>0)) return -1; const s=stations[si]; if(!s) return -1; return nearIdx(clampX(span-s.x)); }
+  // overwrite=false: fill MISSING mirrors + refresh non-detached ones (keeping symmetry). overwrite=true: re-mirror everything.
+  function applyMirror(overwrite){ if(!symmetric||!(span>0)) return 0; const c=span/2; let changed=0;
+    stations.filter(s=>!s.mir&&s.tag!=="peak"&&s.x<c-0.02).forEach(s=>{ const mx=clampX(span-s.x); const j=nearIdx(mx);
+      if(j<0){ stations.push({x:mx,h:s.h,sug:s.sug,mir:true,ue:false}); changed++; }
+      else { const m=stations[j]; if(overwrite||(m.mir&&!m.ue)){ if(m.h!==s.h||m.sug!==s.sug){ m.h=s.h; m.sug=s.sug; changed++; } if(overwrite){ m.ue=false; } } } });
+    for(let i=stations.length-1;i>=0;i--){ const m=stations[i]; if(m.mir&&!m.ue&&m.x>c+0.02){ const sx=clampX(span-m.x); if(nearIdx(sx,i)<0){ stations.splice(i,1); changed++; } } }
+    return changed; }
+
+  /* ---- point edits (typed field, list row, or drag all funnel here) ---- */
+  function setPoint(si,x,h,isDrag){ const s=stations[si]; if(!s) return; const c=span/2;
+    if(x!=null){ if(s.tag==="SR") x=0; else if(s.tag==="SL") x=span; else if(s.tag==="peak") x=c; else { x=clampX(x); if(isDrag) x=snapXq(x); if(s.mir) x=Math.max(x,c+0.02); } x=clampX(x); }
+    if(h!=null){ h=clampH(h); if(isDrag) h=snapH(h); }
+    const isSource=(!s.mir&&s.tag!=="peak"&&s.x<c-0.02);
+    const mi=(symmetric&&isSource)?mirrorOf(si):-1;
+    if(x!=null) s.x=x; if(h!=null) s.h=h; s.sug=false; s.ue=true; proposed=false;
+    if(s.tag==="peak"&&h!=null) peak=clampH(h); if(s.tag==="SR"&&h!=null) srH=clampH(h); if(s.tag==="SL"&&h!=null) slH=clampH(h);
+    if(mi>=0&&stations[mi]&&stations[mi].mir&&!stations[mi].ue){ if(x!=null) stations[mi].x=clampX(span-x); if(h!=null) stations[mi].h=h; }
+    syncViews(si); }
+
+  /* ---- add / tap / delete / clear ---- */
+  function addStation(x,h,userMade){ pushSnap(); x=clampX(x); h=clampH(h);
+    stations.push({x:x,h:h,sug:!userMade,ue:!!userMade,mir:(span>0&&x>span/2+0.02)}); proposed=false;
+    if(symmetric&&x<span/2-0.02) applyMirror(false);
+    redraw(); }
+  function nextGapX(){ const dp=drawStations(); if(dp.length<2) return clampX(span?span*0.5:5); let best=(dp[0].x+dp[1].x)/2,gap=-1;
+    for(let i=1;i<dp.length;i++){ const g=dp[i].x-dp[i-1].x; if(g>gap){ gap=g; best=(dp[i].x+dp[i-1].x)/2; } } return clampX(best); }
+  function xToX(px){ return (px-PADL)/VIEW.sc; }
+  function yToH(py){ return (VIEW.baseY-py)/VIEW.sc; }
+  function addStationTap(px,py){ if(!VIEW) computeView();
+    if(px<PADL-2||px>WPX-PADR+2) return false; if(py<PADT-2||py>VIEW.baseY+2) return false;
+    addStation(snapXq(xToX(px)), snapH(yToH(py)), true); return true; }
+  function delStation(si){ const s=stations[si]; if(!s) return; pushSnap();
+    const mi=(symmetric&&!s.mir&&s.tag!=="peak"&&s.x<span/2-0.02)?mirrorOf(si):-1;
+    const rm=[si]; if(mi>=0&&stations[mi]&&stations[mi].mir&&!stations[mi].ue) rm.push(mi);
+    rm.sort((a,b)=>b-a).forEach(ix=>stations.splice(ix,1)); proposed=false; redraw(); }
+  function clearAll(){ pushSnap(); stations=[]; proposed=false; redraw(); }
+  function reMirror(){ pushSnap(); symmetric=true; applyMirror(true); proposed=false; redraw(); }
+  function reSuggest(){ pushSnap(); buildProposed(); redraw(); }
+  function toggleSymmetric(on){ pushSnap(); if(on&&!symmetric){ symmetric=true; applyMirror(false); } else if(!on&&symmetric){ symmetric=false; } redraw(); }
+  function anchorIdx(tag){ return stations.findIndex(s=>s.tag===tag); }
+  function setSpan(ns){ ns=Math.max(ns||0,0); span=ns;
+    stations.forEach(s=>{ if(s.tag==="peak") s.x=span/2; else if(s.tag==="SL") s.x=span; s.x=clampX(s.x); });
+    if(proposed) buildProposed(); else if(symmetric) applyMirror(false);
+    redraw(); }
+
+  /* ---- geometry / bounded view ---- */
+  const WPX=1500, PADL=124, PADR=60, PADT=74, PADB=64, PLOTH=420;
+  let VIEW=null;
+  // TRUE, floor-anchored, uniform scale (NO vertical exaggeration): a single px/ft factor for BOTH axes so the arch reads
+  // at real proportions. Origin = SR floor corner: X 0..span (from SR), Y 0(floor)..yTop(just above peak, hard-capped 100ft).
+  function computeView(){ let xMax=(span>0?span:(stations.length?Math.max.apply(null,stations.map(s=>s.x)):10)); if(!(xMax>0)) xMax=10;
+    const hs=stations.map(s=>(s.h||0)); let yTop=Math.max(peak||0,(hs.length?Math.max.apply(null,hs):0),1); yTop=Math.min(yTop*1.06,HCAP);
+    const plotW=WPX-PADL-PADR, floorPx=PADT+PLOTH;
+    const sc=Math.min(plotW/Math.max(xMax,1e-6), PLOTH/Math.max(yTop,1e-6));   // uniform: fit both axes at the SAME px/ft
+    VIEW={xMax:xMax,yTop:yTop,sc:sc,floorPx:floorPx,baseY:floorPx}; }
+  function SVGX(x){ return PADL+x*VIEW.sc; }
+  function SVGY(h){ return VIEW.floorPx-h*VIEW.sc; }   // Y=0 pinned to the floor line, grows upward at true scale
+
+  function drawStations(){ return stations.map((s,i)=>({x:s.x,h:s.h,src:i,sug:!!s.sug,mir:!!s.mir,tag:s.tag||null}))
+    .filter(s=>s.h!=null&&!isNaN(s.h)).sort((a,b)=>a.x-b.x); }
+  function fitCurve(){ const dp=drawStations(); const P=[]; dp.forEach(p=>{ if(!P.length||p.x-P[P.length-1][0]>1e-9) P.push([p.x,p.h]); });
     if(P.length<2) return {P,poly:P.slice(),spans:[],devLen:0,worst:null};
     const cr=crCentripetal(P,24); let devLen=0; for(let i=1;i<cr.poly.length;i++) devLen+=Math.hypot(cr.poly[i][0]-cr.poly[i-1][0],cr.poly[i][1]-cr.poly[i-1][1]);
-    // under-sampled: worst gap = widest AND most-bending (chord length x sagitta). Flag only if sagitta > ~1/2".
-    let worst=null; cr.spans.forEach((sp,i)=>{ let sag=0; sp.forEach(p=>{ const d=distSeg(p,P[i],P[i+1]); if(d>sag)sag=d; });
+    let worst=null; cr.spans.forEach((sp,i)=>{ let sag=0; sp.forEach(p=>{ const d=distSeg(p,P[i],P[i+1]); if(d>sag) sag=d; });
       const chord=Math.hypot(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]); const score=chord*sag;
-      if(sag>1/24 && (!worst||score>worst.score)) worst={a:P[i],b:P[i+1],sag,chord,score,mid:[(P[i][0]+P[i+1][0])/2,(P[i][1]+P[i+1][1])/2]}; });
-    return {P,poly:cr.poly,spans:cr.spans,devLen,worst};
-  }
+      if(sag>1/24&&(!worst||score>worst.score)) worst={a:P[i],b:P[i+1],sag,chord,score,mid:[(P[i][0]+P[i+1][0])/2,(P[i][1]+P[i+1][1])/2]}; });
+    return {P,poly:cr.poly,spans:cr.spans,devLen,worst}; }
 
-  /* ---- edits ---- */
-  function breakSymmetry(){ if(!symmetric) return; stations=drawStations().map(d=>({x:d.dx,h:d.h})).sort((a,b)=>a.x-b.x); symmetric=false; proposed=false; const c=document.getElementById("inSym"); if(c)c.checked=false; }
-  function setDotHeight(di,h){ const dp=drawStations(); const d=dp[di]; if(!d) return; proposed=false;
-    if(d.mirror&&symmetric){ const dx=d.dx; breakSymmetry(); const ni=stations.findIndex(s=>Math.abs(s.x-dx)<1e-6); if(ni>=0) stations[ni].h=h; redraw(); }   // symmetry break = structural, rebuild fields
-    else { stations[d.src].h=h; redrawLive(); } }                                                                                                             // plain drag = keep the field set, just reflow
-  function setChipHeight(si,h){ if(stations[si]){ stations[si].h=h; proposed=false; redrawLive(); } }
-  // TAP-TO-ADD (change 1): a click on empty plot area drops a NEW freeform station at that x, seeding its height from the tapped y.
-  // symmetric -> add on the measured half (abs x) so it mirrors; asymmetric -> add at the literal x. New stations are normal (movable/deletable).
-  function xToDx(px){ return VIEW.xMin+(px-PADL)/VIEW.sx; }
-  function addStationTap(px,py){ if(!VIEW) computeView();
-    if(px<PADL-2||px>WPX-PADR+2) return false;          // outside the horizontal plot band
-    if(py<PADT-2||py>VIEW.baseY+2) return false;        // outside the vertical plot band (below the baseline / above the top)
-    const dx=xToDx(px), h=snap(yToH(py)); proposed=false;
-    stations.push({x:symmetric?Math.abs(dx):dx,h:h}); stations.sort((a,b)=>a.x-b.x);
-    redraw(); return true; }
-  function planPoint(dxFeet,hFeet){ if(!VIEW) computeView(); return {px:SVGX(dxFeet),py:SVGY(hFeet)}; }
-  function toggleSymmetric(on){ if(on&&!symmetric){ const right=stations.filter(s=>s.x>=-1e-9).map(s=>({x:Math.abs(s.x),h:s.h})); const seen={}; const dedup=[]; right.sort((a,b)=>a.x-b.x).forEach(s=>{ const k=s.x.toFixed(4); if(!seen[k]){ seen[k]=1; dedup.push(s); } }); stations=dedup; symmetric=true; proposed=false; }
-    else if(!on&&symmetric){ breakSymmetry(); } redraw(); }
-
-  /* ---- geometry / view ---- */
-  const WPX=1500, PADL=118, PADR=54, PADT=64, PADB=96, PLOTH=430;
-  let VIEW=null;   // {xMin,xMax,lo,hi,sx,sy,minH,maxH,baseY}
-  function computeView(){ const dp=drawStations();
-    let xs=dp.map(p=>p.dx), hs=dp.map(p=>p.h);
-    let xMin,xMax; if(xs.length){ xMin=Math.min.apply(null,xs); xMax=Math.max.apply(null,xs); } else { const h=(span>0?span/2:5); xMin=symmetric?-h:0; xMax=h; }
-    if(xMax-xMin<1e-6){ xMin-=1; xMax+=1; }
-    let minH,maxH; if(hs.length){ minH=Math.min.apply(null,hs); maxH=Math.max.apply(null,hs); } else { minH=(peak||8)-2; maxH=(peak||8); }
-    const pad=Math.max(0.5,(maxH-minH)*0.45); const lo=minH-pad, hi=maxH+pad;
-    const plotW=WPX-PADL-PADR; const sx=plotW/(xMax-xMin); const sy=PLOTH/(hi-lo);
-    VIEW={xMin,xMax,lo,hi,sx,sy,minH,maxH,baseY:PADT+PLOTH+34};
-  }
-  const SVGX=dx=>PADL+(dx-VIEW.xMin)*VIEW.sx;
-  const SVGY=h=>PADT+(VIEW.hi-h)*VIEW.sy;
-  const yToH=y=>VIEW.hi-(y-PADT)/VIEW.sy;
-  const snap=h=>Math.round(h*48)/48;   // 0.25in
-
-  function buildSVG(forExport){ computeView(); const dp=drawStations(); const fit=fitCurve(); const HPX=PADT+PLOTH+PADB;
+  function buildSVG(){ computeView(); const dp=drawStations(); const fit=fitCurve(); const HPX=PADT+PLOTH+PADB;
     let s='<svg id="plan" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+WPX+' '+HPX+'">';
-    // horizontal height rulers
-    const rng=VIEW.hi-VIEW.lo; let step=0.5; if(rng>6)step=1; if(rng>16)step=2; if(rng>40)step=5;
-    const first=Math.ceil(VIEW.lo/step)*step;
-    for(let hv=first; hv<=VIEW.hi+1e-6; hv+=step){ const y=SVGY(hv);
+    // height rulers (0 .. yTop, all non-negative)
+    const rng=VIEW.yTop; let step=0.5; if(rng>6)step=1; if(rng>16)step=2; if(rng>40)step=5;
+    for(let hv=0; hv<=VIEW.yTop+1e-6; hv+=step){ const y=SVGY(hv);
       s+='<line class="ruler" x1="'+PADL+'" y1="'+y.toFixed(1)+'" x2="'+(WPX-PADR)+'" y2="'+y.toFixed(1)+'" opacity="0.16"/>';
       s+='<text class="rlabel" x="'+(PADL-10)+'" y="'+(y+4).toFixed(1)+'">'+esc(fmtFeet(hv))+'</text>'; }
-    // center line at the peak (x=0) when symmetric
-    if(symmetric){ const cx=SVGX(0); s+='<line class="centerline" x1="'+cx.toFixed(1)+'" y1="'+PADT+'" x2="'+cx.toFixed(1)+'" y2="'+(VIEW.baseY)+'"/>'; s+='<text class="axlabel" x="'+cx.toFixed(1)+'" y="'+(PADT-14)+'" text-anchor="middle">PEAK (mirror axis)</text>'; }
-    // fabric fill under the fitted curve down to the baseline
+    // baseline (floor, h=0) + axis caption
+    s+='<line class="floor" x1="'+PADL+'" y1="'+VIEW.baseY.toFixed(1)+'" x2="'+(WPX-PADR)+'" y2="'+VIEW.baseY.toFixed(1)+'"/>';
+    s+='<text class="axcap" x="'+PADL+'" y="'+(VIEW.baseY+50).toFixed(1)+'">0 = SR (house left)</text>';
+    s+='<text class="axcap" x="'+(WPX-PADR)+'" y="'+(VIEW.baseY+50).toFixed(1)+'" text-anchor="end">'+esc(fmtFeet(VIEW.xMax))+' = SL (house right)</text>';
+    s+='<text class="axcap2" x="'+((PADL+WPX-PADR)/2)+'" y="'+(VIEW.baseY+50).toFixed(1)+'" text-anchor="middle">position — feet from SR &#8594;</text>';
+    // center line at the peak (x = span/2) when symmetric
+    if(symmetric&&span>0){ const cx=SVGX(span/2); s+='<line class="centerline" x1="'+cx.toFixed(1)+'" y1="'+PADT+'" x2="'+cx.toFixed(1)+'" y2="'+VIEW.baseY.toFixed(1)+'"/>'; s+='<text class="axlabel" x="'+cx.toFixed(1)+'" y="'+(PADT-14)+'" text-anchor="middle">CENTER / PEAK</text>'; }
+    // fabric fill + top edge (fitted curve)
     if(fit.poly.length>=2){ let d='M '+SVGX(fit.poly[0][0]).toFixed(1)+' '+SVGY(fit.poly[0][1]).toFixed(1);
       for(let i=1;i<fit.poly.length;i++) d+=' L '+SVGX(fit.poly[i][0]).toFixed(1)+' '+SVGY(fit.poly[i][1]).toFixed(1);
       d+=' L '+SVGX(fit.poly[fit.poly.length-1][0]).toFixed(1)+' '+VIEW.baseY.toFixed(1)+' L '+SVGX(fit.poly[0][0]).toFixed(1)+' '+VIEW.baseY.toFixed(1)+' Z';
       s+='<path class="fabric" d="'+d+'"/>';
-      // the curve (top edge)
       let e='M '+SVGX(fit.poly[0][0]).toFixed(1)+' '+SVGY(fit.poly[0][1]).toFixed(1);
       for(let i=1;i<fit.poly.length;i++) e+=' L '+SVGX(fit.poly[i][0]).toFixed(1)+' '+SVGY(fit.poly[i][1]).toFixed(1);
       s+='<path id="archCurve" class="edge" d="'+e+'"/>';
     } else { s+='<path id="archCurve" class="edge" d=""/>'; }
-    // under-sampled marker at the worst gap
     if(fit.worst){ const mx=SVGX(fit.worst.mid[0]), my=SVGY(fit.worst.mid[1]);
       s+='<g class="flag"><path d="M '+mx.toFixed(1)+' '+(my-13)+' L '+(mx+12)+' '+my+' L '+mx.toFixed(1)+' '+(my+13)+' L '+(mx-12)+' '+my+' Z"/>';
       s+='<text x="'+mx.toFixed(1)+'" y="'+(my-20)+'" text-anchor="middle">measure here</text></g>'; }
-    // station dots + labels + drop ticks
-    dp.forEach((p,i)=>{ const x=SVGX(p.dx), y=SVGY(p.h);
+    // station dots + drops + absolute x labels
+    dp.forEach(p=>{ const x=SVGX(p.x), y=SVGY(p.h);
       s+='<line class="drop" x1="'+x.toFixed(1)+'" y1="'+y.toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+VIEW.baseY.toFixed(1)+'"/>';
-      s+='<circle class="stndot'+(p.mirror?' mir':'')+'" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="7" data-di="'+i+'"></circle>';
-      if(p.mirror) s+='<text class="hlabel" x="'+x.toFixed(1)+'" y="'+(y-13).toFixed(1)+'" text-anchor="middle">'+esc(fmtFeet(p.h))+'</text>';   // source dots carry an on-graph editable input (fieldLayer); mirrored dots keep a static label
-      s+='<text class="xlabel" x="'+x.toFixed(1)+'" y="'+(VIEW.baseY+18).toFixed(1)+'" text-anchor="middle">'+esc(symmetric?(Math.abs(p.dx)<1e-6?"peak":fmtFeet(Math.abs(p.dx))):fmtFeet(p.dx))+'</text>';
-    });
-    return s+'</svg>';
-  }
+      s+='<circle class="stndot'+(p.mir?' mir':'')+(p.sug?' sug':'')+(p.tag?' anch':'')+'" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="8" data-si="'+p.src+'"></circle>';
+      s+='<text class="xlabel" x="'+x.toFixed(1)+'" y="'+(VIEW.baseY+18).toFixed(1)+'" text-anchor="middle">'+esc(fmtFeet(p.x))+'</text>'; });
+    return s+'</svg>'; }
 
   function readouts(){ const fit=fitCurve(); const dp=drawStations();
-    let span_=0,rise_=0; if(dp.length){ const xs=dp.map(p=>p.dx),hs=dp.map(p=>p.h); span_=Math.max.apply(null,xs)-Math.min.apply(null,xs); rise_=Math.max.apply(null,hs)-Math.min.apply(null,hs); }
-    document.getElementById("rdDev").textContent=fmtFeet(fit.devLen)||"–";
-    document.getElementById("rdSpan").textContent=fmtFeet(span_)||"–";
-    document.getElementById("rdRise").textContent=fmtFeet(rise_)||"–";
+    let sp=0,rise=0; if(dp.length){ const xs=dp.map(p=>p.x),hs=dp.map(p=>p.h); sp=Math.max.apply(null,xs)-Math.min.apply(null,xs); rise=Math.max.apply(null,hs)-Math.min.apply(null,hs); }
+    const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+    set("rdDev",fmtFeet(fit.devLen)||"–"); set("rdSpan",fmtFeet(sp||span)||"–"); set("rdRise",fmtFeet(rise)||"–");
     const fn=document.getElementById("flagNote");
-    if(fit.worst){ fn.style.display="block"; fn.innerHTML='&#9888; Under-sampled: the fitted top bows '+esc(fmtFeet(fit.worst.sag))+' off the straight chord near <b>'+esc(symmetric?fmtFeet(Math.abs(fit.worst.mid[0]))+" from the peak":fmtFeet(fit.worst.mid[0]))+'</b> &mdash; add a measured station there before cutting.'; }
-    else { fn.style.display="none"; }
-  }
-  // ON-GRAPH INLINE HEIGHT FIELDS (change 2): one absolutely-positioned <input> per station, anchored over its dot in the
-  // #fieldLayer overlay (a sibling of the SVG holder so a redraw of the SVG never wipes it). buildFields() (re)creates the
-  // input set on STRUCTURAL changes (add / delete / symmetry); positionFields() re-places each input via the viewBox->CSS
-  // scale every redraw so an input tracks its dot on drag / mirror / rescale. Typing an input live-updates the station height.
-  const FIELD_GAP=9;   // px the field floats above its dot (dot stays clear + draggable)
-  function buildFields(){ const layer=document.getElementById("fieldLayer"); if(!layer) return;
-    let h=""; stations.forEach((s,i)=>{ h+='<div class="hf" data-si="'+i+'"><input type="text" inputmode="decimal" data-si="'+i+'" value="'+esc(fmtFeet(s.h))+'"><button class="hfdel" data-si="'+i+'" title="delete station">&times;</button></div>'; });
+    if(fn){ if(fit.worst){ fn.style.display="block"; fn.innerHTML='&#9888; Under-sampled: the fitted top bows '+esc(fmtFeet(fit.worst.sag))+' off the straight chord near <b>'+esc(fmtFeet(fit.worst.mid[0]))+' from SR</b> &mdash; add a measured station there before cutting.'; }
+      else fn.style.display="none"; } }
+
+  /* ---- on-graph inline fields: TWO per station (position X + height Y), both typed-editable + live ---- */
+  const FIELD_GAP=11;
+  function buildFields(){ const layer=document.getElementById("fieldLayer"); if(!layer) return; let h="";
+    stations.forEach((s,i)=>{ h+='<div class="hf'+(s.sug?" sug":"")+(s.mir?" mir":"")+'" data-si="'+i+'">'
+      +'<span class="hfg"><input class="fx" type="text" inputmode="decimal" data-si="'+i+'" data-ax="x" value="'+esc(fmtFeet(s.x))+'" title="position from SR">'
+      +'<input class="fy" type="text" inputmode="decimal" data-si="'+i+'" data-ax="h" value="'+esc(fmtFeet(s.h))+'" title="height floor to top"></span>'
+      +(s.tag?'':'<button class="hfdel" data-si="'+i+'" title="delete station">&times;</button>')+'</div>'; });
     layer.innerHTML=h;
-    layer.querySelectorAll("input[data-si]").forEach(inp=>{ inp.oninput=()=>{ const v=parseFeet(inp.value); if(v!=null){ const si=+inp.dataset.si; if(stations[si]){ stations[si].h=v; proposed=false; redrawLive(); } } };
+    layer.querySelectorAll("input[data-si]").forEach(inp=>{ inp.onfocus=beginEdit;
+      inp.oninput=()=>{ const v=parseFeet(inp.value); if(v==null) return; commitEditIfNeeded(); const si=+inp.dataset.si;
+        if(inp.dataset.ax==="x") setPoint(si,v,null,false); else setPoint(si,null,v,false); };
+      inp.onblur=()=>{ endEdit(); buildList(); positionFields(); };
       inp.onkeydown=e=>{ if(e.key==="Enter") inp.blur(); }; });
-    layer.querySelectorAll(".hfdel").forEach(b=>{ b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); const si=+b.dataset.si; if(stations[si]){ stations.splice(si,1); proposed=false; redraw(); } }; });
-  }
+    layer.querySelectorAll(".hfdel").forEach(b=>{ b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); delStation(+b.dataset.si); }; }); }
   function positionFields(){ const svg=document.getElementById("plan"), layer=document.getElementById("fieldLayer"); if(!svg||!layer||!VIEW) return;
     const rect=svg.getBoundingClientRect(); if(!rect.width) return; const scale=rect.width/WPX, layerW=rect.width;
     layer.querySelectorAll(".hf").forEach(fd=>{ const si=+fd.dataset.si, s=stations[si];
       if(!s){ fd.style.display="none"; return; } fd.style.display="";
-      const halfW=(fd.offsetWidth||84)/2, cx=SVGX(s.x)*scale, cy=SVGY(s.h)*scale;
-      fd.style.left=Math.max(halfW+1,Math.min(layerW-halfW-1,cx))+"px";   // clamp so edge (spring) fields stay fully visible
-      fd.style.top=Math.max(1,cy-FIELD_GAP)+"px";
-      const inp=fd.querySelector("input"); if(inp&&document.activeElement!==inp) inp.value=fmtFeet(s.h);   // live-sync value except the one being typed
-    });
-  }
-  function redraw(){ const holder=document.getElementById("svgHolder"); if(holder)holder.innerHTML=buildSVG(false); wireDots(); readouts(); buildFields(); positionFields(); }
-  function redrawLive(){ const holder=document.getElementById("svgHolder"); if(holder)holder.innerHTML=buildSVG(false); wireDots(); readouts(); positionFields(); }   // keep the field set, just reflow the SVG + input positions
+      const halfW=(fd.offsetWidth||118)/2, cx=SVGX(s.x)*scale, cy=SVGY(s.h)*scale;
+      fd.style.left=Math.max(halfW+1,Math.min(layerW-halfW-1,cx))+"px"; fd.style.top=Math.max(1,cy-FIELD_GAP)+"px";
+      const fx=fd.querySelector(".fx"), fy=fd.querySelector(".fy");
+      if(fx&&document.activeElement!==fx) fx.value=fmtFeet(s.x);
+      if(fy&&document.activeElement!==fy) fy.value=fmtFeet(s.h); }); }
 
-  /* ---- drag (vertical, snap 0.25") ---- */
+  /* ---- guided-suggestion checklist (distances from SR) ---- */
+  function buildSug(){ const el=document.getElementById("sugList"); if(!el) return; const c=(span>0?span/2:5);
+    const sg=stations.filter(s=>s.sug&&(!symmetric||s.x<=c+0.02)).slice().sort((a,b)=>a.x-b.x);
+    if(!span){ el.innerHTML='<span class="ssub">Enter Span + Peak (+ SR-end height) above to generate suggested measure points.</span>'; return; }
+    if(!sg.length){ el.innerHTML='<span class="sok">&#10003; All suggested stations measured. Tap the plot or use the list to add more &mdash; suggestions guide only.</span>'; return; }
+    el.innerHTML='<b>Next &mdash; measure at (from SR):</b> '+sg.map(s=>'<span class="spill">'+esc(fmtFeet(s.x))+'</span>').join(" ")
+      +' <span class="ssub">&mdash; type each real height on the graph or list. Denser near the peak &amp; springs. Tap anywhere to add your own (freeform is never blocked).</span>'; }
+
+  /* ---- synced station LIST (second view of the same model) ---- */
+  function buildList(){ const el=document.getElementById("stnList"); if(!el) return; const dp=drawStations();
+    let h='<div class="lrow lhead"><span>#</span><span>Position (from SR)</span><span>Height (floor&#8594;top)</span><span></span></div>';
+    dp.forEach((p,n)=>{ h+='<div class="lrow"><span class="lidx">'+(n+1)+(p.tag?' <i>'+esc(p.tag)+'</i>':'')+(p.mir?' <i class="im">mir</i>':'')+'</span>'
+      +'<input class="lx" type="text" inputmode="decimal" data-src="'+p.src+'" value="'+esc(fmtFeet(p.x))+'">'
+      +'<input class="lh" type="text" inputmode="decimal" data-src="'+p.src+'" value="'+esc(fmtFeet(p.h))+'">'
+      +(p.tag?'<span class="lxpad"></span>':'<button class="lxdel" data-src="'+p.src+'" title="delete station">&times;</button>')+'</div>'; });
+    el.innerHTML=h+'<button class="laddbtn" id="laddstn">+ Add station</button>';
+    el.querySelectorAll(".lx,.lh").forEach(inp=>{ inp.onfocus=beginEdit;
+      inp.oninput=()=>{ const v=parseFeet(inp.value); if(v==null) return; commitEditIfNeeded(); const src=+inp.dataset.src;
+        if(inp.classList.contains("lx")) setPoint(src,v,null,false); else setPoint(src,null,v,false); };
+      inp.onblur=()=>{ endEdit(); buildList(); positionFields(); };
+      inp.onkeydown=e=>{ if(e.key==="Enter") inp.blur(); }; });
+    el.querySelectorAll(".lxdel").forEach(b=>{ b.onclick=()=>delStation(+b.dataset.src); });
+    const add=document.getElementById("laddstn"); if(add) add.onclick=()=>{ const x=nextGapX(); addStation(x,estH(x),true); }; }
+  function refreshListValues(){ const el=document.getElementById("stnList"); if(!el) return;
+    el.querySelectorAll(".lx").forEach(inp=>{ const s=stations[+inp.dataset.src]; if(s&&document.activeElement!==inp) inp.value=fmtFeet(s.x); });
+    el.querySelectorAll(".lh").forEach(inp=>{ const s=stations[+inp.dataset.src]; if(s&&document.activeElement!==inp) inp.value=fmtFeet(s.h); }); }
+
+  /* ---- render orchestration ---- */
+  function redraw(){ const holder=document.getElementById("svgHolder"); if(holder) holder.innerHTML=buildSVG(); wireDots(); readouts(); buildFields(); positionFields(); buildList(); buildSug(); syncHeader(); }
+  function syncViews(){ const holder=document.getElementById("svgHolder"); if(holder) holder.innerHTML=buildSVG(); wireDots(); readouts(); positionFields(); refreshListValues(); buildSug(); syncHeader(); }
+
+  /* ---- drag (X + Y, snapped, mirror-consistent, undoable) ---- */
   let drag=null, dragMoved=false;
   function svgPoint(svg,e){ const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
   function wireDots(){ const svg=document.getElementById("plan"); if(!svg) return;
-    svg.addEventListener("pointerdown",()=>{ dragMoved=false; });   // any fresh interaction starts clean (so a stale drag never eats a later tap)
-    svg.querySelectorAll("circle.stndot").forEach(c=>{ c.addEventListener("pointerdown",e=>{ drag=+c.dataset.di; dragMoved=false; try{c.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); }); });
-    svg.addEventListener("pointermove",e=>{ if(drag===null) return; dragMoved=true; const p=svgPoint(svg,e); const h=snap(yToH(p.y)); setDotHeight(drag,h); });
-    svg.addEventListener("pointerup",()=>{ drag=null; }); svg.addEventListener("pointerleave",()=>{ drag=null; });
-  }
-  // persistent (attached once) tap-to-add + resize reflow. svgHolder outlives each SVG rebuild, so the click delegate survives redraws.
+    svg.addEventListener("pointerdown",()=>{ dragMoved=false; });
+    svg.querySelectorAll("circle.stndot").forEach(c=>{ c.addEventListener("pointerdown",e=>{ drag=+c.dataset.si; dragMoved=false; beginEdit(); try{ c.setPointerCapture(e.pointerId); }catch(_){}; e.preventDefault(); }); });
+    svg.addEventListener("pointermove",e=>{ if(drag===null) return; dragMoved=true; commitEditIfNeeded(); const p=svgPoint(svg,e); const s=stations[drag]; if(!s) return;
+      const nx=(s.tag?null:xToX(p.x)); const nh=yToH(p.y); setPoint(drag,nx,nh,true); });
+    svg.addEventListener("pointerup",()=>{ if(drag!==null){ drag=null; endEdit(); buildList(); } });
+    svg.addEventListener("pointerleave",()=>{ if(drag!==null){ drag=null; endEdit(); buildList(); } }); }
   function wireCanvas(){ const holder=document.getElementById("svgHolder"); if(!holder) return;
-    holder.addEventListener("click",e=>{ if(dragMoved){ dragMoved=false; return; }                     // ignore the click that ends a drag
-      if(e.target&&e.target.closest&&e.target.closest("circle.stndot")) return;                          // ignore clicks on a dot (that's a drag handle)
+    holder.addEventListener("click",e=>{ if(dragMoved){ dragMoved=false; return; }
+      if(e.target&&e.target.closest&&e.target.closest("circle.stndot")) return;
       const svg=document.getElementById("plan"); if(!svg) return; const m=svg.getScreenCTM(); if(!m) return;
       const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; const p=pt.matrixTransform(m.inverse()); addStationTap(p.x,p.y); });
     window.addEventListener("resize",positionFields);
-  }
+    document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==="z"||e.key==="Z")&&!e.shiftKey){ e.preventDefault(); doUndo(); } }); }
 
   /* ---- export / save ---- */
   function templateSVG(){ const fit=fitCurve(); const P=fit.P; if(P.length<2) return '<svg xmlns="http://www.w3.org/2000/svg" width="6in" height="3in" viewBox="0 0 6 3"><text x="0.3" y="1" font-family="Arial" font-size="0.3">Add 2+ stations to build a 1:1 template.</text></svg>';
@@ -1259,63 +1341,91 @@ function archRuntime(SEED){
     const X=p=>+(ML+(p[0]-x0)*12).toFixed(3), Y=p=>+(MT+(maxH-p[1])*12).toFixed(3);
     let path=poly.map((p,i)=>(i?"L":"M")+X(p)+" "+Y(p)).join(" ");
     let s='<svg xmlns="http://www.w3.org/2000/svg" width="'+(+W.toFixed(3))+'in" height="'+(+H.toFixed(3))+'in" viewBox="0 0 '+(+W.toFixed(3))+' '+(+H.toFixed(3))+'">';
-    s+='<text x="'+ML+'" y="0.55" font-family="Arial" font-size="0.42" font-weight="bold">'+esc(SEED.label||"Treatment")+' &mdash; arch template (1:1'+(symmetric?", symmetric about peak":"")+')</text>';
+    s+='<text x="'+ML+'" y="0.55" font-family="Arial" font-size="0.42" font-weight="bold">'+esc(SEED.label||"Treatment")+' &mdash; arch template (1:1'+(symmetric?", symmetric about center":"")+')</text>';
     s+='<text x="'+ML+'" y="1.05" font-family="Arial" font-size="0.3">'+esc(SEED.venue||"")+(SEED.venue?" · ":"")+'span '+fmtFeet(spanIn/12)+' · rise '+fmtFeet(riseIn/12)+' · developed length '+fmtFeet(fit.devLen)+'</text>';
     s+='<text x="'+ML+'" y="1.5" font-family="Arial" font-size="0.26" fill="#555">print at 100% / actual size &mdash; the scale bar below must measure exactly 12"</text>';
-    if(fit.worst) s+='<text x="'+ML+'" y="1.95" font-family="Arial" font-size="0.26" fill="#b00">&#9888; under-sampled near '+esc(fmtFeet(symmetric?Math.abs(fit.worst.mid[0]):fit.worst.mid[0]))+' &mdash; verify before cutting</text>';
+    if(fit.worst) s+='<text x="'+ML+'" y="1.95" font-family="Arial" font-size="0.26" fill="#b00">&#9888; under-sampled near '+esc(fmtFeet(fit.worst.mid[0]))+' from SR &mdash; verify before cutting</text>';
     s+='<path d="'+path+'" fill="none" stroke="#000" stroke-width="0.04"/>';
-    // centerline at the peak
-    const px=X([0, 0]); if(symmetric && 0>=x0-1e-6) s+='<line x1="'+px+'" y1="'+MT+'" x2="'+px+'" y2="'+(+(H-MB+0.2).toFixed(3))+'" stroke="#c00" stroke-width="0.02" stroke-dasharray="0.2 0.15"/>';
+    if(symmetric&&span>0){ const cxft=span/2; if(cxft>=x0-1e-6&&cxft<=P[P.length-1][0]+1e-6){ const cxin=+(ML+(cxft-x0)*12).toFixed(3); s+='<line x1="'+cxin+'" y1="'+MT+'" x2="'+cxin+'" y2="'+(+(H-MB+0.2).toFixed(3))+'" stroke="#c00" stroke-width="0.02" stroke-dasharray="0.2 0.15"/>'; } }
     P.forEach(p=>{ s+='<line x1="'+X(p)+'" y1="'+(Y(p)-0.35)+'" x2="'+X(p)+'" y2="'+(Y(p)+0.35)+'" stroke="#c00" stroke-width="0.02"/><circle cx="'+X(p)+'" cy="'+Y(p)+'" r="0.07" fill="#c00"/><text x="'+X(p)+'" y="'+(Y(p)+0.7)+'" font-family="Arial" font-size="0.22" text-anchor="middle" fill="#c00">'+esc(fmtFeet(p[1]))+'</text>'; });
     const by=+(H-1.6).toFixed(3);
     s+='<line x1="'+ML+'" y1="'+by+'" x2="'+(ML+12)+'" y2="'+by+'" stroke="#000" stroke-width="0.03"/>';
     for(let i=1;i<12;i++) s+='<line x1="'+(ML+i)+'" y1="'+(by-0.12)+'" x2="'+(ML+i)+'" y2="'+(by+0.12)+'" stroke="#000" stroke-width="0.015"/>';
     s+='<text x="'+(ML+6)+'" y="'+(by+0.6)+'" font-family="Arial" font-size="0.28" text-anchor="middle">SCALE CHECK &mdash; this bar = exactly 12"</text>';
-    return s+'</svg>';
-  }
-  function download(name,text,mime){ const b=new Blob([text],{type:mime||"image/svg+xml"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },900); }
+    return s+'</svg>'; }
   function doSave(){ const fit=fitCurve();
     const out={ stations:stations.map(s=>({pos:fmtFeet(s.x),h:fmtFeet(s.h)})), symmetric:symmetric, peak:fmtFeet(peak)||(SEED.peak||""), span:fmtFeet(span)||(SEED.span||""), devLen:fit.devLen };
     try{ localStorage.setItem("rb_arch_result_"+SEED.tid, JSON.stringify(out)); const m=document.getElementById("savemsg"); if(m){ m.textContent="Saved to survey ✓ (return to the survey tab)"; setTimeout(()=>{ m.textContent=""; },4000); } }
     catch(e){ const m=document.getElementById("savemsg"); if(m) m.textContent="Save failed: "+((e&&e.message)||e); }
-    return out;
-  }
+    return out; }
 
-  /* ---- wire header controls ---- */
-  function wireHeader(){
-    const iSpan=document.getElementById("inSpan"), iPeak=document.getElementById("inPeak"), iSym=document.getElementById("inSym");
-    iSpan.value=SEED.span||(span?fmtFeet(span):""); iPeak.value=SEED.peak||(peak?fmtFeet(peak):""); iSym.checked=symmetric;
-    iSpan.oninput=()=>{ const v=parseFeet(iSpan.value); if(v!=null){ span=v; if(proposed) stations=propose(); redraw(); } };
-    iPeak.oninput=()=>{ const v=parseFeet(iPeak.value); if(v!=null){ peak=v; if(proposed) stations=propose(); redraw(); } };
+  /* ---- header controls ---- */
+  function syncHeader(){ const g=id=>document.getElementById(id); const set=(id,v)=>{ const e=g(id); if(e&&e!==document.activeElement) e.value=v; };
+    set("inSpan", halfMode?(span?fmtFeet(span/2):""):(span?fmtFeet(span):"")); set("inPeak", peak?fmtFeet(peak):"");
+    set("inSR", srH!=null?fmtFeet(srH):""); set("inSL", slH!=null?fmtFeet(slH):"");
+    const cs=g("inSym"); if(cs) cs.checked=symmetric; const ch=g("inHalf"); if(ch) ch.checked=halfMode;
+    const w=g("wrapSL"); if(w) w.style.display=symmetric?"none":"inline-flex";
+    const mb=g("btnMirror"); if(mb) mb.style.display=symmetric?"":"none"; updateUndoBtn(); }
+  function wireHeader(){ const g=id=>document.getElementById(id);
+    const iSpan=g("inSpan"), iHalf=g("inHalf"), iPeak=g("inPeak"), iSR=g("inSR"), iSL=g("inSL"), iSym=g("inSym");
+    iSpan.value=halfMode?(span?fmtFeet(span/2):""):(span?fmtFeet(span):""); iPeak.value=peak?fmtFeet(peak):""; iSym.checked=symmetric; iHalf.checked=halfMode;
+    iSpan.onfocus=beginEdit; iSpan.oninput=()=>{ const v=parseFeet(iSpan.value); if(v==null) return; if(!pendingSnap)beginEdit(); commitEditIfNeeded(); setSpan(halfMode?v*2:v); }; iSpan.onblur=endEdit;
+    iHalf.onchange=()=>{ pushSnap(); halfMode=iHalf.checked; const v=parseFeet(iSpan.value); if(v!=null) setSpan(halfMode?v*2:v); else redraw(); };
+    iPeak.onfocus=beginEdit; iPeak.oninput=()=>{ const v=parseFeet(iPeak.value); if(v==null) return; if(!pendingSnap)beginEdit(); commitEditIfNeeded(); peak=clampH(v); const pi=anchorIdx("peak"); if(pi>=0){ stations[pi].h=peak; stations[pi].sug=false; } if(proposed) buildProposed(); redraw(); }; iPeak.onblur=endEdit;
+    iSR.onfocus=beginEdit; iSR.oninput=()=>{ const v=parseFeet(iSR.value); if(v==null) return; if(!pendingSnap)beginEdit(); commitEditIfNeeded(); srH=clampH(v); const i=anchorIdx("SR"); if(i>=0){ setPoint(i,null,srH,false); } else redraw(); }; iSR.onblur=endEdit;
+    iSL.onfocus=beginEdit; iSL.oninput=()=>{ const v=parseFeet(iSL.value); if(v==null) return; if(!pendingSnap)beginEdit(); commitEditIfNeeded(); slH=clampH(v); const i=anchorIdx("SL"); if(i>=0){ setPoint(i,null,slH,false); } else redraw(); }; iSL.onblur=endEdit;
     iSym.onchange=()=>toggleSymmetric(iSym.checked);
-    document.getElementById("btnSvg").onclick=()=>download("arch-template-"+(SEED.tid||"curve")+".svg",templateSVG());
-    document.getElementById("btnPrint").onclick=()=>{ const w=window.open("","_blank"); if(!w){ alert("Allow popups to print."); return; } w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arch template</title><style>@page{margin:0.25in}html,body{margin:0;padding:0}svg{display:block}</style></head><body>'+templateSVG()+'</body></html>'); w.document.close(); w.focus(); setTimeout(()=>{ try{w.print();}catch(_){} },300); };
-    document.getElementById("btnSave").onclick=doSave;
-  }
+    g("btnMirror").onclick=()=>reMirror();
+    g("btnSuggest").onclick=()=>reSuggest();
+    g("btnUndo").onclick=()=>doUndo();
+    let clrArmed=false, clrTimer=null; const cb=g("btnClear");
+    cb.onclick=()=>{ if(!clrArmed){ clrArmed=true; cb.textContent="Clear all — confirm?"; cb.classList.add("armed"); clrTimer=setTimeout(()=>{ clrArmed=false; cb.textContent="Clear"; cb.classList.remove("armed"); },2500); return; } clearTimeout(clrTimer); clrArmed=false; cb.textContent="Clear"; cb.classList.remove("armed"); clearAll(); };
+    g("btnSvg").onclick=()=>download("arch-template-"+(SEED.tid||"curve")+".svg",templateSVG());
+    g("btnPrint").onclick=()=>{ const w=window.open("","_blank"); if(!w){ alert("Allow popups to print."); return; } w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arch template</title><style>@page{margin:0.25in}html,body{margin:0;padding:0}svg{display:block}</style></head><body>'+templateSVG()+'</body></html>'); w.document.close(); w.focus(); setTimeout(()=>{ try{ w.print(); }catch(_){} },300); };
+    g("btnSave").onclick=doSave; }
+  function download(name,text,mime){ const b=new Blob([text],{type:mime||"image/svg+xml"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },900); }
 
-  // test / integration hooks (used by the headless verifier and any future automation)
-  window.__arch={ state:()=>({span,peak,symmetric,stations:stations.map(s=>({x:s.x,h:s.h})),proposed}),
-    dbg:()=>{ const fit=fitCurve(); const dp=drawStations(); return {symmetric,nStations:stations.length,nDots:dp.length,devLen:fit.devLen,minX:dp.length?Math.min.apply(null,dp.map(p=>p.dx)):0,maxX:dp.length?Math.max.apply(null,dp.map(p=>p.dx)):0,worst:!!fit.worst}; },
-    editDot:setDotHeight, editChip:setChipHeight, breakSym:breakSymmetry, toggleSym:toggleSymmetric, svg:templateSVG, save:doSave, redraw,
-    tap:addStationTap, planPoint, nStations:()=>stations.length };
+  /* ---- test / integration hooks ---- */
+  window.__arch={ state:()=>({span,peak,symmetric,halfMode,proposed,stations:stations.map(s=>({x:s.x,h:s.h,sug:!!s.sug,mir:!!s.mir,ue:!!s.ue,tag:s.tag||null}))}),
+    suggestions:()=>stations.map((s,i)=>({i,x:s.x,sug:!!s.sug})).filter(o=>o.sug),
+    setHeaderSpan:v=>{ const e=document.getElementById("inSpan"); if(!pendingSnap)beginEdit(); e.value=v; const p=parseFeet(v); if(p!=null){ commitEditIfNeeded(); setSpan(halfMode?p*2:p); } endEdit(); },
+    setHeaderPeak:v=>{ pushSnap(); peak=clampH(parseFeet(v)||0); const pi=anchorIdx("peak"); if(pi>=0){ stations[pi].h=peak; stations[pi].sug=false; } if(proposed) buildProposed(); redraw(); },
+    setHeaderSR:v=>{ pushSnap(); srH=clampH(parseFeet(v)||0); const i=anchorIdx("SR"); if(i>=0) setPoint(i,null,srH,false); else redraw(); },
+    editHeight:(src,h)=>{ pushSnap(); setPoint(src,null,parseFeet(""+h),false); redraw(); },
+    editPos:(src,x)=>{ pushSnap(); setPoint(src,parseFeet(""+x),null,false); redraw(); },
+    dragDot:(src,x,h)=>{ beginEdit(); commitEditIfNeeded(); setPoint(src,x,h,true); endEdit(); redraw(); },
+    addAt:(x,h)=>addStation(x,h,true), tap:addStationTap, planPoint:(x,h)=>{ if(!VIEW) computeView(); return {px:SVGX(x),py:SVGY(h)}; },
+    mirror:reMirror, clear:clearAll, reSuggest, toggleSym:toggleSymmetric, undo:doUndo, undoDepth:()=>undoStack.length,
+    svg:templateSVG, save:doSave, redraw, nStations:()=>stations.length,
+    findSrcNearX:x=>{ let bi=-1,bd=1e9; stations.forEach((s,i)=>{ const d=Math.abs(s.x-x); if(d<bd){ bd=d; bi=i; } }); return bi; } };
+
+  /* ---- init ---- */
+  (function init(){ if(SEED.stations&&SEED.stations.length>=2){
+      stations=SEED.stations.map(s=>({x:parseFeet(s.pos),h:parseFeet(s.h)})).filter(s=>s.x!=null&&s.h!=null);
+      if(stations.length){ const mn=Math.min.apply(null,stations.map(s=>s.x)); if(mn<0) stations.forEach(s=>s.x-=mn); }
+      stations.forEach(s=>{ s.x=clampX(s.x); s.h=clampH(s.h); s.sug=false; s.ue=true; s.mir=false; }); proposed=false;
+    } else if(span>0){ buildProposed(); } else { stations=[]; proposed=false; } })();
 
   wireHeader(); wireCanvas(); redraw();
 }
 // Returns the full self-contained HTML document string for the Arch Profiler window.
 function archToolHTML(seed){
   seed=seed||{};
-  const S1='<'+'script>', S2='<'+'/script>';   // split so this string never prematurely closes the parent <script>
+  const S1='<'+'script>', S2='<'+'/script>';
   const head='<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     +'<title>Arch Profiler'+(seed.label?" — "+esc(seed.label):"")+'</title><style>'
     +'*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}'
     +'html,body{background:#525659;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#0d1117}'
-    +'.tb{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:#12161c;color:#fff;padding:9px 14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}'
+    +'.tb{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#12161c;color:#fff;padding:9px 14px;box-shadow:0 2px 10px rgba(0,0,0,.4)}'
     +'.tb label{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}'
-    +'.tb input[type=text]{width:78px;font-size:14px;padding:6px 8px;border:1px solid #3a4250;border-radius:6px;background:#0c0f14;color:#fff}'
-    +'.tb .sym input{width:18px;height:18px}'
+    +'.tb input[type=text]{width:70px;font-size:14px;padding:6px 8px;border:1px solid #3a4250;border-radius:6px;background:#0c0f14;color:#fff}'
+    +'.tb .chk input{width:17px;height:17px}.tb .half{font-size:11px;color:#9aa6b2}'
     +'.tb .ro{font-size:11px;color:#9aa6b2;letter-spacing:.03em}.tb .ro b{color:#fff;font-size:14px;margin-left:4px}'
     +'.tb button{font-size:12px;font-weight:700;background:#2b3440;color:#fff;border:1px solid #3a4250;border-radius:6px;padding:7px 11px;cursor:pointer}'
+    +'.tb button:disabled{opacity:.4;cursor:default}'
     +'.tb button#btnSave{background:#1a9850;border-color:#1a9850}.tb button#btnSvg{background:#1d6fe0;border-color:#1d6fe0}'
+    +'.tb button#btnClear.armed{background:#c2362b;border-color:#c2362b}'
+    +'.tb button#btnMirror{background:#7a4bd0;border-color:#7a4bd0}'
     +'.tb #savemsg{font-size:12px;font-weight:700;color:#7ee2a8}'
     +'.sheet{width:16in;max-width:98vw;margin:16px auto;background:#fff;padding:0.3in;box-shadow:0 6px 28px rgba(0,0,0,.5)}'
     +'.titlebar{display:flex;justify-content:space-between;align-items:flex-start;border:2px solid #0d1117;padding:9px 13px;margin-bottom:8px}'
@@ -1326,36 +1436,54 @@ function archToolHTML(seed){
     +'#svgHolder{display:block;line-height:0}'
     +'#fieldLayer{position:absolute;inset:0;pointer-events:none;z-index:5}'
     +'.hf{position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:2px;pointer-events:auto;white-space:nowrap;will-change:left,top}'
-    +'.hf input{width:66px;font-size:13px;font-weight:700;text-align:center;padding:3px 4px;border:1.5px solid #1d6fe0;border-radius:6px;background:rgba(255,255,255,.96);color:#14181b;box-shadow:0 1px 5px rgba(0,0,0,.28)}'
-    +'.hf input:focus{outline:none;border-color:#0d4fb0}'
-    +'.hf .hfdel{width:16px;height:16px;line-height:14px;text-align:center;font-size:12px;font-weight:900;color:#fff;background:#c2362b;border:none;border-radius:50%;cursor:pointer;padding:0;flex:0 0 auto}'
+    +'.hf .hfg{display:flex;flex-direction:column;gap:1px}'
+    +'.hf input{width:60px;font-size:12px;font-weight:700;text-align:center;padding:2px 3px;border:1.5px solid #1d6fe0;border-radius:5px;background:rgba(255,255,255,.97);color:#14181b;box-shadow:0 1px 5px rgba(0,0,0,.26)}'
+    +'.hf input.fx{border-color:#5b6776;color:#334}.hf input:focus{outline:none;border-color:#0d4fb0}'
+    +'.hf.sug input{border-style:dashed;opacity:.82}.hf.mir input{border-color:#b45309}'
+    +'.hf .hfdel{width:15px;height:15px;line-height:13px;text-align:center;font-size:11px;font-weight:900;color:#fff;background:#c2362b;border:none;border-radius:50%;cursor:pointer;padding:0;flex:0 0 auto}'
     +'.ruler{stroke:#5b6776;stroke-width:1}.rlabel{font-size:11px;fill:#5b6776;text-anchor:end}'
+    +'.floor{stroke:#0d1117;stroke-width:1.5}.axcap{font-size:11px;fill:#5b6776;font-weight:700}.axcap2{font-size:11px;fill:#8a9099}'
     +'.centerline{stroke:#c2362b;stroke-width:1;stroke-dasharray:5 4;opacity:.7}.axlabel{font-size:11px;font-weight:700;fill:#c2362b}'
     +'.fabric{fill:#7a1f1a;opacity:.72}.edge{fill:none;stroke:#3a0f0c;stroke-width:2.5}'
     +'.drop{stroke:#c2c8cf;stroke-width:1;stroke-dasharray:2 3}'
-    +'.stndot{fill:#fff;stroke:#1d6fe0;stroke-width:3;cursor:grab}.stndot.mir{stroke:#b45309;stroke-dasharray:3 2}'
-    +'.hlabel{font-size:12px;font-weight:700;fill:#14181b}.xlabel{font-size:11px;fill:#5b6776}'
+    +'.stndot{fill:#fff;stroke:#1d6fe0;stroke-width:3;cursor:grab}.stndot.mir{stroke:#b45309;stroke-dasharray:3 2}.stndot.sug{stroke-dasharray:2 2;opacity:.85}.stndot.anch{fill:#eef4ff;stroke-width:3.5}'
+    +'.xlabel{font-size:11px;fill:#5b6776}'
     +'.flag path{fill:#f0b429;stroke:#8a5a00;stroke-width:1.5}.flag text{font-size:12px;font-weight:800;fill:#8a5a00}'
     +'.spanel{margin-top:10px;border:1.5px solid #dcdfe4;border-radius:9px;padding:9px 11px;background:#fbfcfd}'
     +'.spanel .sp-title{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#6a7079;margin-bottom:7px}'
-    +'#stationChips{display:flex;flex-wrap:wrap;gap:8px}'
-    +'.chip{display:flex;flex-direction:column;gap:3px;border:1px solid #dcdfe4;border-radius:8px;padding:6px 8px;background:#fff;min-width:96px}'
-    +'.chip span{font-size:10.5px;font-weight:700;color:#6a7079}.chip input{width:88px;font-size:14px;padding:5px 6px;border:1.5px solid #dcdfe4;border-radius:6px}'
+    +'#sugList{font-size:12.5px;color:#334;line-height:1.7;margin-bottom:8px}#sugList .spill{display:inline-block;background:#eef4ff;border:1px solid #cfe0ff;border-radius:20px;padding:1px 9px;font-weight:700;color:#1d4ea0;margin:1px}#sugList .ssub{color:#8a9099}#sugList .sok{color:#1a7a44;font-weight:700}'
+    +'#stnList{display:flex;flex-direction:column;gap:4px}'
+    +'.lrow{display:grid;grid-template-columns:64px 1fr 1fr 30px;gap:8px;align-items:center}'
+    +'.lrow.lhead{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#8a9099}'
+    +'.lrow .lidx{font-size:12px;font-weight:700;color:#556}.lrow .lidx i{font-style:normal;font-size:10px;color:#b45309;font-weight:800}.lrow .lidx i.im{color:#8a9099}'
+    +'.lrow input{width:100%;font-size:13.5px;padding:5px 7px;border:1.5px solid #dcdfe4;border-radius:6px}'
+    +'.lrow input:focus{outline:none;border-color:#1d6fe0}'
+    +'.lrow .lxdel{width:22px;height:22px;line-height:20px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#c2362b;border:none;border-radius:50%;cursor:pointer;padding:0}'
+    +'.laddbtn{margin-top:6px;align-self:flex-start;font-size:12px;font-weight:700;background:#eef1f4;border:1px dashed #9aa6b2;border-radius:7px;padding:6px 12px;cursor:pointer;color:#334}'
     +'.flagNote{margin-top:9px;font-size:12.5px;color:#8a5a00;background:#fff8e6;border:1px solid #f0d9a0;border-radius:8px;padding:8px 10px;display:none}'
     +'@media print{html,body{background:#fff}.tb,.spanel{display:none!important}.sheet{margin:0;box-shadow:none;width:auto}@page{size:16in 11in;margin:0.25in}}'
     +'</style></head><body>';
   const bar='<div class="tb">'
     +'<label>Span <input type="text" id="inSpan" placeholder="26\'"></label>'
+    +'<label class="chk half">&frac12; to center <input type="checkbox" id="inHalf" title="Span input = SR to center; full span = 2x"></label>'
     +'<label>Peak <input type="text" id="inPeak" placeholder="8\'"></label>'
-    +'<label class="sym">Symmetrical? <input type="checkbox" id="inSym"></label>'
+    +'<label>SR-end <input type="text" id="inSR" placeholder="6\'"></label>'
+    +'<label class="chk" id="wrapSL" style="display:none">SL-end <input type="text" id="inSL" placeholder="6\'"></label>'
+    +'<label class="chk">Symmetrical? <input type="checkbox" id="inSym"></label>'
+    +'<button id="btnMirror" title="Materialize / re-apply mirror stations on the SL half">Mirror SR&#8594;SL</button>'
+    +'<button id="btnSuggest" title="Regenerate the suggested measure points">Re-suggest</button>'
+    +'<button id="btnUndo" title="Undo (Cmd/Ctrl+Z)" disabled>&#8630; Undo</button>'
+    +'<button id="btnClear" title="Remove all stations (undoable)">Clear</button>'
     +'<span class="ro">Developed<b id="rdDev">–</b></span><span class="ro">Span<b id="rdSpan">–</b></span><span class="ro">Rise<b id="rdRise">–</b></span>'
     +'<button id="btnSvg">Download 1:1 template (SVG)</button><button id="btnPrint">Print</button><button id="btnSave">Save to survey</button>'
     +'<span id="savemsg"></span></div>';
   const sheet='<div class="sheet"><div class="titlebar"><div><h1>ARCH PROFILER</h1>'
-    +'<div class="sub">'+esc(seed.venue||"")+(seed.venue?' &nbsp;|&nbsp; ':'')+esc(seed.label||"")+'<br>shaped-top station capture &middot; drag dots or type heights (floor &rarr; top) &middot; symmetric = measured from the peak outward</div></div>'
-    +'<div class="block"><span class="logo">R</span><br>Rose Brand Site Survey<br>Arch Profiler v1.02</div></div>'
+    +'<div class="sub">'+esc(seed.venue||"")+(seed.venue?' &nbsp;|&nbsp; ':'')+esc(seed.label||"")+'<br>shaped-top station capture &middot; positions are feet from the SR (house-left) end &middot; type or drag each station\'s position + height &middot; symmetric mirrors across the center</div></div>'
+    +'<div class="block"><span class="logo">R</span><br>Rose Brand Site Survey<br>Arch Profiler v1.03</div></div>'
     +'<div id="drawWrap"><div id="svgHolder"></div><div id="fieldLayer"></div></div>'
-    +'<div class="spanel"><div class="sp-title">Stations &mdash; edit each height right on the graph &middot; tap an empty spot to add a station &middot; drag a dot to fine-tune</div><div class="flagNote" id="flagNote"></div></div>'
+    +'<div class="spanel"><div class="sp-title">Guided measure points</div><div id="sugList"></div>'
+    +'<div class="sp-title">Stations &mdash; list view (edit position or height; two-way synced with the graph)</div><div id="stnList"></div>'
+    +'<div class="flagNote" id="flagNote"></div></div>'
     +'</div>';
   const script=S1+'('+archRuntime.toString()+')('+JSON.stringify(seed)+');'+S2;
   return head+bar+sheet+script+'</body></html>';
