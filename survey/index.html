@@ -146,6 +146,10 @@
           <div id="importstatus" style="font-size:12px;font-weight:600;margin-top:7px;min-height:15px;"></div>
         </div>
       </details>
+      <details id="typeorderwrap" style="display:none;margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
+        <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Reorder treatment types <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(dev - local only)</span></summary>
+        <div id="typeorderlist" style="padding:2px 12px 12px;"></div>
+      </details>
       <details id="pdfwrap" style="margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
         <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Import Rose Brand quote <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(drop the quote PDF, builds the scope)</span></summary>
         <div style="padding:2px 12px 12px;">
@@ -187,7 +191,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=9;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.91";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.92";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
@@ -387,6 +391,22 @@ const TYPES=[
 const LEGACY_TYPES={traveler:["Traveler curtain","drawn"],border:["Border / Teaser","flat"],tab:["Tab","flat"],pipedrape:["Pipe & Drape","pipedrape"]};
 const typeFamily=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[2];return LEGACY_TYPES[t]?LEGACY_TYPES[t][1]:"";};
 const typeLabel=t=>{const r=TYPES.find(x=>x[0]===t);if(r)return r[1];return LEGACY_TYPES[t]?LEGACY_TYPES[t][0]:"";};
+// dev-only custom picker order (localStorage rb_type_order = JSON array of type ids). Placeholder ("") always first;
+// saved ids ordered as stored; any TYPES id NOT saved is appended in original relative order (new types never vanish);
+// any saved id that no longer exists is skipped. Order-only view of TYPES; typeFamily/typeLabel stay id-based.
+const TYPE_ORDER_KEY="rb_type_order";
+function orderedTypes(){
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem(TYPE_ORDER_KEY)); }catch(e){}
+  if(!Array.isArray(saved)) return TYPES;
+  const blank=TYPES.filter(x=>x[0]==="");
+  const rest=TYPES.filter(x=>x[0]!=="");
+  const byId=new Map(rest.map(x=>[x[0],x]));
+  const used=new Set();
+  const out=[];
+  saved.forEach(id=>{ if(byId.has(id)&&!used.has(id)){ out.push(byId.get(id)); used.add(id); } });
+  rest.forEach(x=>{ if(!used.has(x[0])) out.push(x); });
+  return blank.concat(out);
+}
 
 const FABRICS=["Charisma Velour","Encore Velour","Prestige Velour","Imperial Velour","Marvel Velour","Velour IFR","Commando cloth","Duvetyn","IFR muslin","Natural muslin (NFR)","Sharkstooth scrim","Leno / filled scrim","Allegro silk IFR","Poly poplin","Other (type)"];
 // RB catalog hints (vault Reference/rosebrand-catalog.md). All OPTIONAL - blank allowed, free text passes.
@@ -721,7 +741,7 @@ function treatmentCard(t,i){
     <div class="thead"><span class="tnum">${i+1}</span><span class="ttitle">${title}</span><button class="del" data-sketch="${t.id}" title="Sketch" style="font-size:16px">&#9998;${t.sketch&&t.sketch.edges&&t.sketch.edges.length?" "+t.sketch.edges.length:""}</button><button class="del" data-del="${t.id}">&times;</button></div>
     <div class="tbody">
       <div class="grid2">
-        <label class="f"><span>Type</span><select data-type="${t.id}">`+TYPES.map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
+        <label class="f"><span>Type</span><select data-type="${t.id}">`+orderedTypes().map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
         <label class="f"><span>Label / location <span class="sub">(optional)</span></span><input type="text" data-label="${t.id}" value="${esc(t.label||"")}"></label>
       </div>
       ${t.type&&fam!=="hardware"?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option><option value="existing" ${t.basis==="existing"?"selected":""}>Existing track (verified) - 1:1 replacement</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
@@ -1347,7 +1367,7 @@ function renderProjList(){
     wrap.appendChild(row);
   });
 }
-function openProjModal(){ renderProjList(); document.getElementById("projmodal").classList.add("show"); }
+function openProjModal(){ renderProjList(); const to=document.getElementById("typeorderwrap"); if(to&&to.style.display!=="none")renderTypeOrder(); document.getElementById("projmodal").classList.add("show"); }
 function closeProjModal(){ document.getElementById("projmodal").classList.remove("show"); }
 document.getElementById("projbtn").onclick=openProjModal;
 document.getElementById("projx").onclick=closeProjModal;
@@ -1382,7 +1402,55 @@ function copySurveyLink(id){ const d=surveyById(id); if(!d)return;
 /* Toggle by ?dev=1 / ?dev=0 in the URL, or tap the "beta" version badge 5x. Persists in localStorage. */
 function devOn(){ try{ return localStorage.getItem("rb_dev")==="1"; }catch(e){ return false; } }
 function setDev(on){ try{ if(on)localStorage.setItem("rb_dev","1"); else localStorage.removeItem("rb_dev"); }catch(e){} applyDev(); }
-function applyDev(){ const w=document.getElementById("importwrap"); if(w)w.style.display=devOn()?"":"none"; }
+function applyDev(){ const on=devOn();
+  const w=document.getElementById("importwrap"); if(w)w.style.display=on?"":"none";
+  const to=document.getElementById("typeorderwrap"); if(to)to.style.display=on?"":"none";
+  if(on)renderTypeOrder(); }
+// dev-only reorder panel: one row per non-blank type in current orderedTypes() order + Copy / Reset buttons.
+// No-ops when the element is absent/hidden. Handlers are bound ONCE (below) via event delegation, never per-render.
+function renderTypeOrder(){
+  const list=document.getElementById("typeorderlist"); if(!list)return;
+  const rows=orderedTypes().filter(x=>x[0]!=="");
+  const btnS="font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:#3a3f45;cursor:pointer;";
+  const arrow="width:38px;flex:0 0 auto;font-size:15px;font-weight:800;padding:9px 0;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:#3a3f45;cursor:pointer;";
+  let h="";
+  rows.forEach((x,i)=>{
+    const first=i===0, last=i===rows.length-1;
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-top:7px;">'+
+       '<span style="flex:1;font-size:13.5px;font-weight:600;color:#2a2e33;">'+esc(x[1])+'</span>'+
+       '<button data-tup="'+esc(x[0])+'"'+(first?' disabled':'')+' style="'+arrow+(first?"opacity:.35;cursor:default;":"")+'" title="Move up">&#9650;</button>'+
+       '<button data-tdn="'+esc(x[0])+'"'+(last?' disabled':'')+' style="'+arrow+(last?"opacity:.35;cursor:default;":"")+'" title="Move down">&#9660;</button>'+
+       '</div>';
+  });
+  h+='<div style="display:flex;gap:10px;margin-top:12px;">'+
+     '<button id="typeordercopy" style="flex:1;'+btnS+'">Copy order</button>'+
+     '<button id="typeorderreset" style="flex:1;'+btnS+'">Reset to default</button>'+
+     '</div>';
+  list.innerHTML=h;
+}
+function currentTypeOrderIds(){ return orderedTypes().filter(x=>x[0]!=="").map(x=>x[0]); }
+function moveType(id,dir){
+  const ids=currentTypeOrderIds();
+  const i=ids.indexOf(id); if(i<0)return;
+  const j=i+dir; if(j<0||j>=ids.length)return;
+  const tmp=ids[i]; ids[i]=ids[j]; ids[j]=tmp;
+  try{ localStorage.setItem(TYPE_ORDER_KEY,JSON.stringify(ids)); }catch(e){}
+  renderTypeOrder();
+  if(window.__rerender)window.__rerender();
+}
+function chip(msg){ const c=document.getElementById("savechip"); if(c){ c.textContent=msg; setTimeout(()=>{ c.textContent="Saved"; },2500); } }
+// single delegated handler on the list (survives innerHTML re-renders; bound once at module load)
+(function(){ const list=document.getElementById("typeorderlist"); if(!list)return;
+  list.addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b)return;
+    if(b.dataset.tup){ moveType(b.dataset.tup,-1); }
+    else if(b.dataset.tdn){ moveType(b.dataset.tdn,1); }
+    else if(b.id==="typeordercopy"){ const txt=JSON.stringify(currentTypeOrderIds());
+      const done=()=>chip("Order copied");
+      if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,()=>{prompt("Copy the type order:",txt);done();}); }
+      else { prompt("Copy the type order:",txt); done(); } }
+    else if(b.id==="typeorderreset"){ try{ localStorage.removeItem(TYPE_ORDER_KEY); }catch(e){} renderTypeOrder(); if(window.__rerender)window.__rerender(); chip("Order reset"); }
+  });
+})();
 (function(){ const q=new URLSearchParams(location.search); if(q.get("dev")==="1")setDev(true); else if(q.get("dev")==="0")setDev(false);
   applyDev();
   const av=document.getElementById("appver"); if(av){ let n=0,tmr=null; av.style.cursor="pointer";
