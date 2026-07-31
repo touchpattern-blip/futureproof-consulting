@@ -35,6 +35,7 @@
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
   select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%236a7079' stroke-width='1.6'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;}
   textarea{min-height:64px;resize:vertical;}
+  input[type=date].datefield{width:auto;max-width:190px;font-size:16px;font-family:inherit;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   @media(max-width:520px){.grid3{grid-template-columns:1fr 1fr;}}
@@ -207,8 +208,8 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=11;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.98";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const SCHEMA_V=12;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const APP_VERSION="0.99";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -318,6 +319,10 @@ function migrateSurvey(d){
     delete lb.hotel; delete lb.perdiem;
     if(!(typeof lb.mileRate==="number"&&isFinite(lb.mileRate)))lb.mileRate=78;   // default ONLY when missing; existing saved mileRate preserved
     v=11; }
+  // v12 (lead-edge gate): the one-way lead-edge allowance is now behind a per-track toggle (t.track.leadOn, default OFF).
+  // Preserve prior math: a track already carrying a non-blank lead value HAD it applied, so fold that forward as leadOn:true.
+  if(v<12){ (d.treatments||[]).forEach(t=>{ if(t&&t.track&&typeof t.track==="object"&&!Array.isArray(t.track)){
+    if(typeof t.track.leadOn!=="boolean") t.track.leadOn=!!(((t.track.lead||"")+"").trim()); } }); v=12; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -463,6 +468,8 @@ const BOTFIN=["Chain pocket","Pipe pocket","Plain hem","Jute webbing","Lead weig
 const SIDEFIN=["Turned hem","Overlap/underlap","Reverse fold","Plain"];
 const DRAW=["Bi-part (center)","One-way SL","One-way SR","Guillotine / fly"];
 const OVERLAP=["12\"","14\"","16\"","24\""];
+// Fullness combo options (datalist chevron + free-type). A bare typed number is normalized to append "%" on commit (see bind).
+const FULLNESS=["0%","25%","50%","75%","100%","125%","150%","175%","200%"];
 // floor-clearance presets (keep strings STABLE, saved surveys hold them verbatim). Brush/blank = 0; puddle = negative (adds length).
 const CLEARANCES=["Brush floor (0)","+1\" clear","+2\" clear","Puddle (-)"];
 // Unified track reference table (Pass 1b). One row per pickable track; replaces the old TRACKS / TRACK_MODEL_LIST / TRACK_OVERLAP / TRACK_DROP parallel structures.
@@ -491,6 +498,9 @@ const trackByLabel=s=>s?(TRACK_TABLE.find(r=>r.enabled&&r.label===s)||null):null
 const trackById=id=>TRACK_TABLE.find(r=>r.id===id)||null;                            // join by id (rename-proof)
 // mount-aware auto-fill: suspended pulls row.drop, ceiling pulls row.ceilingDrop; unknown = "" (surveyor measures, never fabricated)
 const dropForMount=(row,mount)=>row?((mount==="ceiling")?(row.ceilingDrop||""):(row.drop||"")):"";
+// EFFECTIVE center overlap: a Replace-Pre-Existing job can record the existing track's ACTUAL overlap (t.track.overlapObserved),
+// which overrides the model default for a true 1:1 replacement. Non-blank observed wins; else the auto-filled t.track.overlap.
+const effOverlap=t=>{ const TR=(t&&t.track)||{}; const o=((TR.overlapObserved||"")+"").trim(); return o!==""?o:(TR.overlap||""); };
 const CORDING=["Hand line (rope)","Continuous cord loop","Sash cord"];
 const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
 // internal key "manual" is a saved-data key - display label only says Walk-along
@@ -512,7 +522,7 @@ function drawnFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
   ...FABRIC_SPEC(F),
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
-  ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
+  ["fullness","Fullness","datalist",FULLNESS,"as observed, e.g. ~50%"],
   ["h","Floor to track bottom","text",null,"floor to BOTTOM of track"],
   ["w","Total width of opening","text",null,"full opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
@@ -526,7 +536,7 @@ function valanceFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
   ...FABRIC_SPEC(F),
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
-  ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
+  ["fullness","Fullness","datalist",FULLNESS,"as observed, e.g. ~50%"],
   ["profile","Profile / shape","text",null,"e.g. pointed, straight, arched"],
   ["h","Height (peak / ends)","text",null,"e.g. peak 6'-4\", ends 1'-8\""],
   ["w","Width (developed)","text",null,"along face / arc"],
@@ -600,7 +610,7 @@ function venetianFields(F){return [
   ...FABRIC_SPEC(F),
   ["liftLines","Lift lines","number",null,"count"],
   ["lineSpacing","Line spacing","text",null,"ring-row / lift-line spacing"],
-  ["fullness","Fullness","text",null,"as observed; sets swag size"],
+  ["fullness","Fullness","datalist",FULLNESS,"as observed; sets swag size"],
   ["variesPerLine","Fullness varies per line?","toggle",null,"Contour"],
   ["bottomProfile","Bottom profile","select",["","Straight","Contour","Scalloped"],""],
   ["festoons","Festoons / swags","number",null,"count"],
@@ -715,15 +725,17 @@ function panelBoxInner(t){
   }
   { const row=trackByLabel((TR.model||"").trim());
     if(row&&row.id==="adc280") out.push(`<b style="color:var(--warn)">&#9888; 280 Silent Steel:</b> <span style="color:var(--warn)">drop 12-5/16&quot; = MAX, adjustable shorter via trim chain - confirm before cut.</span>`); }
-  const W=parseLen(F.w), draw=F.draw||"", O=parseInches(TR.overlap);
+  const ovStr=effOverlap(t), obsOv=((TR.overlapObserved||"")+"").trim();
+  const W=parseLen(F.w), draw=F.draw||"", O=parseInches(ovStr);
   const biBlank=/Bi-part/i.test(draw)&&!(O>0);
   if(biBlank) out.push(`<b style="color:var(--warn)">&#9888; Overlap not set.</b> <span style="color:var(--warn)">Bi-part with no center overlap = center light-gap. Enter the TOTAL bypass or pick a track model.</span>`);
+  if(obsOv!=="") out.push(`<b>Overlap (as observed):</b> ${esc(obsOv)}${(TR.overlap&&(TR.overlap+"").trim()&&(TR.overlap+"").trim()!==obsOv)?` <span style="color:#7a8088">overrides ${esc(TR.overlap)} default</span>`:""}`);
   if(W!=null&&W>0){   // per-drape line: panel width x finished height TOGETHER (presentation only; same math)
     const hPart=(FIN!=null)?` &times; <b>${fmtLen(FIN)}</b> H`:"";
     const hNote=(FIN!=null)?" &times; finished height":"";
-    if(/Bi-part/i.test(draw)){ if(!biBlank) out.push(`<b>Each drape (&times;2):</b> <b>${fmtLen(W/2+O/2)}</b> W${hPart} <span style="color:#7a8088">(width = &frac12; of ${fmtLen(W)} + &frac12; the ${esc(TR.overlap)} overlap${hNote})</span>`); }
-    else if(/One-way/i.test(draw)){ const L=parseInches(TR.lead);
-      out.push(`<b>Drape (&times;1):</b> <b>${fmtLen(W+(L>0?L:0))}</b> W${hPart} <span style="color:#7a8088">(width = ${fmtLen(W)}${L>0?" + "+esc(TR.lead)+" lead-edge":", lead-edge allowance blank (optional)"}; center overlap n/a on one-way${hNote})</span>`); }
+    if(/Bi-part/i.test(draw)){ if(!biBlank) out.push(`<b>Each drape (&times;2):</b> <b>${fmtLen(W/2+O/2)}</b> W${hPart} <span style="color:#7a8088">(width = &frac12; of ${fmtLen(W)} + &frac12; the ${esc(ovStr)} overlap${obsOv!==""?" as observed":""}${hNote})</span>`); }
+    else if(/One-way/i.test(draw)){ const L=(TR.leadOn)?parseInches(TR.lead):null; const leadUsed=!!(TR.leadOn&&L>0);
+      out.push(`<b>Drape (&times;1):</b> <b>${fmtLen(W+(leadUsed?L:0))}</b> W${hPart} <span style="color:#7a8088">(width = ${fmtLen(W)}${leadUsed?" + "+esc(TR.lead)+" lead edge (overlap)":""}; center overlap n/a on one-way${hNote})</span>`); }
     else out.push(`<b>Each drape:</b> <b>${fmtLen(W)}</b> W${hPart} <span style="color:#7a8088">(full width &mdash; pick a draw style${hNote})</span>`);
   }
   return out.length? out.join("<br>") : "Enter opening height and/or width to compute the drape.";
@@ -740,6 +752,7 @@ function ovwField(t){ const tr=t.track||{};
 // ONE unified track selector (input + datalist = dropdown with type-your-own). Explicit data-track attrs, never the _op suffix scheme.
 function trackBlock(t){
   const tr=t.track||{}; const dl="tkdl_"+t.id; const isDrawn=typeFamily(t.type)==="drawn";
+  const isOneWay=isDrawn&&/One-way/i.test((t.fields||{}).draw||"");   // lead-edge only applies to one-way draw
   return `<div class="grid2">
     <label class="f"><span>Track model <span class="sub">(preset auto-fills overlap + drop; or type your own)</span></span>
       <span class="combo"><input type="text" list="${dl}" data-track="model" data-tid="${t.id}" value="${esc(tr.model||"")}">
@@ -752,10 +765,11 @@ function trackBlock(t){
     <label class="f"><span>Center overlap <span class="sub">(TOTAL bypass; bare number = inches)</span></span>
       <span class="combo"><input type="text" list="${dl}_ov" data-track="overlap" data-tid="${t.id}" value="${esc(tr.overlap||"")}">
       <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick"><option value=""></option>`+OVERLAP.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span></label>
+    ${t.basis==="replace"?`<label class="f"><span>Overlap (as observed) <span class="sub">(existing track's actual overlap; overrides the default for a 1:1 replacement; bare number = inches)</span></span>
+      <input type="text" data-track="overlapObserved" data-tid="${t.id}" value="${esc(tr.overlapObserved||"")}"></label>`:""}
     <label class="f"><span>Hardware drop <span class="sub">(track top &rarr; drape top; bare number = inches)</span></span>
       <input type="text" data-track="drop" data-tid="${t.id}" value="${esc(tr.drop||"")}"></label>
-    ${isDrawn?`<label class="f"><span>Lead-edge allowance <span class="sub">(one-way only, optional; bare number = inches)</span></span>
-      <input type="text" data-track="lead" data-tid="${t.id}" value="${esc(tr.lead||"")}"></label>`:""}
+    ${isOneWay?`<div class="toggle" style="grid-column:1/-1"><span>Lead edge allowance (overlap)? <span class="sub">(one-way draw only; rarely used)</span></span><label class="sw"><input type="checkbox" data-leadon="${t.id}" ${tr.leadOn?"checked":""}><span class="track"></span></label></div>${tr.leadOn?`<label class="f" style="grid-column:1/-1"><span>Lead edge allowance (overlap) <span class="sub">(bare number = inches)</span></span><input type="text" data-track="lead" data-tid="${t.id}" value="${esc(tr.lead||"")}"></label>`:""}`:""}
   </div>`;
 }
 function treatmentCard(t,i){
@@ -823,11 +837,11 @@ function render(){
       <select id="custtype">`+CUSTOMER_TYPES.map(c=>`<option value="${c[0]}" ${S.meta.customerType===c[0]?"selected":""}>${c[1]}</option>`).join("")+`</select></label>
     ${PW_TYPES.has(S.meta.customerType)?`<div class="toggle"><span>Prevailing wage? <span class="sub">(verify - public funding)</span></span><label class="sw"><input type="checkbox" id="pwchk" ${S.meta.pw?"checked":""}><span class="track"></span></label></div>`:""}
     ${miniField("address","Address")}
-    ${miniField("date","Date")}
+    ${dateField()}
     <label class="f"><span>Surveyor</span></label>
     <div class="seg sm" id="surveyorseg">`+SURVEYORS.map(n=>`<button data-surveyor="${n}" class="${S.meta.surveyor===n?"on":""}">${n}</button>`).join("")+`</div>`+`
     <div class="grid2">${miniField("contactName","Contact name")}${miniField("contactTitle","Contact title")}</div>
-    <div class="grid2">${miniField("contactEmail","Contact email")}${miniField("contactCell","Contact cell")}</div>
+    <div class="grid2">${miniField("contactEmail","Contact email")}${phoneField("contactCell","Contact cell")}</div>
     <label class="f" style="margin-top:14px"><span>Venue frame</span>
       <select id="frame">`+FRAMES.map(f=>`<option value="${f[0]}" ${S.venueFrame===f[0]?"selected":""}>${f[1]}</option>`).join("")+`</select></label>
   </div></div>`;
@@ -866,6 +880,23 @@ function safeRender(){ const a=document.activeElement; if(a&&a.closest&&a.closes
 function miniField(k,label){
   return `<label class="f"><span>${label}</span><input type="text" data-meta="${k}" value="${esc(S.meta[k]||"")}"></label>`;
 }
+// Section-1 DATE: native date picker. Legacy/non-ISO stored values normalize to YYYY-MM-DD for the value attr, else fall back
+// to blank (a type=date input silently ignores a bad value - never crashes); S.meta.date keeps its string until a date is picked.
+function toISODate(s){ if(s==null)return ""; s=(""+s).trim(); if(!s)return "";
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;                              // already ISO
+  const m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);         // M/D/Y or M-D-Y / M.D.Y
+  if(m){ let mo=+m[1],da=+m[2],yr=+m[3]; if(yr<100)yr+=2000;
+    if(mo>=1&&mo<=12&&da>=1&&da<=31) return String(yr).padStart(4,"0")+"-"+String(mo).padStart(2,"0")+"-"+String(da).padStart(2,"0"); }
+  return ""; }
+function dateField(){ return `<label class="f"><span>Date</span><input type="date" class="datefield" data-meta="date" value="${esc(toISODate(S.meta.date))}"></label>`; }
+// Section-1 CONTACT phone: live (###) ###-#### mask. Strips non-digits, formats partials (no forced full mask), backspace-safe
+// (no trailing separators to re-trap the caret). Stored formatted; a feed-populated raw value is formatted on render.
+function fmtPhone(s){ const d=(""+(s==null?"":s)).replace(/\D/g,"").slice(0,10);
+  if(!d)return "";
+  if(d.length<4)return "("+d;
+  if(d.length<7)return "("+d.slice(0,3)+") "+d.slice(3);
+  return "("+d.slice(0,3)+") "+d.slice(3,6)+"-"+d.slice(6); }
+function phoneField(k,label){ return `<label class="f"><span>${label}</span><input type="tel" inputmode="tel" data-metaphone="${k}" value="${esc(fmtPhone(S.meta[k]||""))}"></label>`; }
 /* ---- per-treatment shaped/arched-top capture (Pass 2a; relocated from the old venue-level prosc block) ---- */
 const CONFORM_FAMS=new Set(["drawn","valance","masking"]);   // only tops that must conform to an arch / raked wall
 function conformBlock(t){
@@ -1146,6 +1177,8 @@ function bind(){
   app.querySelectorAll("[data-surveyor]").forEach(b=>b.onclick=()=>{S.meta.surveyor=b.dataset.surveyor;save();render();});
   // meta
   app.querySelectorAll("[data-meta]").forEach(i=>i.oninput=()=>{S.meta[i.dataset.meta]=i.value;save(); if(i.dataset.meta==="venue"||i.dataset.meta==="projName")document.getElementById("hdrsub").textContent=projName(S);});
+  // contact phone live mask: reformat + persist the formatted string on every keystroke (caret rides the end - the typing case)
+  app.querySelectorAll("[data-metaphone]").forEach(i=>i.oninput=()=>{ const f=fmtPhone(i.value); i.value=f; S.meta[i.dataset.metaphone]=f; save(); });
   const psel=document.getElementById("pendsel"); if(psel)psel.onchange=()=>{ if(psel.value==="")return; applyPending(PENDING[+psel.value]); };
   const pref=document.getElementById("pendrefresh"); if(pref)pref.onclick=(e)=>{ e.preventDefault(); pref.textContent="refreshing…"; fetchPending().then(()=>{ render(); }); };
   // frame
@@ -1189,6 +1222,14 @@ function bind(){
     const upd=()=>refreshDerived(t);
     inp.addEventListener("input",upd); inp.addEventListener("change",upd);
   }));
+  // FULLNESS combo: append "%" to a bare typed number on commit (change/blur). Picks already carry "%"; runs after the generic
+  // data-k save (addEventListener fires after the onchange property handler) so the normalized value is what persists.
+  app.querySelectorAll('[data-k="fullness"]').forEach(inp=>{ inp.setAttribute("inputmode","numeric");
+    const norm=()=>{ let v=(inp.value||"").trim(); if(/^\d+(?:\.\d+)?$/.test(v)){ v=v+"%"; inp.value=v;
+      const t=T((inp.dataset.t||"").replace("_op","")); if(t){ (inp.dataset.t.endsWith("_op")?t.opFields:t.fields).fullness=v; save(); } } };
+    inp.addEventListener("change",norm); inp.addEventListener("blur",norm); });
+  // draw-style change re-renders the drawn card so the one-way-only Lead-edge toggle appears/disappears with the draw style
+  app.querySelectorAll('[data-k="draw"]').forEach(inp=>inp.addEventListener("change",()=>{ const t=T((inp.dataset.t||"").replace("_op","")); if(t&&typeFamily(t.type)==="drawn")render(); }));
   // unified track selector (data-track): writes t.track; exact preset match auto-fills overlap+drop (blank where catalog unknown);
   // free text passes through; derived box refreshes via targeted DOM patch only - NEVER a full render() (would drop iOS keyboard focus)
   app.querySelectorAll("[data-track]").forEach(inp=>{
@@ -1222,6 +1263,8 @@ function bind(){
     };
     inp.addEventListener("input",handler); inp.addEventListener("change",handler);
   });
+  // LEAD-EDGE gate: the one-way lead-edge toggle reveals/hides the lead input (checkbox -> full render is focus-safe).
+  app.querySelectorAll("[data-leadon]").forEach(i=>i.onchange=()=>{ const t=T(i.dataset.leadon); if(!t)return; if(!t.track)t.track={model:"",overlap:"",drop:"",lead:"",mount:"suspended"}; t.track.leadOn=i.checked; save(); render(); });
   // hardware materials bundle (Pass 3). Row TEXT inputs recompute totals via TARGETED patch (hwline_/hwtot_) - never a
   // full render (iOS keyboard focus). Add/delete-row buttons and the expendables checkbox are safe to re-render/patch.
   app.querySelectorAll("[data-hwadd]").forEach(b=>b.onclick=()=>{const t=T(b.dataset.hwadd); if(!t)return; if(!t.hw)t.hw=hwDefault(); t.hw.rows=t.hw.rows||[]; t.hw.rows.push({item:"",source:"",partNo:"",qty:"1",unit:"ea",unitPrice:null}); save(); render();});
@@ -1317,6 +1360,7 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
 }
 // ADCK0001 track-kit block (trackonly, or a new track for a drawn-new run), fields in Epicor screen order.
 function adckBlock(t,lineNo,srcNote){ const F=t.fields||{}, TR=t.track||{}, C=RB_CONFIG.track;
+  const obsOv=((TR.overlapObserved||"")+"").trim();
   const isTrackOnly=typeFamily(t.type)==="trackonly";
   const cord=cordingFromOp(t.operation), layout=layoutFromDraw(F.draw);
   const width=isTrackOnly?F.trackLen:F.w, height=isTrackOnly?F.existBottomFloor:F.h;
@@ -1328,7 +1372,7 @@ function adckBlock(t,lineNo,srcNote){ const F=t.fields||{}, TR=t.track||{}, C=RB
   o+=dlead("Layout",layout||("Overlap-track"+DEFV))+"\n";
   o+=dlead("Width (track length ft)",orMissing(width))+"\n";
   o+=dlead("Height (ft)",orMissing(height))+"\n";
-  o+=dlead("Overlap (in)",orMissing(TR.overlap))+"\n";
+  o+=dlead("Overlap (in)",orMissing(effOverlap(t))+(obsOv?"  (as observed)":""))+"\n";
   o+=dlead("Suspension",suspFromMount(TR,F))+"\n";
   o+=dlead("Drive",C.drive+DEFV)+"\n";
   o+=dlead("Model Variant",orDefault(modelVariant(TR.model),"per track family"))+"\n";
@@ -1388,10 +1432,11 @@ function drapeMathText(t){ if(typeFamily(t.type)!=="drawn")return ""; const F=t.
   const H=parseLen(F.h), D=parseInches(TR.drop), C=parseClearance(F.clearance); let o="", FIN=null;
   if(H!=null&&H>0){ if(D!=null&&D>0){ if(C!=null&&C!==0){ FIN=H-D-C; o+="  finished height: "+fmtLen(H)+" - "+TR.drop+" hw "+(C>0?"- "+fmtIn(C*12)+" clr":"+ "+fmtIn(-C*12)+" puddle")+" = "+fmtLen(FIN)+"\n"; }
       else{ FIN=H-D; o+="  finished height: "+fmtLen(H)+" - "+TR.drop+" hw = "+fmtLen(FIN)+"\n"; } } else FIN=H; }
-  const W=parseLen(F.w), O=parseInches(TR.overlap);
+  const ovStr=effOverlap(t), obsOv=((TR.overlapObserved||"")+"").trim();
+  const W=parseLen(F.w), O=parseInches(ovStr);
   if(W!=null&&W>0){ const hP=(FIN!=null)?(" x "+fmtLen(FIN)+" H"):"";
-    if(/Bi-part/i.test(F.draw||"")){ o+=(O>0)?("  each drape (x2): "+fmtLen(W/2+O/2)+" W"+hP+"  (half width + half of the "+TR.overlap+" overlap)\n"):"  ** overlap not set - bi-part panel width blocked\n"; }
-    else if(/One-way/i.test(F.draw||"")){ const L=parseInches(TR.lead); o+="  drape (x1): "+fmtLen(W+(L>0?L:0))+" W"+hP+"\n"; }
+    if(/Bi-part/i.test(F.draw||"")){ o+=(O>0)?("  each drape (x2): "+fmtLen(W/2+O/2)+" W"+hP+"  (half width + half of the "+ovStr+" overlap"+(obsOv?" as observed":"")+")\n"):"  ** overlap not set - bi-part panel width blocked\n"; }
+    else if(/One-way/i.test(F.draw||"")){ const L=(TR.leadOn)?parseInches(TR.lead):null; o+="  drape (x1): "+fmtLen(W+(L>0?L:0))+" W"+hP+"\n"; }
     else o+="  each drape: "+fmtLen(W)+" W"+hP+"\n"; }
   return o;
 }
