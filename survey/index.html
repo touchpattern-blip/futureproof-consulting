@@ -126,7 +126,10 @@
       <h1><span class="logo">R</span> Site Survey <span id="appver" style="font-size:12px;font-weight:600;color:#7a8088;letter-spacing:.02em;vertical-align:middle"></span></h1>
       <small id="hdrsub">New survey</small>
     </div>
-    <span class="savechip" id="savechip">Saved</span>
+    <div style="display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto">
+      <label id="devbox" title="Developer mode" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#7a8088;cursor:pointer;margin-right:8px;user-select:none"><input type="checkbox" id="devchk" style="margin:0;cursor:pointer">dev</label>
+      <span class="savechip" id="savechip">Saved</span>
+    </div>
   </div>
 </header>
 
@@ -196,7 +199,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=10;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.93";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.94";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
@@ -1409,12 +1412,13 @@ function copySurveyLink(id){ const d=surveyById(id); if(!d)return;
   else prompt("Copy this self-loading link:",url); }
 
 /* ---- Dev mode: hides admin-only surfaces (Import scope) from the ~non-admin RB users. ---- */
-/* Toggle by ?dev=1 / ?dev=0 in the URL, or tap the "beta" version badge 5x. Persists in localStorage. */
+/* Toggle by the header "dev" checkbox, or ?dev=1 / ?dev=0 in the URL. Persists in localStorage. */
 function devOn(){ try{ return localStorage.getItem("rb_dev")==="1"; }catch(e){ return false; } }
 function setDev(on){ try{ if(on)localStorage.setItem("rb_dev","1"); else localStorage.removeItem("rb_dev"); }catch(e){} applyDev(); }
 function applyDev(){ const on=devOn();
   const w=document.getElementById("importwrap"); if(w)w.style.display=on?"":"none";
   const to=document.getElementById("typeorderwrap"); if(to)to.style.display=on?"":"none";
+  const chk=document.getElementById("devchk"); if(chk)chk.checked=on;   // keep header checkbox in sync (URL param / programmatic toggles)
   if(on)renderTypeOrder(); }
 // dev-only reorder panel: one row per non-blank type in current orderedTypes() order + Copy / Reset buttons.
 // No-ops when the element is absent/hidden. Handlers are bound ONCE (below) via event delegation, never per-render.
@@ -1463,9 +1467,7 @@ function chip(msg){ const c=document.getElementById("savechip"); if(c){ c.textCo
 })();
 (function(){ const q=new URLSearchParams(location.search); if(q.get("dev")==="1")setDev(true); else if(q.get("dev")==="0")setDev(false);
   applyDev();
-  const av=document.getElementById("appver"); if(av){ let n=0,tmr=null; av.style.cursor="pointer";
-    av.addEventListener("click",()=>{ n++; clearTimeout(tmr); tmr=setTimeout(()=>{ n=0; },1600);
-      if(n>=5){ n=0; const now=!devOn(); setDev(now); const c=document.getElementById("savechip"); if(c){ c.textContent="Dev mode "+(now?"ON":"OFF"); setTimeout(()=>{ c.textContent="Saved"; },2500); } } }); } })();
+  const chk=document.getElementById("devchk"); if(chk){ chk.checked=devOn(); chk.addEventListener("change",()=>setDev(chk.checked)); } })();
 
 /* ---- Import scope: paste (or drop) a full survey JSON -> becomes a NEW saved project ---- */
 function importStatus(msg,ok){ const el=document.getElementById("importstatus"); if(el){ el.textContent=msg; el.style.color=ok?"var(--ok)":"#c0392b"; } }
