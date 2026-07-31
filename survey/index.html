@@ -451,8 +451,8 @@ function drawnFields(F){return [
   ...FABRIC_SPEC(F),
   ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
   ["fullness","Fullness","text",null,"as observed, e.g. ~50%"],
-  ["h","Floor to track top","text",null,"floor to TOP of track / mount"],
-  ["w","Width","text",null,"opening / track width"],
+  ["h","Floor to track bottom","text",null,"floor to BOTTOM of track"],
+  ["w","Total width of opening","text",null,"full opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
@@ -639,24 +639,27 @@ function panelBoxInner(t){
   const F=t.fields||{}, TR=t.track||{}; const out=[];
   const H=parseLen(F.h), D=parseInches(TR.drop);   // drop: bare number = INCHES (the 5.75-feet bug fix)
   const C=parseClearance(F.clearance);             // feet; 0 = brush floor; negative = puddle; null = unreadable
+  let FIN=null;   // finished height carried into the per-drape W x H line below (math unchanged)
   if(H!=null&&H>0){
     if(D!=null&&D>0){
       const mtag=(TR.mount==="ceiling")?" (ceiling mount)":"";
-      if(C!=null&&C!==0) out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} ${C>0?"&minus; "+fmtIn(C*12)+" clearance":"+ "+fmtIn(-C*12)+" puddle"} = <b>${fmtLen(H-D-C)}</b>`);
-      else out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} = <b>${fmtLen(H-D)}</b> <span style="color:#7a8088">${C===null?`(clearance &quot;${esc(F.clearance)}&quot; not a number - enter inches, e.g. -2 for a 2&quot; puddle)`:"(brush floor, 0 clearance)"}</span>`);
+      if(C!=null&&C!==0){ FIN=H-D-C; out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} ${C>0?"&minus; "+fmtIn(C*12)+" clearance":"+ "+fmtIn(-C*12)+" puddle"} = <b>${fmtLen(FIN)}</b>`); }
+      else{ FIN=H-D; out.push(`<b>Finished height (d):</b> opening ${fmtLen(H)} &minus; ${esc(TR.drop)} hardware${mtag} = <b>${fmtLen(FIN)}</b> <span style="color:#7a8088">${C===null?`(clearance &quot;${esc(F.clearance)}&quot; not a number - enter inches, e.g. -2 for a 2&quot; puddle)`:"(brush floor, 0 clearance)"}</span>`); }
     }
-    else out.push(`<b>Finished height:</b> ${fmtLen(H)} <span style="color:#7a8088">(pick a track model to subtract its hardware drop)</span>`);
+    else{ FIN=H; out.push(`<b>Finished height:</b> ${fmtLen(H)} <span style="color:#7a8088">(pick a track model to subtract its hardware drop)</span>`); }
   }
   { const row=trackByLabel((TR.model||"").trim());
     if(row&&row.id==="adc280") out.push(`<b style="color:var(--warn)">&#9888; 280 Silent Steel:</b> <span style="color:var(--warn)">drop 12-5/16&quot; = MAX, adjustable shorter via trim chain - confirm before cut.</span>`); }
   const W=parseLen(F.w), draw=F.draw||"", O=parseInches(TR.overlap);
   const biBlank=/Bi-part/i.test(draw)&&!(O>0);
   if(biBlank) out.push(`<b style="color:var(--warn)">&#9888; Overlap not set.</b> <span style="color:var(--warn)">Bi-part with no center overlap = center light-gap. Enter the TOTAL bypass or pick a track model.</span>`);
-  if(W!=null&&W>0){
-    if(/Bi-part/i.test(draw)){ if(!biBlank) out.push(`<b>Each panel (d):</b> 2&times; @ <b>${fmtLen(W/2+O/2)}</b> <span style="color:#7a8088">(&frac12; of ${fmtLen(W)} + &frac12; the ${esc(TR.overlap)} overlap)</span>`); }
+  if(W!=null&&W>0){   // per-drape line: panel width x finished height TOGETHER (presentation only; same math)
+    const hPart=(FIN!=null)?` &times; <b>${fmtLen(FIN)}</b> H`:"";
+    const hNote=(FIN!=null)?" &times; finished height":"";
+    if(/Bi-part/i.test(draw)){ if(!biBlank) out.push(`<b>Each drape (&times;2):</b> <b>${fmtLen(W/2+O/2)}</b> W${hPart} <span style="color:#7a8088">(width = &frac12; of ${fmtLen(W)} + &frac12; the ${esc(TR.overlap)} overlap${hNote})</span>`); }
     else if(/One-way/i.test(draw)){ const L=parseInches(TR.lead);
-      out.push(`<b>Panel (d):</b> 1&times; @ <b>${fmtLen(W+(L>0?L:0))}</b> <span style="color:#7a8088">(${fmtLen(W)}${L>0?" + "+esc(TR.lead)+" lead-edge":", lead-edge allowance blank (optional)"}; center overlap n/a on one-way)</span>`); }
-    else out.push(`<b>Each panel (d):</b> 1&times; @ <b>${fmtLen(W)}</b> <span style="color:#7a8088">(full width &mdash; pick a draw style)</span>`);
+      out.push(`<b>Drape (&times;1):</b> <b>${fmtLen(W+(L>0?L:0))}</b> W${hPart} <span style="color:#7a8088">(width = ${fmtLen(W)}${L>0?" + "+esc(TR.lead)+" lead-edge":", lead-edge allowance blank (optional)"}; center overlap n/a on one-way${hNote})</span>`); }
+    else out.push(`<b>Each drape:</b> <b>${fmtLen(W)}</b> W${hPart} <span style="color:#7a8088">(full width &mdash; pick a draw style${hNote})</span>`);
   }
   return out.length? out.join("<br>") : "Enter opening height and/or width to compute the drape.";
 }
@@ -664,6 +667,11 @@ function trackBad(t){ if(typeFamily(t.type)!=="drawn")return false; const F=t.fi
   return /Bi-part/i.test(F.draw||"")&&!(parseInches(TR.overlap)>0); }
 function refreshDerived(t){ const box=document.getElementById("pbox_"+t.id); if(!box)return; box.innerHTML=panelBoxInner(t); const card=box.closest(".treat"); if(card)card.classList.toggle("badcfg",trackBad(t)); }
 const TRACK_OPS=new Set(["manual","cord","motor"]);   // operations that ride a track
+// T1: drawn-card mirror of the unified center overlap. Reads/writes the SAME t.track.overlap the track block edits
+// (no new data field); explicit data-ovw attr; handler patches the derived box + track-block twin, never a full render.
+function ovwField(t){ const tr=t.track||{};
+  return `<label class="f"><span>Overlap width <span class="sub">(TOTAL center bypass; bare number = inches; auto-fills from track model)</span></span>
+      <input type="text" data-ovw="${t.id}" value="${esc(tr.overlap||"")}"></label>`; }
 // ONE unified track selector (input + datalist = dropdown with type-your-own). Explicit data-track attrs, never the _op suffix scheme.
 function trackBlock(t){
   const tr=t.track||{}; const dl="tkdl_"+t.id; const isDrawn=typeFamily(t.type)==="drawn";
@@ -692,7 +700,7 @@ function treatmentCard(t,i){
   if(fam && FAMILY_FIELDS[fam]){
     const fs=FAMILY_FIELDS[fam](t.fields||{});
     // 2-col grid for compact fields
-    fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)).join("")+`</div>`;
+    fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)+((fam==="drawn"&&f[0]==="w")?ovwField(t):"")).join("")+`</div>`;
   }
   let opHtml="";
   if(showOp){
@@ -1129,6 +1137,20 @@ function bind(){
           app.querySelectorAll(`[data-track][data-tid="${t.id}"]`).forEach(s=>{ if(s.dataset.track==="overlap")s.value=t.track.overlap; if(s.dataset.track==="drop")s.value=t.track.drop; });
         }
       }
+      // keep the drawn-card Overlap-width mirror (data-ovw) in sync - value patch only, skip if it holds focus
+      const ovm=app.querySelector(`[data-ovw="${t.id}"]`); if(ovm&&ovm!==document.activeElement)ovm.value=t.track.overlap||"";
+      save(); refreshDerived(t);
+    };
+    inp.addEventListener("input",handler); inp.addEventListener("change",handler);
+  });
+  // T1: drawn-card Overlap-width input writes the SAME t.track.overlap the track block edits (no new data field);
+  // targeted patches only (derived box + track-block twin) - NEVER a full render() (iOS keyboard focus)
+  app.querySelectorAll("[data-ovw]").forEach(inp=>{
+    const t=T(inp.dataset.ovw); if(!t)return;
+    const handler=()=>{
+      if(!t.track)t.track={model:"",overlap:"",drop:"",lead:"",mount:"suspended"};
+      t.track.overlap=inp.value;
+      app.querySelectorAll(`[data-track="overlap"][data-tid="${t.id}"]`).forEach(s=>{ if(s!==document.activeElement)s.value=t.track.overlap; });
       save(); refreshDerived(t);
     };
     inp.addEventListener("input",handler); inp.addEventListener("change",handler);
