@@ -209,7 +209,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.01";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.02";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -1040,7 +1040,7 @@ function printConformTemplate(t,cv){
   setTimeout(function(){ try{w.print();}catch(_){}} ,300);
 }
 
-/* ================= ARCH PROFILER (v1.01) =================
+/* ================= ARCH PROFILER (v1.02) =================
    A richer, standalone interactive instrument for a treatment's shaped/arched top (Wynn lift-line style).
    Launches in a SEPARATE WINDOW via window.open + document.write(archToolHTML(seed)). Fully self-contained
    (own <style> + <script>): archRuntime holds ALL tool logic and is serialized into the child document, so it
@@ -1132,10 +1132,19 @@ function archRuntime(SEED){
   /* ---- edits ---- */
   function breakSymmetry(){ if(!symmetric) return; stations=drawStations().map(d=>({x:d.dx,h:d.h})).sort((a,b)=>a.x-b.x); symmetric=false; proposed=false; const c=document.getElementById("inSym"); if(c)c.checked=false; }
   function setDotHeight(di,h){ const dp=drawStations(); const d=dp[di]; if(!d) return; proposed=false;
-    if(d.mirror&&symmetric){ const dx=d.dx; breakSymmetry(); const ni=stations.findIndex(s=>Math.abs(s.x-dx)<1e-6); if(ni>=0) stations[ni].h=h; }
-    else { stations[d.src].h=h; }
-    redraw(); }
-  function setChipHeight(si,h){ if(stations[si]){ stations[si].h=h; proposed=false; redraw(); } }
+    if(d.mirror&&symmetric){ const dx=d.dx; breakSymmetry(); const ni=stations.findIndex(s=>Math.abs(s.x-dx)<1e-6); if(ni>=0) stations[ni].h=h; redraw(); }   // symmetry break = structural, rebuild fields
+    else { stations[d.src].h=h; redrawLive(); } }                                                                                                             // plain drag = keep the field set, just reflow
+  function setChipHeight(si,h){ if(stations[si]){ stations[si].h=h; proposed=false; redrawLive(); } }
+  // TAP-TO-ADD (change 1): a click on empty plot area drops a NEW freeform station at that x, seeding its height from the tapped y.
+  // symmetric -> add on the measured half (abs x) so it mirrors; asymmetric -> add at the literal x. New stations are normal (movable/deletable).
+  function xToDx(px){ return VIEW.xMin+(px-PADL)/VIEW.sx; }
+  function addStationTap(px,py){ if(!VIEW) computeView();
+    if(px<PADL-2||px>WPX-PADR+2) return false;          // outside the horizontal plot band
+    if(py<PADT-2||py>VIEW.baseY+2) return false;        // outside the vertical plot band (below the baseline / above the top)
+    const dx=xToDx(px), h=snap(yToH(py)); proposed=false;
+    stations.push({x:symmetric?Math.abs(dx):dx,h:h}); stations.sort((a,b)=>a.x-b.x);
+    redraw(); return true; }
+  function planPoint(dxFeet,hFeet){ if(!VIEW) computeView(); return {px:SVGX(dxFeet),py:SVGY(hFeet)}; }
   function toggleSymmetric(on){ if(on&&!symmetric){ const right=stations.filter(s=>s.x>=-1e-9).map(s=>({x:Math.abs(s.x),h:s.h})); const seen={}; const dedup=[]; right.sort((a,b)=>a.x-b.x).forEach(s=>{ const k=s.x.toFixed(4); if(!seen[k]){ seen[k]=1; dedup.push(s); } }); stations=dedup; symmetric=true; proposed=false; }
     else if(!on&&symmetric){ breakSymmetry(); } redraw(); }
 
@@ -1184,7 +1193,7 @@ function archRuntime(SEED){
     dp.forEach((p,i)=>{ const x=SVGX(p.dx), y=SVGY(p.h);
       s+='<line class="drop" x1="'+x.toFixed(1)+'" y1="'+y.toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+VIEW.baseY.toFixed(1)+'"/>';
       s+='<circle class="stndot'+(p.mirror?' mir':'')+'" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="7" data-di="'+i+'"></circle>';
-      s+='<text class="hlabel" x="'+x.toFixed(1)+'" y="'+(y-13).toFixed(1)+'" text-anchor="middle">'+esc(fmtFeet(p.h))+'</text>';
+      if(p.mirror) s+='<text class="hlabel" x="'+x.toFixed(1)+'" y="'+(y-13).toFixed(1)+'" text-anchor="middle">'+esc(fmtFeet(p.h))+'</text>';   // source dots carry an on-graph editable input (fieldLayer); mirrored dots keep a static label
       s+='<text class="xlabel" x="'+x.toFixed(1)+'" y="'+(VIEW.baseY+18).toFixed(1)+'" text-anchor="middle">'+esc(symmetric?(Math.abs(p.dx)<1e-6?"peak":fmtFeet(Math.abs(p.dx))):fmtFeet(p.dx))+'</text>';
     });
     return s+'</svg>';
@@ -1199,21 +1208,47 @@ function archRuntime(SEED){
     if(fit.worst){ fn.style.display="block"; fn.innerHTML='&#9888; Under-sampled: the fitted top bows '+esc(fmtFeet(fit.worst.sag))+' off the straight chord near <b>'+esc(symmetric?fmtFeet(Math.abs(fit.worst.mid[0]))+" from the peak":fmtFeet(fit.worst.mid[0]))+'</b> &mdash; add a measured station there before cutting.'; }
     else { fn.style.display="none"; }
   }
-  function chips(){ const box=document.getElementById("stationChips"); let h="";
-    stations.forEach((s,i)=>{ const lab=symmetric?(Math.abs(s.x)<1e-6?"peak":fmtFeet(s.x)+" from peak"):fmtFeet(s.x);
-      h+='<div class="chip"><span>'+esc(lab)+'</span><input type="text" inputmode="decimal" data-si="'+i+'" value="'+esc(fmtFeet(s.h))+'"></div>'; });
-    box.innerHTML=h;
-    box.querySelectorAll("input[data-si]").forEach(inp=>{ inp.oninput=()=>{ const v=parseFeet(inp.value); if(v!=null) setChipHeight(+inp.dataset.si,v); }; });
+  // ON-GRAPH INLINE HEIGHT FIELDS (change 2): one absolutely-positioned <input> per station, anchored over its dot in the
+  // #fieldLayer overlay (a sibling of the SVG holder so a redraw of the SVG never wipes it). buildFields() (re)creates the
+  // input set on STRUCTURAL changes (add / delete / symmetry); positionFields() re-places each input via the viewBox->CSS
+  // scale every redraw so an input tracks its dot on drag / mirror / rescale. Typing an input live-updates the station height.
+  const FIELD_GAP=9;   // px the field floats above its dot (dot stays clear + draggable)
+  function buildFields(){ const layer=document.getElementById("fieldLayer"); if(!layer) return;
+    let h=""; stations.forEach((s,i)=>{ h+='<div class="hf" data-si="'+i+'"><input type="text" inputmode="decimal" data-si="'+i+'" value="'+esc(fmtFeet(s.h))+'"><button class="hfdel" data-si="'+i+'" title="delete station">&times;</button></div>'; });
+    layer.innerHTML=h;
+    layer.querySelectorAll("input[data-si]").forEach(inp=>{ inp.oninput=()=>{ const v=parseFeet(inp.value); if(v!=null){ const si=+inp.dataset.si; if(stations[si]){ stations[si].h=v; proposed=false; redrawLive(); } } };
+      inp.onkeydown=e=>{ if(e.key==="Enter") inp.blur(); }; });
+    layer.querySelectorAll(".hfdel").forEach(b=>{ b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); const si=+b.dataset.si; if(stations[si]){ stations.splice(si,1); proposed=false; redraw(); } }; });
   }
-  function redraw(){ document.getElementById("drawWrap").innerHTML=buildSVG(false); wireDots(); readouts(); chips(); }
+  function positionFields(){ const svg=document.getElementById("plan"), layer=document.getElementById("fieldLayer"); if(!svg||!layer||!VIEW) return;
+    const rect=svg.getBoundingClientRect(); if(!rect.width) return; const scale=rect.width/WPX, layerW=rect.width;
+    layer.querySelectorAll(".hf").forEach(fd=>{ const si=+fd.dataset.si, s=stations[si];
+      if(!s){ fd.style.display="none"; return; } fd.style.display="";
+      const halfW=(fd.offsetWidth||84)/2, cx=SVGX(s.x)*scale, cy=SVGY(s.h)*scale;
+      fd.style.left=Math.max(halfW+1,Math.min(layerW-halfW-1,cx))+"px";   // clamp so edge (spring) fields stay fully visible
+      fd.style.top=Math.max(1,cy-FIELD_GAP)+"px";
+      const inp=fd.querySelector("input"); if(inp&&document.activeElement!==inp) inp.value=fmtFeet(s.h);   // live-sync value except the one being typed
+    });
+  }
+  function redraw(){ const holder=document.getElementById("svgHolder"); if(holder)holder.innerHTML=buildSVG(false); wireDots(); readouts(); buildFields(); positionFields(); }
+  function redrawLive(){ const holder=document.getElementById("svgHolder"); if(holder)holder.innerHTML=buildSVG(false); wireDots(); readouts(); positionFields(); }   // keep the field set, just reflow the SVG + input positions
 
   /* ---- drag (vertical, snap 0.25") ---- */
-  let drag=null;
+  let drag=null, dragMoved=false;
   function svgPoint(svg,e){ const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
   function wireDots(){ const svg=document.getElementById("plan"); if(!svg) return;
-    svg.querySelectorAll("circle.stndot").forEach(c=>{ c.addEventListener("pointerdown",e=>{ drag=+c.dataset.di; try{c.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); }); });
-    svg.addEventListener("pointermove",e=>{ if(drag===null) return; const p=svgPoint(svg,e); const h=snap(yToH(p.y)); setDotHeight(drag,h); });
+    svg.addEventListener("pointerdown",()=>{ dragMoved=false; });   // any fresh interaction starts clean (so a stale drag never eats a later tap)
+    svg.querySelectorAll("circle.stndot").forEach(c=>{ c.addEventListener("pointerdown",e=>{ drag=+c.dataset.di; dragMoved=false; try{c.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); }); });
+    svg.addEventListener("pointermove",e=>{ if(drag===null) return; dragMoved=true; const p=svgPoint(svg,e); const h=snap(yToH(p.y)); setDotHeight(drag,h); });
     svg.addEventListener("pointerup",()=>{ drag=null; }); svg.addEventListener("pointerleave",()=>{ drag=null; });
+  }
+  // persistent (attached once) tap-to-add + resize reflow. svgHolder outlives each SVG rebuild, so the click delegate survives redraws.
+  function wireCanvas(){ const holder=document.getElementById("svgHolder"); if(!holder) return;
+    holder.addEventListener("click",e=>{ if(dragMoved){ dragMoved=false; return; }                     // ignore the click that ends a drag
+      if(e.target&&e.target.closest&&e.target.closest("circle.stndot")) return;                          // ignore clicks on a dot (that's a drag handle)
+      const svg=document.getElementById("plan"); if(!svg) return; const m=svg.getScreenCTM(); if(!m) return;
+      const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; const p=pt.matrixTransform(m.inverse()); addStationTap(p.x,p.y); });
+    window.addEventListener("resize",positionFields);
   }
 
   /* ---- export / save ---- */
@@ -1261,9 +1296,10 @@ function archRuntime(SEED){
   // test / integration hooks (used by the headless verifier and any future automation)
   window.__arch={ state:()=>({span,peak,symmetric,stations:stations.map(s=>({x:s.x,h:s.h})),proposed}),
     dbg:()=>{ const fit=fitCurve(); const dp=drawStations(); return {symmetric,nStations:stations.length,nDots:dp.length,devLen:fit.devLen,minX:dp.length?Math.min.apply(null,dp.map(p=>p.dx)):0,maxX:dp.length?Math.max.apply(null,dp.map(p=>p.dx)):0,worst:!!fit.worst}; },
-    editDot:setDotHeight, editChip:setChipHeight, breakSym:breakSymmetry, toggleSym:toggleSymmetric, svg:templateSVG, save:doSave, redraw };
+    editDot:setDotHeight, editChip:setChipHeight, breakSym:breakSymmetry, toggleSym:toggleSymmetric, svg:templateSVG, save:doSave, redraw,
+    tap:addStationTap, planPoint, nStations:()=>stations.length };
 
-  wireHeader(); redraw();
+  wireHeader(); wireCanvas(); redraw();
 }
 // Returns the full self-contained HTML document string for the Arch Profiler window.
 function archToolHTML(seed){
@@ -1287,6 +1323,12 @@ function archToolHTML(seed){
     +'.titlebar .block{text-align:right;font-size:11px;line-height:1.6;color:#333}'
     +'.titlebar .logo{display:inline-flex;width:22px;height:22px;border:2px solid #0d1117;border-radius:50%;align-items:center;justify-content:center;font-weight:900;font-size:12px;margin-bottom:4px}'
     +'#drawWrap{border:1.5px solid #0d1117;position:relative;background:#fff;overflow:hidden}svg{width:100%;height:auto;display:block}'
+    +'#svgHolder{display:block;line-height:0}'
+    +'#fieldLayer{position:absolute;inset:0;pointer-events:none;z-index:5}'
+    +'.hf{position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:2px;pointer-events:auto;white-space:nowrap;will-change:left,top}'
+    +'.hf input{width:66px;font-size:13px;font-weight:700;text-align:center;padding:3px 4px;border:1.5px solid #1d6fe0;border-radius:6px;background:rgba(255,255,255,.96);color:#14181b;box-shadow:0 1px 5px rgba(0,0,0,.28)}'
+    +'.hf input:focus{outline:none;border-color:#0d4fb0}'
+    +'.hf .hfdel{width:16px;height:16px;line-height:14px;text-align:center;font-size:12px;font-weight:900;color:#fff;background:#c2362b;border:none;border-radius:50%;cursor:pointer;padding:0;flex:0 0 auto}'
     +'.ruler{stroke:#5b6776;stroke-width:1}.rlabel{font-size:11px;fill:#5b6776;text-anchor:end}'
     +'.centerline{stroke:#c2362b;stroke-width:1;stroke-dasharray:5 4;opacity:.7}.axlabel{font-size:11px;font-weight:700;fill:#c2362b}'
     +'.fabric{fill:#7a1f1a;opacity:.72}.edge{fill:none;stroke:#3a0f0c;stroke-width:2.5}'
@@ -1311,9 +1353,9 @@ function archToolHTML(seed){
     +'<span id="savemsg"></span></div>';
   const sheet='<div class="sheet"><div class="titlebar"><div><h1>ARCH PROFILER</h1>'
     +'<div class="sub">'+esc(seed.venue||"")+(seed.venue?' &nbsp;|&nbsp; ':'')+esc(seed.label||"")+'<br>shaped-top station capture &middot; drag dots or type heights (floor &rarr; top) &middot; symmetric = measured from the peak outward</div></div>'
-    +'<div class="block"><span class="logo">R</span><br>Rose Brand Site Survey<br>Arch Profiler v1.01</div></div>'
-    +'<div id="drawWrap"></div>'
-    +'<div class="spanel"><div class="sp-title">Stations &mdash; floor &rarr; top height (type for accuracy; drag a dot to fine-tune)</div><div id="stationChips"></div><div class="flagNote" id="flagNote"></div></div>'
+    +'<div class="block"><span class="logo">R</span><br>Rose Brand Site Survey<br>Arch Profiler v1.02</div></div>'
+    +'<div id="drawWrap"><div id="svgHolder"></div><div id="fieldLayer"></div></div>'
+    +'<div class="spanel"><div class="sp-title">Stations &mdash; edit each height right on the graph &middot; tap an empty spot to add a station &middot; drag a dot to fine-tune</div><div class="flagNote" id="flagNote"></div></div>'
     +'</div>';
   const script=S1+'('+archRuntime.toString()+')('+JSON.stringify(seed)+');'+S2;
   return head+bar+sheet+script+'</body></html>';
