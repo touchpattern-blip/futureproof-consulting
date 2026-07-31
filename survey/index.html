@@ -138,8 +138,8 @@
     <div class="phead"><h3>Saved Surveys</h3><button class="x" id="projx">&times;</button></div>
     <div class="pbody">
       <button class="primary" id="projnew" style="width:100%;font-weight:700;padding:12px;border-radius:10px;border:none;color:#fff;background:var(--rb);cursor:pointer;margin-bottom:14px;">+ New survey</button>
-      <details id="importwrap" style="margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
-        <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Import scope <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(paste or drop a survey JSON)</span></summary>
+      <details id="importwrap" style="display:none;margin:0 0 14px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;">
+        <summary style="cursor:pointer;padding:11px 12px;font-size:13.5px;font-weight:700;color:#3a3f45;">Import scope <span class="sub" style="font-weight:500;color:var(--muted);font-size:11.5px;">(dev - paste or drop a survey JSON)</span></summary>
         <div id="importdrop" style="padding:2px 12px 12px;">
           <textarea id="importbox" placeholder="Paste survey JSON here..." style="min-height:110px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;"></textarea>
           <button id="importbtn" style="width:100%;margin-top:9px;font-size:14px;font-weight:700;padding:11px;border-radius:9px;border:1.5px solid var(--rb);background:#fff;color:var(--rb);cursor:pointer;">Import</button>
@@ -187,7 +187,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=9;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.90";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.91";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
@@ -365,13 +365,12 @@ const PW_TYPES=new Set(["public","school","gov"]);
 
 // Treatment type -> field family
 // Picker order is intentional (Gio, S119): Track → Main/Traveler → Leg → Valance → Masking → Backdrop
-// (cyc/scrim/drop) → Architectural → Install HW → Other. Venetian sits with Main as its variation.
+// (cyc/scrim/drop) → Architectural → Venetian/Austrian → Install HW → Other. Venetian sits low (rarely done).
 // Labor is NOT a picker type; it is the project-level install calculator (INST0001) and renders last on its own.
 const TYPES=[
   ["","Select type…",""],
   ["trackonly","Track only (no soft goods)","trackonly"],
   ["main","Main / Traveler curtain","drawn"],
-  ["venetian","Venetian / Austrian","venetian"],
   ["leg","Leg","flat"],
   ["valance","Valance","valance"],
   ["masking","Masking","masking"],
@@ -379,6 +378,7 @@ const TYPES=[
   ["scrim","Scrim","backdrop"],
   ["drop","Backdrop / Drop","backdrop"],
   ["arch","Architectural / Window drape","arch"],
+  ["venetian","Venetian / Austrian","venetian"],
   ["hardware","Installation hardware / material","hardware"],
   ["other","Other","other"]
 ];
@@ -1343,7 +1343,7 @@ function renderProjList(){
     const row=document.createElement("div");
     row.className="projrow"+(active?" active":"");
     row.innerHTML='<div class="pi"><div class="pn">'+esc(projName(d))+(active?' <span class="badge">current</span>':'')+'</div><div class="ps">'+(esc(bits.join("  •  "))||"empty")+'</div></div>'+
-      '<div class="pa"><button data-open="'+id+'">Open</button><button data-ren="'+id+'">Rename</button><button data-dup="'+id+'">Duplicate</button><button data-del="'+id+'">Delete</button></div>';
+      '<div class="pa"><button data-open="'+id+'">Open</button><button data-exp="'+id+'">Export</button>'+(devOn()?'<button data-lnk="'+id+'">Link</button>':'')+'<button data-ren="'+id+'">Rename</button><button data-dup="'+id+'">Duplicate</button><button data-del="'+id+'">Delete</button></div>';
     wrap.appendChild(row);
   });
 }
@@ -1356,10 +1356,38 @@ document.getElementById("newbtn").onclick=()=>{ newProject(); };
 document.getElementById("projlist").onclick=(e)=>{
   const b=e.target.closest("button"); if(!b)return;
   if(b.dataset.open){ openProject(b.dataset.open); closeProjModal(); }
+  else if(b.dataset.exp){ exportSurvey(b.dataset.exp); }
+  else if(b.dataset.lnk){ copySurveyLink(b.dataset.lnk); }
   else if(b.dataset.dup){ dupProject(b.dataset.dup); renderProjList(); }
   else if(b.dataset.ren){ const id=b.dataset.ren; const cur=projName((id===IDX.activeId)?S:loadProj(id)); const nn=prompt("Survey name:",cur); if(nn!=null){ renameProject(id,nn.trim()); if(id===IDX.activeId)render(); renderProjList(); } }
   else if(b.dataset.del){ const id=b.dataset.del; const d=(id===IDX.activeId)?S:loadProj(id); if(confirm('Delete "'+projName(d)+'"?  This cannot be undone.')){ delProject(id); renderProjList(); } }
 };
+
+/* ---- Export a survey OUT of the menu (deterministic, offline, no server) ---- */
+function slugName(d){ return ((projName(d)||"survey").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"survey").slice(0,60); }
+function b64uEncode(str){ const bytes=new TextEncoder().encode(str); let bin=""; for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }   // mirrors the #import= decoder
+function surveyById(id){ return (id===IDX.activeId)?S:loadProj(id); }
+function exportSurvey(id){ const d=surveyById(id); if(!d)return;
+  const blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
+  dlBlob("rb-survey-"+slugName(d)+".json",blob);
+  const c=document.getElementById("savechip"); if(c){ c.textContent="Exported .json"; setTimeout(()=>{ c.textContent="Saved"; },4000); } }
+function copySurveyLink(id){ const d=surveyById(id); if(!d)return;
+  const url=location.origin+location.pathname+"#import="+b64uEncode(JSON.stringify(d));
+  const done=()=>{ const c=document.getElementById("savechip"); if(c){ c.textContent="Link copied"; setTimeout(()=>{ c.textContent="Saved"; },4000); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done,()=>prompt("Copy this self-loading link:",url)); }
+  else prompt("Copy this self-loading link:",url); }
+
+/* ---- Dev mode: hides admin-only surfaces (Import scope) from the ~non-admin RB users. ---- */
+/* Toggle by ?dev=1 / ?dev=0 in the URL, or tap the "beta" version badge 5x. Persists in localStorage. */
+function devOn(){ try{ return localStorage.getItem("rb_dev")==="1"; }catch(e){ return false; } }
+function setDev(on){ try{ if(on)localStorage.setItem("rb_dev","1"); else localStorage.removeItem("rb_dev"); }catch(e){} applyDev(); }
+function applyDev(){ const w=document.getElementById("importwrap"); if(w)w.style.display=devOn()?"":"none"; }
+(function(){ const q=new URLSearchParams(location.search); if(q.get("dev")==="1")setDev(true); else if(q.get("dev")==="0")setDev(false);
+  applyDev();
+  const av=document.getElementById("appver"); if(av){ let n=0,tmr=null; av.style.cursor="pointer";
+    av.addEventListener("click",()=>{ n++; clearTimeout(tmr); tmr=setTimeout(()=>{ n=0; },1600);
+      if(n>=5){ n=0; const now=!devOn(); setDev(now); const c=document.getElementById("savechip"); if(c){ c.textContent="Dev mode "+(now?"ON":"OFF"); setTimeout(()=>{ c.textContent="Saved"; },2500); } } }); } })();
 
 /* ---- Import scope: paste (or drop) a full survey JSON -> becomes a NEW saved project ---- */
 function importStatus(msg,ok){ const el=document.getElementById("importstatus"); if(el){ el.textContent=msg; el.style.color=ok?"var(--ok)":"#c0392b"; } }
