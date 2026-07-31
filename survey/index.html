@@ -118,7 +118,7 @@
 <header>
   <div class="row">
     <div>
-      <h1><span class="logo">R</span> Site Survey</h1>
+      <h1><span class="logo">R</span> Site Survey <span id="appver" style="font-size:12px;font-weight:600;color:#7a8088;letter-spacing:.02em;vertical-align:middle"></span></h1>
       <small id="hdrsub">New survey</small>
     </div>
     <span class="savechip" id="savechip">Saved</span>
@@ -187,6 +187,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=9;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const APP_VERSION="0.90";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
@@ -363,14 +364,17 @@ const CUSTOMER_TYPES=[["","Select…"],["private","Private"],["public","Public a
 const PW_TYPES=new Set(["public","school","gov"]);
 
 // Treatment type -> field family
+// Picker order is intentional (Gio, S119): Track → Main/Traveler → Leg → Valance → Masking → Backdrop
+// (cyc/scrim/drop) → Architectural → Install HW → Other. Venetian sits with Main as its variation.
+// Labor is NOT a picker type; it is the project-level install calculator (INST0001) and renders last on its own.
 const TYPES=[
   ["","Select type…",""],
+  ["trackonly","Track only (no soft goods)","trackonly"],
   ["main","Main / Traveler curtain","drawn"],
   ["venetian","Venetian / Austrian","venetian"],
-  ["valance","Valance","valance"],
   ["leg","Leg","flat"],
+  ["valance","Valance","valance"],
   ["masking","Masking","masking"],
-  ["trackonly","Track only (no soft goods)","trackonly"],
   ["cyc","Cyclorama","backdrop"],
   ["scrim","Scrim","backdrop"],
   ["drop","Backdrop / Drop","backdrop"],
@@ -1968,6 +1972,7 @@ async function handleQuotePdf(file){
 window.__rerender=render;
 window.addEventListener("pagehide",flushSave);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden")flushSave(); });
+{ const av=document.getElementById("appver"); if(av)av.textContent="beta "+APP_VERSION; }
 render();
 /* ---- #import= direct-load link: /survey/#import=<URL-safe base64 of the survey JSON> ----
    The scope rides entirely in the URL fragment (never sent to any server); it is decoded, migrated
