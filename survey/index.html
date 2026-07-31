@@ -96,7 +96,7 @@
   .out .copybar button.primary{background:var(--ok);border-color:var(--ok);color:#fff;}
   .empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 0;}
   @media print{
-    header,.bar,.addbtn,.treat .thead button.del,#app,.out .phead,.out .tabs,.out .copybar{display:none !important;}
+    header,.bar,.addbtn,.treat .thead button.del,#app,.out .phead,.out .tabs,.out .copybar,#outchips{display:none !important;}
     body{padding:0;}
     .out{position:static !important;background:none !important;display:block !important;}
     .out .panel{max-height:none !important;box-shadow:none !important;border-radius:0 !important;}
@@ -120,6 +120,11 @@
   .combo input{display:block;width:100%;box-sizing:border-box;padding-right:2.4em;}
   .combopick{position:absolute;right:0;top:0;height:100%;width:2.4em;padding:0;margin:0;border:none;background-color:transparent;background-position:center center;cursor:pointer;font-size:16px;appearance:none;-webkit-appearance:none;}
   .combopick:focus{outline:none;}
+  /* per-DRAP copy chips on the Sales / Epicor Entry tab (copy the reconstructed configurator Description) */
+  .out .outchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .out .outchips .chiphint{flex-basis:100%;font-size:11.5px;color:var(--muted);margin-bottom:1px;}
+  .out .outchips .descchip{font-size:12px;font-weight:700;padding:7px 11px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:#3a3f45;cursor:pointer;}
+  .out .outchips .descchip:active{background:#f2f7ff;}
 </style>
 </head>
 <body>
@@ -179,10 +184,11 @@
     <div class="phead"><h3>Survey Handoff</h3><button class="x" id="outx">&times;</button></div>
     <div class="pbody">
       <div class="tabs">
-        <button class="on" data-tab="kinetic" id="tabK">Kinetic Sheet</button>
-        <button data-tab="summary" id="tabS">Full Summary</button>
+        <button class="on" data-tab="sales" id="tabK">Sales / Epicor Entry</button>
+        <button data-tab="installer" id="tabS">Installer Field Sheet</button>
       </div>
       <pre id="outpre"></pre>
+      <div id="outchips" class="outchips" style="display:none"></div>
       <div class="copybar">
         <button id="copybtn" class="primary">Copy</button>
         <button id="printbtn">Print / PDF</button>
@@ -202,7 +208,11 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=11;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.97";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.98";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+// RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
+// these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
+// treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
+const RB_CONFIG = { drape:{category:"Drapery Synthetic Velours", webbing:"3 in", hardwareOC:"12 in", mcSpacing:"None", labelType:"Rose Brand", labelLocation:"Bottom Hem - Offstage", onStageSide:"SR"}, track:{material:"Steel", color:"Silver", drive:"None", carrierSpacing:"12 in"} };
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.78/mi fuel);
@@ -1243,140 +1253,226 @@ function bind(){
 }
 function T(id){return S.treatments.find(t=>t.id===id);}
 
-/* ============ OUTPUT ============ */
-function ftxt(t){
-  const fam=typeFamily(t.type);
-  const F=t.fields||{}, O=t.opFields||{};
-  if(fam==="hardware"){   // KINETIC = the single rolled-up line, never the itemization (that lives in the FULL summary)
-    const c=hwCalc(t);
-    return "INHW0001  "+fmtMoney(c.totC)+((t.hw&&t.hw.expend)?"  (+10% expendables)":"");
-  }
-  const parts=[];
-  if(fam==="masking"&&F.role)parts.push("role: "+({leg:"Leg",border:"Border",teaser:"Teaser",tab:"Tab",blackout:"Full blackout",other:"Other"}[F.role]||F.role));
-  if(fam==="venetian"&&F.subType)parts.push(({austrian:"Austrian",venetian:"Venetian",contour:"Venetian Contour"}[F.subType])||F.subType);
-  const dims=[F.w?("W "+F.w):"",F.h?("H "+F.h):""].filter(Boolean).join(" × ");
-  if(dims)parts.push(dims);
-  if(F.fabric)parts.push(F.fabric);
-  { const fs=[F.color,F.weight,F.cert&&("cert "+F.cert)].filter(Boolean); if(fs.length)parts.push(fs.join(" · ")); }
-  if(F.lined)parts.push("LINED"+(F.lining?" ("+F.lining+")":""));
-  if(F.pleat||F.fullness)parts.push([F.pleat,F.fullness].filter(Boolean).join(" "));
-  const fins=[F.topFin&&("top: "+F.topFin),F.botFin&&("btm: "+F.botFin),F.sideFin&&("side: "+F.sideFin)].filter(Boolean);
-  if(fins.length)parts.push(fins.join(", "));
-  if(F.draw)parts.push("draw: "+F.draw);
-  const TR=t.track||{};   // unified track: printed EXACTLY ONCE, from the one source
-  { const trk=[TR.model&&("track "+TR.model), (TR.mount==="ceiling")&&"ceiling mount", TR.overlap&&("overlap "+TR.overlap+" total"), TR.drop&&("hw drop "+TR.drop)].filter(Boolean); if(trk.length)parts.push(trk.join(", ")); }
-  { const row=trackByLabel((TR.model||"").trim()); if(row&&row.id==="adc280") parts.push("⚠ 280: drop = MAX, adjustable shorter via trim chain - confirm before cut"); }
-  if(fam==="drawn"){ const _H=parseLen(F.h), _D=parseInches(TR.drop); if(_H>0&&_D>0){ const _C=parseClearance(F.clearance);
-    if(_C!=null&&_C!==0) parts.push("finished H "+fmtLen(_H-_D-_C)+" (opening "+F.h+" − "+TR.drop+" hw "+(_C>0?("− "+fmtIn(_C*12)+" clearance"):("+ "+fmtIn(-_C*12)+" puddle"))+")");
-    else parts.push("finished H "+fmtLen(_H-_D)+" (opening "+F.h+" − "+TR.drop+" hw"+(_C===null?("; ⚠ clearance \""+F.clearance+"\" unreadable, shown at brush"):"; brush floor")+")"); } }
-  if(fam==="drawn"){ const _W=parseLen(F.w); if(_W>0){ const _O=parseInches(TR.overlap);
-    if(/Bi-part/i.test(F.draw||"")){ parts.push((_O>0)?("panels: 2 @ "+fmtLen(_W/2+_O/2)+" (½W+½ ovl)"):"⚠ OVERLAP NOT SET (bi-part needs the total center bypass; panel math blocked)"); }
-    else if(/One-way/i.test(F.draw||"")){ const _L=parseInches(TR.lead); parts.push("panel: "+fmtLen(_W+(_L>0?_L:0))+(_L>0?" (W + "+TR.lead+" lead)":"")); } } }
-  if(F.profile)parts.push("profile: "+F.profile);
-  if(F.seamless)parts.push("seamless");
-  if(F.oneSided)parts.push("one-sided");
-  if(F.mount)parts.push("mount "+F.mount);
-  if(fam==="venetian"){ const ven=[
-    F.liftLines&&(F.liftLines+" lift lines"+(F.lineSpacing?" @ "+F.lineSpacing:"")),
-    (!F.liftLines&&F.lineSpacing)&&("line spacing "+F.lineSpacing),
-    F.variesPerLine&&"fullness varies per line",
-    F.bottomProfile&&("bottom "+F.bottomProfile),
-    F.festoons&&(F.festoons+" festoons"),
-    F.inTrim&&("in trim "+F.inTrim),
-    F.outTrim&&("out trim "+F.outTrim),
-    F.stackAllowance&&("stack "+F.stackAllowance),
-    F.liftMethod&&("lift: "+F.liftMethod),
-    F.gang,
-    F.controller&&("ctrl "+F.controller)
-  ].filter(Boolean); if(ven.length)parts.push(ven.join(", ")); }
-  if(fam==="trackonly"){ if(F.trackLen)parts.push("track length "+F.trackLen); if(F.notes)parts.push(F.notes); }
-  if(fam==="other"&&F.desc)parts.push(F.desc.replace(/\n/g," / "));
-  if(fam==="pipedrape")parts.push([F.panelW&&("panel "+F.panelW+"×"+(F.panelH||"")),F.qty&&("qty "+F.qty),F.uprightRange&&("uprights "+F.uprightRange),F.baseType&&("base "+F.baseType)].filter(Boolean).join(", "));
-  if(t.conform&&t.conform.on&&(t.conform.stations||[]).length){ const c=t.conform;
-    parts.push("shaped top: opening "+(c.openW||"?")+" × "+(c.openH||"?")+", stations "+c.stations.map(s=>"@"+(s.pos||"?")+"'="+(s.h||"?")).join(", ")+" · "+conformDerivedText(t)); }
-  if(t.operation){
-    const opLabel=(OPS.find(o=>o[0]===t.operation)||[])[1]||t.operation;
-    const opBits=[opLabel];
-    if(O.motor)opBits.push("motor "+O.motor);
-    if(O.power)opBits.push(O.power);
-    if(O.control)opBits.push("ctrl "+O.control);
-    if(O.limitOpen||O.limitClose)opBits.push("limits "+[O.limitOpen&&("open: "+O.limitOpen),O.limitClose&&("close: "+O.limitClose)].filter(Boolean).join(" / "));
-    if(O.cabling)opBits.push("cabling "+O.cabling);
-    if(O.batten)opBits.push("batten "+O.batten);
-    parts.push("["+opBits.join(", ")+"]");
-  }
-  return parts.filter(Boolean).join(" · ");
+/* ============ HANDOFF OUTPUT (S119 redesign) ============ */
+/* TWO audience-specific sheets. SALES / EPICOR ENTRY mirrors the Epicor configurator field ORDER (DRAP0001 / ADCK0001 /
+   INST0001 / INHW0001) one block per line item for transcription; INSTALLER FIELD SHEET is the price-free crew reference
+   grouped by treatment/location + a consolidated materials pull list. RB shop conventions live in RB_CONFIG (config layer,
+   SaaS firewall), never hardcoded here. Fixed-width dotted-leader blocks so a copy/paste survives Gmail/Outlook. */
+
+// dotted-leader row for monospace alignment (label ....... value)
+function dlead(label,value,w){ w=w||30; const L=String(label);
+  const V=(value==null||value==="")?"-":String(value);
+  const dots=Math.max(2,w-L.length);
+  return "  "+L+" "+".".repeat(dots)+" "+V; }
+const DEFV=" [default - verify]";
+function orDefault(v,def){ return (v==null||(""+v).trim()==="")?(def+DEFV):(""+v); }
+function orMissing(v){ return (v==null||(""+v).trim()==="")?"[not captured - verify]":(""+v); }
+function basisLabel(b){ return ({new:"new",replace:"replace pre-existing"})[b]||b||""; }
+// soft-good families keyed via the DRAPE configurator (DRAP0001). trackonly -> ADCK0001, hardware -> INHW0001.
+const DRAP_FAMS=new Set(["drawn","venetian","valance","flat","masking","backdrop","arch","other"]);
+function fabricStr(F){ return [F.fabric,F.color,F.weight,F.cert&&(F.cert+" cert")].filter(Boolean).join(", "); }
+function cordingFromOp(op){ return ({manual:"Walk-Along",cord:"Corded",motor:"Motor"})[op]||""; }
+function layoutFromDraw(draw){ if(/Bi-part/i.test(draw||""))return "Overlap-track"; if(/One-way/i.test(draw||""))return "One-way-draw"; return ""; }
+function suspFromMount(TR,F){ if(TR&&TR.mount==="ceiling")return "Ceiling Mount"; if(F&&F.mount)return F.mount; return "Suspended"; }
+function modelVariant(model){ const m=(model||"").match(/(\d{3})/); return m?("Model "+m[1]):""; }
+
+// the Epicor-auto-generated Base Description shape (what the configurator builds). The per-DRAP copy chip copies this so the
+// salesperson can paste it into the Description field if Epicor accepts a paste; harmless if unused.
+function salesDrapeDesc(t){ const F=t.fields||{}, C=RB_CONFIG.drape;
+  const piece=(t.label&&t.label.trim())||typeLabel(t.type)||"Drape";
+  const fab=fabricStr(F)||(C.category+" (verify)");
+  const dims=(F.h||F.w)?((F.h||"?")+" high x "+(F.w||"?")+" wide"):"";
+  const full=F.fullness?("With "+F.fullness+" Added Fullness"):"";
+  const pleat=F.pleat?("via "+F.pleat+" pleats"):"";
+  const liner=F.lined?("Lined"+(F.lining?" ("+F.lining+")":"")):"Unlined";
+  const top=F.topFin?("Top: "+F.topFin+", "+C.webbing+" webbing hardware on "+C.hardwareOC+" centers"):"";
+  const bot=F.botFin?("Bottom: "+F.botFin):"";
+  const edge=F.sideFin?("Edge: "+F.sideFin):"";
+  return [piece,"Drape with Vertical Seams","Material: "+fab,dims,[full,pleat,liner].filter(Boolean).join(" "),top,bot,edge].filter(Boolean).join(" / ");
 }
-function kineticSheet(){
-  const m=S.meta;
-  let o=`ROSE BRAND — SITE SURVEY → KINETIC QUOTE\n`;
-  o+=`${m.venue||"(venue)"}${m.quote?"  ·  Q"+m.quote:""}${m.so?"  ·  SO "+m.so:""}${(!m.quote&&!m.so)?"  ·  Quote/SO # __________":""}\n`;
-  if(m.customerName||m.customerId||m.salesperson)o+=`Customer: ${m.customerName||""}${m.customerId?"  (ID "+m.customerId+")":""}${m.salesperson?"  ·  Sales "+m.salesperson:""}\n`;
-  if(m.customerType)o+=`Customer type: ${(CUSTOMER_TYPES.find(c=>c[0]===m.customerType)||["",m.customerType])[1]}${m.pw?"  ·  ⚠ PREVAILING WAGE (verify)":""}\n`;
-  o+=`${m.address||""}\n`;
-  o+=`Date ${m.date||"—"}  ·  Surveyor ${m.surveyor||"—"}\n`;
-  o+=`Job: ${(JOB_TYPES.find(j=>j[0]===S.job)||["","—"])[1]}  ·  Frame: ${(FRAMES.find(f=>f[0]===S.venueFrame)||["","—"])[1]}\n`;
-  o+=`Install: ${({rb:"Rose Brand",installer:"Ship to installer",client:"Client self-install"}[S.install.responsibility]||"—")}\n`;
-  o+=`${"—".repeat(46)}\nLINE ITEMS\n`;
-  if(!S.treatments.length)o+=`  (none)\n`;
-  S.treatments.forEach((t,i)=>{
-    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${t.type==="trackonly"?"[ADK0001] ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+({new:"new",replace:"replace pre-existing"}[t.basis]||t.basis)+")":""}\n`;
-    const line=ftxt(t);
-    if(line)o+=`    ${line}\n`;
-    if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
-    if(t.engNotes&&t.engNotes.trim())o+=`    ⚠ ENG: ${t.engNotes.trim()}\n`;
+// DRAP0001 configurator block (drawn/venetian + every other soft good), fields in Epicor screen order.
+function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
+  let o="LINE "+lineNo+" - DRAP0001  ("+(typeLabel(t.type)||"soft good")+(t.label?" / "+t.label:"")+")"+(t.basis?"  ["+basisLabel(t.basis)+"]":"")+"\n";
+  o+=dlead("Category",orDefault(F.category,C.category))+"\n";
+  o+=dlead("Fabric (+nap)",orMissing(fabricStr(F)))+"\n";
+  o+=dlead("Height (ft-in)",orMissing(F.h))+"\n";
+  o+=dlead("Width (ft-in)",orMissing(F.w))+"\n";
+  o+=dlead("Number of Curtains",orMissing(t.qty))+"\n";
+  o+=dlead("Added Fullness %",orMissing(F.fullness))+"\n";
+  o+=dlead("Pleat",orMissing(F.pleat)+"  (centers"+DEFV+")")+"\n";
+  o+=dlead("Top Finish",orMissing(F.topFin))+"\n";
+  o+=dlead("  webbing size",C.webbing+DEFV)+"\n";
+  o+=dlead("  hardware O.C.",C.hardwareOC+DEFV)+"\n";
+  o+=dlead("Master Carrier Spacing",C.mcSpacing+DEFV)+"\n";
+  o+=dlead("Bottom Finish",orMissing(F.botFin))+"\n";
+  o+=dlead("SR Edge Finish",orMissing(F.sideFin))+"\n";
+  o+=dlead("  SL Edge","SL same as SR"+DEFV)+"\n";
+  o+=dlead("Liner",F.lined?("Full"+(F.lining?" - "+F.lining:"")):"No")+"\n";
+  o+=dlead("Label Type",C.labelType+DEFV)+"\n";
+  o+=dlead("  Label Location",C.labelLocation+DEFV)+"\n";
+  o+=dlead("  Piece Name",(t.label&&t.label.trim())||projName(S))+"\n";
+  o+=dlead("  On Stage Side",C.onStageSide+DEFV)+"\n";
+  o+="  -> configurator auto-builds Description + Unit Price\n";
+  return o;
+}
+// ADCK0001 track-kit block (trackonly, or a new track for a drawn-new run), fields in Epicor screen order.
+function adckBlock(t,lineNo,srcNote){ const F=t.fields||{}, TR=t.track||{}, C=RB_CONFIG.track;
+  const isTrackOnly=typeFamily(t.type)==="trackonly";
+  const cord=cordingFromOp(t.operation), layout=layoutFromDraw(F.draw);
+  const width=isTrackOnly?F.trackLen:F.w, height=isTrackOnly?F.existBottomFloor:F.h;
+  let o="LINE "+lineNo+" - ADCK0001  ADC Track Component Sales Kit"+(srcNote?" ("+srcNote+")":"")+(t.basis?"  ["+basisLabel(t.basis)+"]":"")+"\n";
+  o+=dlead("Track Family",orMissing(TR.model))+"\n";
+  o+=dlead("Cording",cord||("Corded"+DEFV))+"\n";
+  o+=dlead("Material",C.material+DEFV)+"\n";
+  o+=dlead("Color",C.color+DEFV)+"\n";
+  o+=dlead("Layout",layout||("Overlap-track"+DEFV))+"\n";
+  o+=dlead("Width (track length ft)",orMissing(width))+"\n";
+  o+=dlead("Height (ft)",orMissing(height))+"\n";
+  o+=dlead("Overlap (in)",orMissing(TR.overlap))+"\n";
+  o+=dlead("Suspension",suspFromMount(TR,F))+"\n";
+  o+=dlead("Drive",C.drive+DEFV)+"\n";
+  o+=dlead("Model Variant",orDefault(modelVariant(TR.model),"per track family"))+"\n";
+  o+=dlead("  Carrier Spacing",C.carrierSpacing+DEFV)+"\n";
+  o+=dlead("  Center Pipe Support","No"+DEFV)+"\n";
+  o+="  -> configurator auto-builds kit + Unit Price\n";
+  return o;
+}
+function laborDescShort(c,L){ const bits=[];
+  if(c.laborC!=null)bits.push((L.crew||"?")+" crew x "+(L.days||"?")+" day(s)");
+  if(c.mileC!=null)bits.push("fuel");
+  if(c.hotelC!=null)bits.push((L.hotelNights||"?")+"-night hotel");
+  if(c.mealsC!=null)bits.push("meals");
+  return "Install labor: "+(bits.join(" + ")||"see field sheet"); }
+function instBlock(lineNo){ const c=laborCalc(), L=S.install.labor||laborDefault();
+  return "LINE "+lineNo+" - INST0001  Installation Labor\n"
+    +dlead("Qty","1")+"\n"
+    +dlead("Description",laborDescShort(c,L))+"\n"
+    +dlead("Unit Price",fmtMoney(c.totC))+"\n"; }
+function inhwBlock(lineNo){ let tot=0;
+  S.treatments.forEach(t=>{ if(typeFamily(t.type)==="hardware")tot+=hwCalc(t).totC; });
+  return "LINE "+lineNo+" - INHW0001  Install Hardware & Materials\n"
+    +dlead("Qty","1")+"\n"
+    +dlead("Description","Install hardware & materials - see pull list")+"\n"
+    +dlead("Unit Price",fmtMoney(tot))+"\n"; }
+function salesSheet(){ const m=S.meta;
+  const fams=new Set(S.treatments.map(t=>typeFamily(t.type)));
+  const pg=[]; if([...fams].some(f=>DRAP_FAMS.has(f)))pg.push("Drapery");
+  if(fams.has("trackonly")||S.treatments.some(t=>typeFamily(t.type)==="drawn"&&t.basis==="new"))pg.push("ADC Track");
+  if(fams.has("hardware"))pg.push("Install Materials");
+  let o="ROSE BRAND - SALES / EPICOR LINE ENTRY\n";
+  o+="Quote # "+(m.quote||"__________")+"   .   SO # "+(m.so||"______")+"   .   Date "+(m.date||"-")+"\n";
+  o+="Customer: "+(m.customerName||"-")+(m.customerId?"  (ID "+m.customerId+")":"")+(m.salesperson?"   .   Sales: "+m.salesperson:"")+"\n";
+  if(m.customerType)o+="Customer type: "+(CUSTOMER_TYPES.find(c=>c[0]===m.customerType)||["",m.customerType])[1]+(m.pw?"   .   ** PREVAILING WAGE (verify)":"")+"\n";
+  o+="Product Group: "+(pg.join(" + ")||"-")+"\n";
+  o+="Key each block into the Epicor configurator in the field order shown. Values marked [default - verify] are RB shop defaults - confirm on site.\n";
+  o+="=".repeat(62)+"\n";
+  let line=0;
+  S.treatments.forEach(t=>{ const fam=typeFamily(t.type);
+    if(fam==="hardware")return;                     // rolled into the single INHW0001 line below
+    if(fam==="trackonly"){ o+=adckBlock(t,++line)+"\n"; return; }
+    if(DRAP_FAMS.has(fam)){ o+=drapBlock(t,++line)+"\n";
+      if(fam==="drawn"&&t.basis==="new"&&t.track&&(t.track.model||"").trim())
+        o+=adckBlock(t,++line,"new track for "+((t.label&&t.label.trim())||typeLabel(t.type)))+"\n";
+      return; }
+    o+="LINE "+(++line)+" - (type not set)  "+(typeLabel(t.type)||"?")+(t.label?" / "+t.label:"")+"\n\n";
   });
+  { const c=laborCalc(); if(c.any)o+=instBlock(++line)+"\n"; }
+  if(S.treatments.some(t=>typeFamily(t.type)==="hardware"))o+=inhwBlock(++line)+"\n";
   const engs=S.treatments.filter(t=>t.engNotes&&t.engNotes.trim());
-  if(engs.length)o+=`   ⚠ ${engs.length} item(s) with engineering / field notes, see above.\n`;
-  { const c=laborCalc(); if(c.any)o+=`${S.treatments.length+1}. INST0001  ${fmtMoney(c.totC)}\n`; }   // KINETIC = the single rolled-up labor line; itemization lives in the FULL summary
-  if(S.install.responsibility==="rb"){
-    const L=S.install.loadin;
-    const li=[L.doorW&&("door "+L.doorW+"×"+(L.doorH||"")),L.freight&&("freight "+(L.freightW||"")+"×"+(L.freightH||"")+"×"+(L.freightL||"")),L.access&&("access "+L.access),L.union&&"union",L.parking&&"parking",L.multiLevel&&"multi-level"].filter(Boolean).join(", ");
-    o+=`${"—".repeat(46)}\nLOAD-IN: ${li||"—"}\n`;
-    if(L.path)o+=`  path: ${L.path}\n`;
-    if(L.obstructions)o+=`  obstructions: ${L.obstructions}\n`;
-    if(L.notes)o+=`  notes: ${L.notes}\n`;
-  }
-  if(S.generalNotes)o+=`${"—".repeat(46)}\nNOTES: ${S.generalNotes}\n`;
+  if(engs.length)o+=engs.length+" item(s) carry engineering/field notes - see the Installer Field Sheet.\n";
+  if(!line)o+="  (no line items yet)\n";
   return o;
 }
-function fullSummary(){
-  const m=S.meta;
-  let o=kineticSheet()+`\n${"=".repeat(46)}\nCONTACT\n`;
-  o+=`  ${m.contactName||"—"}${m.contactTitle?", "+m.contactTitle:""}\n  ${m.contactEmail||""}  ${m.contactCell||""}\n`;
-  o+=`${"=".repeat(46)}\nTREATMENT DETAIL\n`;
-  S.treatments.forEach((t,i)=>{
-    o+=`\n#${i+1} ${typeLabel(t.type)}${t.label?" — "+t.label:""}\n`;
-    const F=t.fields||{};
-    if(typeFamily(t.type)==="hardware"){ o+=hwDetail(t); }   // FULL = the itemized breakdown + grand total
-    else Object.keys(F).forEach(k=>{ if(F[k]!==""&&F[k]!==false) o+=`   ${k}: ${F[k]===true?"yes":F[k]}\n`; });
-    if(t.type==="trackonly"){ const TR=t.track||{};          // track hardware surfaces under its ADK0001 code alongside soft goods
-      const bits=[TR.model&&("model "+TR.model),(TR.mount==="ceiling")?"ceiling mount":"suspended",TR.overlap&&("overlap "+TR.overlap+" total"),TR.drop&&("hw drop "+TR.drop),F.trackLen&&("length "+F.trackLen)].filter(Boolean).join(", ");
-      o+=`   ADK0001 — track hardware: ${bits}\n`;
-      if(F.existBottomFloor)o+=`   existing track bottom to floor: ${F.existBottomFloor}\n`; }
-    if(t.conform&&t.conform.on){ const c=t.conform; o+=`   shaped top (conforms): opening ${c.openW||"?"} W × ${c.openH||"?"} H (ref)\n`; const sts=c.stations||[];
-      if(sts.length){ sts.forEach(s=>{ o+=`     @ ${s.pos||"?"}' : ${s.h||"?"}\n`; }); o+=`     ${conformDerivedText(t)}\n`; } else o+=`     (no stations recorded)\n`; }
-    if(t.operation){ o+=`   operation: ${(OPS.find(o=>o[0]===t.operation)||[])[1]}\n`; const O=t.opFields||{}; Object.keys(O).forEach(k=>{if(O[k])o+=`     ${k}: ${O[k]}\n`;}); }
-    if(t.engNotes&&t.engNotes.trim())o+=`   eng notes: ${t.engNotes.trim()}\n`;
-  });
-  { const c=laborCalc(); if(c.any){ const L=S.install.labor||laborDefault();   // FULL = the itemized labor breakdown
-    o+=`${"=".repeat(46)}\nINSTALL LABOR — INST0001\n`;
-    if(c.laborC!=null)o+=`   crew ${L.crew} × ${L.days} day(s) × ${fmtMoney(L.rate)}/installer/day = ${fmtMoney(c.laborC)}\n`;
-    if(c.mileC!=null)o+=`   fuel ${L.milesRT} mi RT × ${fmtMoney(L.mileRate)}/mi = ${fmtMoney(c.mileC)}\n`;
-    if(c.hotelC!=null)o+=`   hotel ${fmtMoney(HOTEL_NIGHTLY)}/night × ${L.hotelNights} night(s) × ${L.crew} crew = ${fmtMoney(c.hotelC)}\n`;
-    if(c.mealsC!=null)o+=`   meals ${fmtMoney(c.mealsC)}\n`;
-    o+=`   TOTAL ${fmtMoney(c.totC)}\n`; } }
+// ---- Installer Field Sheet (price-free, grouped by treatment, + materials pull list) ----
+function drapeMathText(t){ if(typeFamily(t.type)!=="drawn")return ""; const F=t.fields||{}, TR=t.track||{};
+  const H=parseLen(F.h), D=parseInches(TR.drop), C=parseClearance(F.clearance); let o="", FIN=null;
+  if(H!=null&&H>0){ if(D!=null&&D>0){ if(C!=null&&C!==0){ FIN=H-D-C; o+="  finished height: "+fmtLen(H)+" - "+TR.drop+" hw "+(C>0?"- "+fmtIn(C*12)+" clr":"+ "+fmtIn(-C*12)+" puddle")+" = "+fmtLen(FIN)+"\n"; }
+      else{ FIN=H-D; o+="  finished height: "+fmtLen(H)+" - "+TR.drop+" hw = "+fmtLen(FIN)+"\n"; } } else FIN=H; }
+  const W=parseLen(F.w), O=parseInches(TR.overlap);
+  if(W!=null&&W>0){ const hP=(FIN!=null)?(" x "+fmtLen(FIN)+" H"):"";
+    if(/Bi-part/i.test(F.draw||"")){ o+=(O>0)?("  each drape (x2): "+fmtLen(W/2+O/2)+" W"+hP+"  (half width + half of the "+TR.overlap+" overlap)\n"):"  ** overlap not set - bi-part panel width blocked\n"; }
+    else if(/One-way/i.test(F.draw||"")){ const L=parseInches(TR.lead); o+="  drape (x1): "+fmtLen(W+(L>0?L:0))+" W"+hP+"\n"; }
+    else o+="  each drape: "+fmtLen(W)+" W"+hP+"\n"; }
   return o;
 }
-let CURTAB="kinetic";
+function installerTreatment(t,n){ const fam=typeFamily(t.type), F=t.fields||{}, TR=t.track||{};
+  let o="\n#"+n+"  "+(typeLabel(t.type)||"(type?)")+(t.label?" - "+t.label:"")+(t.basis?"   ["+basisLabel(t.basis)+"]":"")+((t.qty&&t.qty!=="1")?"   qty "+t.qty:"")+"\n";
+  if(fam==="hardware"){ o+="  materials bundle - see MATERIALS PULL LIST below\n"; if(t.hw&&t.hw.notes)o+="  notes: "+t.hw.notes+"\n"; return o; }
+  const fab=fabricStr(F); if(fab)o+="  fabric: "+fab+(F.lined?"  LINED"+(F.lining?" ("+F.lining+")":""):"")+"\n";
+  if(F.pleat||F.fullness)o+="  pleat/fullness: "+[F.pleat,F.fullness].filter(Boolean).join("  .  ")+"\n";
+  const dims=[F.w&&("W "+F.w),F.h&&("H "+F.h)].filter(Boolean).join("  x  "); if(dims)o+="  finished dims: "+dims+"\n";
+  const fins=[F.topFin&&("top "+F.topFin),F.botFin&&("bottom "+F.botFin),F.sideFin&&("side "+F.sideFin)].filter(Boolean).join("  .  "); if(fins)o+="  finishes: "+fins+"\n";
+  o+=drapeMathText(t);
+  if(F.draw)o+="  draw: "+F.draw+"\n";
+  if(F.clearance)o+="  floor clearance: "+F.clearance+"\n";
+  const trk=[TR.model&&("model "+TR.model),(TR.mount==="ceiling")?"ceiling mount":"suspended",TR.overlap&&("overlap "+TR.overlap),TR.drop&&("hw drop "+TR.drop),F.trackLen&&("length "+F.trackLen),F.mount&&("mount "+F.mount)].filter(Boolean).join(", "); if(trk)o+="  track: "+trk+"\n";
+  if(fam==="trackonly"&&F.notes)o+="  track notes: "+F.notes+"\n";
+  if(fam==="trackonly"&&F.existBottomFloor)o+="  existing track bottom to floor: "+F.existBottomFloor+"\n";
+  if(t.operation){ const O=t.opFields||{}, opLabel=(OPS.find(x=>x[0]===t.operation)||[])[1]||t.operation;
+    o+="  operation: "+opLabel+"\n"; Object.keys(O).forEach(k=>{ if(O[k])o+="    "+k+": "+O[k]+"\n"; }); }
+  if(fam==="venetian"){ const ven=[F.subType,F.liftLines&&(F.liftLines+" lift lines"),F.liftMethod&&("lift: "+F.liftMethod),F.controller&&("ctrl "+F.controller),F.inTrim&&("in trim "+F.inTrim),F.outTrim&&("out trim "+F.outTrim)].filter(Boolean).join("  .  "); if(ven)o+="  lift detail: "+ven+"\n"; }
+  if(t.conform&&t.conform.on){ const c=t.conform; o+="  shaped top: opening "+(c.openW||"?")+" W x "+(c.openH||"?")+" H\n";
+    (c.stations||[]).forEach(s=>{ o+="    @ "+(s.pos||"?")+"' : "+(s.h||"?")+"\n"; });
+    if((c.stations||[]).length>=2)o+="    "+conformDerivedText(t)+"\n"; }
+  if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+="  sketch on file: "+t.sketch.edges.length+" edges, "+t.sketch.edges.filter(e=>e.dim).length+" dims\n";
+  if(t.engNotes&&t.engNotes.trim())o+="  ** eng/field notes: "+t.engNotes.trim()+"\n";
+  return o;
+}
+function materialsPullList(){ const rows=[]; let anyExp=false;
+  S.treatments.forEach(t=>{ if(typeFamily(t.type)!=="hardware")return; const hw=t.hw||hwDefault(); if(hw.expend)anyExp=true;
+    (hw.rows||[]).forEach(r=>rows.push(r)); });
+  let o="=".repeat(62)+"\nMATERIALS PULL LIST  (warehouse pull + on-site check-off)\n";
+  if(!rows.length){ o+="  (no materials bundled)\n"; return o; }
+  rows.forEach(r=>{ o+="  [ ] "+(r.qty||"?")+" "+(r.unit||"ea")+"  "+(r.item||"(item?)")+(r.partNo?"  #"+r.partNo:"")+(r.source?"  ["+r.source+"]":"")+"\n"; });
+  if(anyExp)o+="  [ ] +10% expendables / consumables pad (fasteners, etc.)\n";
+  return o;
+}
+function installerSheet(){ const m=S.meta;
+  let o="ROSE BRAND - INSTALLER FIELD SHEET  (crew reference - no prices)\n";
+  o+=(m.venue||m.customerName||"(venue)")+(m.quote?"   .   Q"+m.quote:"")+(m.so?"   .   SO "+m.so:"")+"\n";
+  if(m.address)o+=m.address+"\n";
+  o+="Date "+(m.date||"-")+"   .   Surveyor "+(m.surveyor||"-")+"   .   Install: "+({rb:"Rose Brand",installer:"Ship to installer",client:"Client self-install"}[S.install.responsibility]||"-")+"\n";
+  o+="Frame: "+(FRAMES.find(f=>f[0]===S.venueFrame)||["","-"])[1]+"\n";
+  if(m.contactName||m.contactCell||m.contactEmail)o+="Site contact: "+(m.contactName||"-")+(m.contactTitle?", "+m.contactTitle:"")+"  "+(m.contactCell||"")+"  "+(m.contactEmail||"")+"\n";
+  o+="=".repeat(62)+"\nTREATMENTS\n";
+  if(!S.treatments.length)o+="  (none)\n";
+  S.treatments.forEach((t,i)=>{ o+=installerTreatment(t,i+1); });
+  { const L=S.install.labor||laborDefault(), bits=[];
+    if(L.crew)bits.push(L.crew+" crew"); if(L.days)bits.push(L.days+" day(s)");
+    if(L.hotelStay&&L.hotelNights)bits.push(L.hotelNights+"-night hotel stay");
+    if(L.milesRT)bits.push(L.milesRT+" mi round trip");
+    if(bits.length)o+="=".repeat(62)+"\nCREW & LOGISTICS\n  "+bits.join("  .  ")+"\n"; }
+  if(S.install.responsibility==="rb"){ const Lo=S.install.loadin;
+    const li=[Lo.doorW&&("door "+Lo.doorW+"x"+(Lo.doorH||"")),Lo.freight&&("freight "+(Lo.freightW||"")+"x"+(Lo.freightH||"")+"x"+(Lo.freightL||"")),Lo.access&&("access "+Lo.access),Lo.union&&"union",Lo.parking&&"parking",Lo.multiLevel&&"multi-level"].filter(Boolean).join(", ");
+    if(li||Lo.path||Lo.obstructions||Lo.notes){ o+="LOAD-IN: "+(li||"-")+"\n";
+      if(Lo.path)o+="  path: "+Lo.path+"\n"; if(Lo.obstructions)o+="  obstructions: "+Lo.obstructions+"\n"; if(Lo.notes)o+="  notes: "+Lo.notes+"\n"; } }
+  if(S.generalNotes)o+="=".repeat(62)+"\nGENERAL NOTES\n  "+S.generalNotes.replace(/\n/g,"\n  ")+"\n";
+  o+=materialsPullList();
+  return o;
+}
+let CURTAB="sales";
+function salesSoftGoods(){ return S.treatments.filter(t=>DRAP_FAMS.has(typeFamily(t.type))); }
+function renderOutChips(){ const box=document.getElementById("outchips"); if(!box)return;
+  const gs=(CURTAB==="sales")?salesSoftGoods():[];
+  if(!gs.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="";
+  box.innerHTML='<div class="chiphint">Copy a DRAP0001 Description (paste into Epicor if it accepts a paste):</div>'+
+    gs.map((t,i)=>'<button class="descchip" data-desc="'+t.id+'">copy #'+(i+1)+' '+esc((t.label&&t.label.trim())||typeLabel(t.type)||"drape")+'</button>').join("");
+}
 function showOut(){
-  document.getElementById("outpre").textContent = CURTAB==="kinetic"?kineticSheet():fullSummary();
+  document.getElementById("outpre").textContent = (CURTAB==="sales")?salesSheet():installerSheet();
+  renderOutChips();
   document.getElementById("outmodal").classList.add("show");
 }
 document.getElementById("genbtn").onclick=showOut;
 document.getElementById("outx").onclick=()=>document.getElementById("outmodal").classList.remove("show");
-document.getElementById("tabK").onclick=()=>{CURTAB="kinetic";document.getElementById("tabK").classList.add("on");document.getElementById("tabS").classList.remove("on");showOut();};
+document.getElementById("tabK").onclick=()=>{CURTAB="sales";document.getElementById("tabK").classList.add("on");document.getElementById("tabS").classList.remove("on");showOut();};
 document.getElementById("tabS").onclick=()=>{CURTAB="summary";document.getElementById("tabS").classList.add("on");document.getElementById("tabK").classList.remove("on");showOut();};
+document.getElementById("outchips").onclick=(e)=>{ const b=e.target.closest("button[data-desc]"); if(!b)return;
+  const t=T(b.dataset.desc); if(!t)return; const txt=salesDrapeDesc(t);
+  const done=()=>{ const o=b.textContent; b.textContent="copied"; setTimeout(()=>{b.textContent=o;},1400); };
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,done); else done();
+};
 document.getElementById("copybtn").onclick=()=>{navigator.clipboard.writeText(document.getElementById("outpre").textContent).then(()=>{const b=document.getElementById("copybtn");b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy",1400);});};
 document.getElementById("printbtn").onclick=()=>{
   const raw=document.getElementById("outpre").textContent;
