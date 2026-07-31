@@ -112,6 +112,11 @@
   .projrow .pa button{font-size:12px;padding:6px 10px;border:1px solid #ccd2d8;background:#fff;border-radius:8px;cursor:pointer;font-weight:600;color:#16181b;}
   .projrow .pa button[data-del]{color:#c0392b;border-color:#e6b3ad;}
   #projempty{color:var(--muted);font-size:13px;text-align:center;padding:18px 0;}
+  /* combo box: free-type input + companion native select "picker" (native selects never filter -> full list always reachable) */
+  .combo{display:flex;gap:6px;align-items:stretch;}
+  .combo input{flex:1 1 auto;min-width:0;}
+  .combopick{flex:0 0 auto;width:2.4em;padding:0 2px;text-align:center;cursor:pointer;font-size:16px;font-family:inherit;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:9px;appearance:none;-webkit-appearance:none;transition:border-color .12s;}
+  .combopick:focus{outline:none;border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -190,8 +195,8 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=9;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.92";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const SCHEMA_V=10;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const APP_VERSION="0.93";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
@@ -280,6 +285,9 @@ function migrateSurvey(d){
     [["rate",120000],["mileRate",67]].forEach(p=>{ const k=p[0]; if(!(typeof lb[k]==="number"&&isFinite(lb[k]))){ const c=(lb[k]==null||lb[k]==="")?null:parseMoney(lb[k]); lb[k]=(c==null)?p[1]:c; } else lb[k]=Math.round(lb[k]); });
     ["hotel","perdiem"].forEach(k=>{ if(!(typeof lb[k]==="number"&&isFinite(lb[k])))lb[k]=(lb[k]==null||lb[k]==="")?null:parseMoney(lb[k]); else lb[k]=Math.round(lb[k]); });
     v=9; }
+  // v10 (basis collapse): the basis vocabulary drops to two - "new" / "replace". Both old replacement cases fold to "replace":
+  // "match" (match existing) and "existing" (existing track 1:1 replacement) -> "replace". "new" and "" pass through unchanged.
+  if(v<10){ (d.treatments||[]).forEach(t=>{ if(t&&(t.basis==="match"||t.basis==="existing"))t.basis="replace"; }); v=10; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -616,7 +624,9 @@ function field(f,val,onkey){
     control=`<select data-k="${key}" data-t="${onkey}">`+opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const l=Array.isArray(o)?o[1]:(o||"Select…");return `<option value="${esc(v)}" ${val===v?"selected":""}>${esc(l)}</option>`;}).join("")+`</select>`;
   }
   else if(ctrl==="datalist"){
-    control=`<input type="text" list="${id}_dl" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}"><datalist id="${id}_dl">`+opts.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist>`;
+    // free-type input + type-ahead datalist + a companion native <select> "picker" (native selects never filter, so the
+    // FULL option list is always reachable and completely replaces the value; also a good mobile picker). See .combopick bind.
+    control=`<span class="combo"><input type="text" list="${id}_dl" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}"><datalist id="${id}_dl">`+opts.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick" data-pick-k="${key}" data-pick-t="${onkey}"><option value="">▾</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span>`;
   }
   else{ control=`<input type="${ctrl==="number"?"number":"text"}" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}">`; }
   return `<label class="f"><span>${esc(label)}${subhtml}</span>${control}</label>`;
@@ -701,16 +711,16 @@ function trackBlock(t){
   const tr=t.track||{}; const dl="tkdl_"+t.id; const isDrawn=typeFamily(t.type)==="drawn";
   return `<div class="grid2">
     <label class="f"><span>Track model <span class="sub">(preset auto-fills overlap + drop; or type your own)</span></span>
-      <input type="text" list="${dl}" data-track="model" data-tid="${t.id}" value="${esc(tr.model||"")}">
-      <datalist id="${dl}">`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">`).join("")+`</datalist></label>
+      <span class="combo"><input type="text" list="${dl}" data-track="model" data-tid="${t.id}" value="${esc(tr.model||"")}">
+      <datalist id="${dl}">`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">`).join("")+`</datalist><select class="combopick"><option value="">▾</option>`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">${esc(r.label)}</option>`).join("")+`</select></span></label>
     <label class="f"><span>Mount <span class="sub">(suspended vs ceiling changes the drop)</span></span>
       <select data-track="mount" data-tid="${t.id}">
         <option value="suspended" ${tr.mount!=="ceiling"?"selected":""}>Suspended</option>
         <option value="ceiling" ${tr.mount==="ceiling"?"selected":""}>Ceiling-mount</option>
       </select></label>
     <label class="f"><span>Center overlap <span class="sub">(TOTAL bypass; bare number = inches)</span></span>
-      <input type="text" list="${dl}_ov" data-track="overlap" data-tid="${t.id}" value="${esc(tr.overlap||"")}">
-      <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist></label>
+      <span class="combo"><input type="text" list="${dl}_ov" data-track="overlap" data-tid="${t.id}" value="${esc(tr.overlap||"")}">
+      <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick"><option value="">▾</option>`+OVERLAP.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span></label>
     <label class="f"><span>Hardware drop <span class="sub">(track top &rarr; drape top; bare number = inches)</span></span>
       <input type="text" data-track="drop" data-tid="${t.id}" value="${esc(tr.drop||"")}"></label>
     ${isDrawn?`<label class="f"><span>Lead-edge allowance <span class="sub">(one-way only, optional; bare number = inches)</span></span>
@@ -744,7 +754,7 @@ function treatmentCard(t,i){
         <label class="f"><span>Type</span><select data-type="${t.id}">`+orderedTypes().map(x=>`<option value="${x[0]}" ${t.type===x[0]?"selected":""}>${x[1]}</option>`).join("")+`</select></label>
         <label class="f"><span>Label / location <span class="sub">(optional)</span></span><input type="text" data-label="${t.id}" value="${esc(t.label||"")}"></label>
       </div>
-      ${t.type&&fam!=="hardware"?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="match" ${t.basis==="match"?"selected":""}>Match existing</option><option value="new" ${t.basis==="new"?"selected":""}>New from opening</option><option value="existing" ${t.basis==="existing"?"selected":""}>Existing track (verified) - 1:1 replacement</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
+      ${t.type&&fam!=="hardware"?`<div class="grid2"><label class="f"><span>Basis</span><select data-basis="${t.id}"><option value="">Select…</option><option value="new" ${t.basis==="new"?"selected":""}>New</option><option value="replace" ${t.basis==="replace"?"selected":""}>Replace Pre-Existing</option></select></label><label class="f"><span>Quantity</span><input type="number" data-qty="${t.id}" value="${esc(t.qty||"1")}"></label></div>`:""}
       ${t.type?`<span class="fam">${fam==="trackonly"?"track hardware · ADK0001":fam==="hardware"?"materials bundle · INHW0001":fam+" goods"}</span>`:`<div class="empty">Pick a type to load its fields.</div>`}
       ${fieldsHtml}
       ${fam==="hardware"?hwBlock(t):""}
@@ -977,8 +987,8 @@ function hwBlock(t){ const hw=t.hw||(t.hw=hwDefault()); hw.rows=hw.rows||[]; con
   const rows=hw.rows.length? hw.rows.map((r,i)=>`
     <div class="hwrow">
       <div class="r1"><input type="text" data-hwk="item" data-hwt="${t.id}" data-hwi="${i}" placeholder="Item / description" value="${esc(r.item||"")}"><button class="stnx" data-hwdel="${t.id}:${i}">&times;</button></div>
-      <div class="r2"><input type="text" list="hwsrc_${t.id}" data-hwk="source" data-hwt="${t.id}" data-hwi="${i}" placeholder="Source / vendor" value="${esc(r.source||"")}"><input type="text" data-hwk="partNo" data-hwt="${t.id}" data-hwi="${i}" placeholder="Part # / spec" value="${esc(r.partNo||"")}"></div>
-      <div class="r3"><input type="text" inputmode="decimal" data-hwk="qty" data-hwt="${t.id}" data-hwi="${i}" placeholder="Qty" value="${esc(r.qty||"")}"><input type="text" list="hwunit_${t.id}" data-hwk="unit" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit" value="${esc(r.unit||"")}"><input type="text" inputmode="decimal" data-hwk="unitPrice" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit $" value="${r.unitPrice!=null?esc(fmtMoney(r.unitPrice)):""}"><span class="hwline" id="hwline_${t.id}_${i}">${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}</span></div>
+      <div class="r2"><span class="combo"><input type="text" list="hwsrc_${t.id}" data-hwk="source" data-hwt="${t.id}" data-hwi="${i}" placeholder="Source / vendor" value="${esc(r.source||"")}"><select class="combopick"><option value="">▾</option>${HW_SOURCES.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" data-hwk="partNo" data-hwt="${t.id}" data-hwi="${i}" placeholder="Part # / spec" value="${esc(r.partNo||"")}"></div>
+      <div class="r3"><input type="text" inputmode="decimal" data-hwk="qty" data-hwt="${t.id}" data-hwi="${i}" placeholder="Qty" value="${esc(r.qty||"")}"><span class="combo"><input type="text" list="hwunit_${t.id}" data-hwk="unit" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit" value="${esc(r.unit||"")}"><select class="combopick"><option value="">▾</option>${HW_UNITS.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" inputmode="decimal" data-hwk="unitPrice" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit $" value="${r.unitPrice!=null?esc(fmtMoney(r.unitPrice)):""}"><span class="hwline" id="hwline_${t.id}_${i}">${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}</span></div>
     </div>`).join("") : `<div class="empty">No materials yet — add one row per item.</div>`;
   return `<datalist id="hwsrc_${t.id}">${HW_SOURCES.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="hwunit_${t.id}">${HW_UNITS.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
@@ -1285,7 +1295,7 @@ function kineticSheet(){
   o+=`${"—".repeat(46)}\nLINE ITEMS\n`;
   if(!S.treatments.length)o+=`  (none)\n`;
   S.treatments.forEach((t,i)=>{
-    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${t.type==="trackonly"?"[ADK0001] ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+({match:"match existing",new:"new from opening",existing:"existing track (verified) - 1:1 replacement"}[t.basis]||t.basis)+")":""}\n`;
+    o+=`${i+1}. ${(t.qty&&t.qty!=="1")?t.qty+"× ":""}${t.type==="trackonly"?"[ADK0001] ":""}${typeLabel(t.type)||"(type?)"}${t.label?" — "+t.label:""}${t.basis?"  ("+({new:"new",replace:"replace pre-existing"}[t.basis]||t.basis)+")":""}\n`;
     const line=ftxt(t);
     if(line)o+=`    ${line}\n`;
     if(t.sketch&&t.sketch.edges&&t.sketch.edges.length)o+=`    sketch: ${t.sketch.edges.length} edges, ${t.sketch.edges.filter(e=>e.dim).length} dims\n`;
@@ -2066,6 +2076,19 @@ async function handleQuotePdf(file){
     document.getElementById("skwrap").classList.add("show"); requestAnimationFrame(()=>{ sizeCanvas(); render(); }); };
 })();
 window.__rerender=render;
+// combo picker: ONE delegated change handler, bound ONCE on the stable #app parent (event delegation, NOT rebound per render).
+// Picking a .combopick option fully REPLACES the free-type input's value, then dispatching BOTH input+change on that input
+// reuses the field's existing save + any targeted derived refresh (refreshDerived/refreshHw/track auto-fill) with NO full
+// render, so iOS keyboard focus is preserved. Then the picker resets to its ▾ placeholder.
+app.addEventListener("change",e=>{
+  const sel=e.target; if(!sel||!sel.classList||!sel.classList.contains("combopick"))return;
+  if(sel.value==="")return;
+  const combo=sel.closest(".combo"); const input=combo&&combo.querySelector("input"); if(!input)return;
+  input.value=sel.value;
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+  input.dispatchEvent(new Event("change",{bubbles:true}));
+  sel.selectedIndex=0;
+});
 window.addEventListener("pagehide",flushSave);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden")flushSave(); });
 { const av=document.getElementById("appver"); if(av)av.textContent="beta "+APP_VERSION; }
