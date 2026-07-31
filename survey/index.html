@@ -112,11 +112,14 @@
   .projrow .pa button{font-size:12px;padding:6px 10px;border:1px solid #ccd2d8;background:#fff;border-radius:8px;cursor:pointer;font-weight:600;color:#16181b;}
   .projrow .pa button[data-del]{color:#c0392b;border-color:#e6b3ad;}
   #projempty{color:var(--muted);font-size:13px;text-align:center;padding:18px 0;}
-  /* combo box: free-type input + companion native select "picker" (native selects never filter -> full list always reachable) */
-  .combo{display:flex;gap:6px;align-items:stretch;}
-  .combo input{flex:1 1 auto;min-width:0;}
-  .combopick{flex:0 0 auto;width:2.4em;padding:0 2px;text-align:center;cursor:pointer;font-size:16px;font-family:inherit;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:9px;appearance:none;-webkit-appearance:none;transition:border-color .12s;}
-  .combopick:focus{outline:none;border-color:var(--accent);}
+  /* combo box: free-type input with an integrated dropdown chevron at its right edge. The native <select> overlays ONLY
+     the right ~2.4em (transparent, borderless, inheriting the form's grey chevron), so the input's left part stays directly
+     typable and the two read as ONE standard combobox that never wraps to a second line in any layout (single-col or .grid2).
+     Picking an option fully replaces the value (see .combopick change handler); native selects never filter -> full list reachable. */
+  .combo{position:relative;display:block;}
+  .combo input{display:block;width:100%;box-sizing:border-box;padding-right:2.4em;}
+  .combopick{position:absolute;right:0;top:0;height:100%;width:2.4em;padding:0;margin:0;border:none;background-color:transparent;background-position:center center;cursor:pointer;font-size:16px;appearance:none;-webkit-appearance:none;}
+  .combopick:focus{outline:none;}
 </style>
 </head>
 <body>
@@ -199,7 +202,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=11;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.95";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="0.96";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.78/mi fuel);
@@ -641,9 +644,10 @@ function field(f,val,onkey){
     control=`<select data-k="${key}" data-t="${onkey}">`+opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const l=Array.isArray(o)?o[1]:(o||"Select…");return `<option value="${esc(v)}" ${val===v?"selected":""}>${esc(l)}</option>`;}).join("")+`</select>`;
   }
   else if(ctrl==="datalist"){
-    // free-type input + type-ahead datalist + a companion native <select> "picker" (native selects never filter, so the
-    // FULL option list is always reachable and completely replaces the value; also a good mobile picker). See .combopick bind.
-    control=`<span class="combo"><input type="text" list="${id}_dl" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}"><datalist id="${id}_dl">`+opts.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick" data-pick-k="${key}" data-pick-t="${onkey}"><option value="">▾</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span>`;
+    // free-type input + type-ahead datalist + an integrated native <select> chevron overlaying the input's right edge
+    // (native selects never filter, so the FULL option list is always reachable and completely replaces the value;
+    // also a good mobile picker). Reads as ONE combobox, never wraps. See .combo CSS + the .combopick change handler.
+    control=`<span class="combo"><input type="text" list="${id}_dl" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}"><datalist id="${id}_dl">`+opts.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick" data-pick-k="${key}" data-pick-t="${onkey}"><option value=""></option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span>`;
   }
   else{ control=`<input type="${ctrl==="number"?"number":"text"}" data-k="${key}" data-t="${onkey}" value="${esc(val||"")}">`; }
   return `<label class="f"><span>${esc(label)}${subhtml}</span>${control}</label>`;
@@ -729,7 +733,7 @@ function trackBlock(t){
   return `<div class="grid2">
     <label class="f"><span>Track model <span class="sub">(preset auto-fills overlap + drop; or type your own)</span></span>
       <span class="combo"><input type="text" list="${dl}" data-track="model" data-tid="${t.id}" value="${esc(tr.model||"")}">
-      <datalist id="${dl}">`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">`).join("")+`</datalist><select class="combopick"><option value="">▾</option>`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">${esc(r.label)}</option>`).join("")+`</select></span></label>
+      <datalist id="${dl}">`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">`).join("")+`</datalist><select class="combopick"><option value=""></option>`+TRACK_TABLE.filter(r=>r.enabled).map(r=>`<option value="${esc(r.label)}">${esc(r.label)}</option>`).join("")+`</select></span></label>
     <label class="f"><span>Mount <span class="sub">(suspended vs ceiling changes the drop)</span></span>
       <select data-track="mount" data-tid="${t.id}">
         <option value="suspended" ${tr.mount!=="ceiling"?"selected":""}>Suspended</option>
@@ -737,7 +741,7 @@ function trackBlock(t){
       </select></label>
     <label class="f"><span>Center overlap <span class="sub">(TOTAL bypass; bare number = inches)</span></span>
       <span class="combo"><input type="text" list="${dl}_ov" data-track="overlap" data-tid="${t.id}" value="${esc(tr.overlap||"")}">
-      <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick"><option value="">▾</option>`+OVERLAP.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span></label>
+      <datalist id="${dl}_ov">`+OVERLAP.map(o=>`<option value="${esc(o)}">`).join("")+`</datalist><select class="combopick"><option value=""></option>`+OVERLAP.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")+`</select></span></label>
     <label class="f"><span>Hardware drop <span class="sub">(track top &rarr; drape top; bare number = inches)</span></span>
       <input type="text" data-track="drop" data-tid="${t.id}" value="${esc(tr.drop||"")}"></label>
     ${isDrawn?`<label class="f"><span>Lead-edge allowance <span class="sub">(one-way only, optional; bare number = inches)</span></span>
@@ -1004,8 +1008,8 @@ function hwBlock(t){ const hw=t.hw||(t.hw=hwDefault()); hw.rows=hw.rows||[]; con
   const rows=hw.rows.length? hw.rows.map((r,i)=>`
     <div class="hwrow">
       <div class="r1"><input type="text" data-hwk="item" data-hwt="${t.id}" data-hwi="${i}" placeholder="Item / description" value="${esc(r.item||"")}"><button class="stnx" data-hwdel="${t.id}:${i}">&times;</button></div>
-      <div class="r2"><span class="combo"><input type="text" list="hwsrc_${t.id}" data-hwk="source" data-hwt="${t.id}" data-hwi="${i}" placeholder="Source / vendor" value="${esc(r.source||"")}"><select class="combopick"><option value="">▾</option>${HW_SOURCES.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" data-hwk="partNo" data-hwt="${t.id}" data-hwi="${i}" placeholder="Part # / spec" value="${esc(r.partNo||"")}"></div>
-      <div class="r3"><input type="text" inputmode="decimal" data-hwk="qty" data-hwt="${t.id}" data-hwi="${i}" placeholder="Qty" value="${esc(r.qty||"")}"><span class="combo"><input type="text" list="hwunit_${t.id}" data-hwk="unit" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit" value="${esc(r.unit||"")}"><select class="combopick"><option value="">▾</option>${HW_UNITS.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" inputmode="decimal" data-hwk="unitPrice" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit $" value="${r.unitPrice!=null?esc(fmtMoney(r.unitPrice)):""}"><span class="hwline" id="hwline_${t.id}_${i}">${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}</span></div>
+      <div class="r2"><span class="combo"><input type="text" list="hwsrc_${t.id}" data-hwk="source" data-hwt="${t.id}" data-hwi="${i}" placeholder="Source / vendor" value="${esc(r.source||"")}"><select class="combopick"><option value=""></option>${HW_SOURCES.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" data-hwk="partNo" data-hwt="${t.id}" data-hwi="${i}" placeholder="Part # / spec" value="${esc(r.partNo||"")}"></div>
+      <div class="r3"><input type="text" inputmode="decimal" data-hwk="qty" data-hwt="${t.id}" data-hwi="${i}" placeholder="Qty" value="${esc(r.qty||"")}"><span class="combo"><input type="text" list="hwunit_${t.id}" data-hwk="unit" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit" value="${esc(r.unit||"")}"><select class="combopick"><option value=""></option>${HW_UNITS.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select></span><input type="text" inputmode="decimal" data-hwk="unitPrice" data-hwt="${t.id}" data-hwi="${i}" placeholder="Unit $" value="${r.unitPrice!=null?esc(fmtMoney(r.unitPrice)):""}"><span class="hwline" id="hwline_${t.id}_${i}">${c.lines[i]!=null?fmtMoney(c.lines[i]):"—"}</span></div>
     </div>`).join("") : `<div class="empty">No materials yet — add one row per item.</div>`;
   return `<datalist id="hwsrc_${t.id}">${HW_SOURCES.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="hwunit_${t.id}">${HW_UNITS.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
@@ -2099,7 +2103,7 @@ window.__rerender=render;
 // combo picker: ONE delegated change handler, bound ONCE on the stable #app parent (event delegation, NOT rebound per render).
 // Picking a .combopick option fully REPLACES the free-type input's value, then dispatching BOTH input+change on that input
 // reuses the field's existing save + any targeted derived refresh (refreshDerived/refreshHw/track auto-fill) with NO full
-// render, so iOS keyboard focus is preserved. Then the picker resets to its ▾ placeholder.
+// render, so iOS keyboard focus is preserved. Then the picker resets to its empty (chevron-only) placeholder.
 app.addEventListener("change",e=>{
   const sel=e.target; if(!sel||!sel.classList||!sel.classList.contains("combopick"))return;
   if(sel.value==="")return;
