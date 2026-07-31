@@ -198,13 +198,14 @@ const pKey = id => "rb_proj_"+id;
 function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toString(36).slice(-4); }
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
-const SCHEMA_V=10;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.94";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const SCHEMA_V=11;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
+const APP_VERSION="0.95";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 const cfmDefault=()=>({on:false,openW:"",openH:"",stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
-// install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.67/mi);
-// count keys (crew/days/milesRT) stay strings like every other numeric field. hotel/perdiem null = not entered.
-function laborDefault(){ return {crew:"",days:"",rate:120000,milesRT:"",mileRate:67,hotel:null,perdiem:null}; }
+// install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.78/mi fuel);
+// count keys (crew/days/milesRT) stay strings like every other numeric field. RB reimbursement policy: hotel = checkbox +
+// nights ($250/night/crew, HOTEL_NIGHTLY below), no per-diem, company reimburses meals (total $, cents-or-null) + fuel.
+function laborDefault(){ return {crew:"",days:"",rate:120000,milesRT:"",mileRate:78,hotelStay:false,hotelNights:"",meals:null}; }
 // Money = INTEGER CENTS everywhere. parseMoney treats strings/numbers as DOLLARS ("$12.50" -> 1250); fmtMoney(1250) -> "$12.50".
 // (function declarations: hoisted so the boot-time migration sweep can use them)
 function parseMoney(s){ if(s==null)return null; if(typeof s==="number")return isFinite(s)?Math.round(s*100):null;
@@ -291,6 +292,19 @@ function migrateSurvey(d){
   // v10 (basis collapse): the basis vocabulary drops to two - "new" / "replace". Both old replacement cases fold to "replace":
   // "match" (match existing) and "existing" (existing track 1:1 replacement) -> "replace". "new" and "" pass through unchanged.
   if(v<10){ (d.treatments||[]).forEach(t=>{ if(t&&(t.basis==="match"||t.basis==="existing"))t.basis="replace"; }); v=10; }
+  // v11 (RB reimbursement policy): HOTEL becomes a checkbox + nights ($250/night/crew), PER DIEM retired entirely, MEALS added
+  // (total $ the company reimburses), fuel/mileRate default -> 78. Fold the old free-$ hotel forward as "stayed = yes".
+  if(v<11){
+    if(!d.install||typeof d.install!=="object"||Array.isArray(d.install))d.install={responsibility:"",loadin:{},labor:laborDefault()};
+    if(!d.install.labor||typeof d.install.labor!=="object"||Array.isArray(d.install.labor))d.install.labor=laborDefault();
+    const lb=d.install.labor;
+    if(typeof lb.hotelStay!=="boolean")lb.hotelStay=false;
+    if(typeof lb.hotelNights!=="string")lb.hotelNights=(lb.hotelNights==null)?"":String(lb.hotelNights);
+    if(!(typeof lb.meals==="number"&&isFinite(lb.meals)))lb.meals=(lb.meals==null||lb.meals==="")?null:parseMoney(lb.meals);
+    if(typeof lb.hotel==="number"&&isFinite(lb.hotel)&&lb.hotel>0)lb.hotelStay=true;   // old positive hotel $ -> stayed yes (nights blank, surveyor re-enters)
+    delete lb.hotel; delete lb.perdiem;
+    if(!(typeof lb.mileRate==="number"&&isFinite(lb.mileRate)))lb.mileRate=78;   // default ONLY when missing; existing saved mileRate preserved
+    v=11; }
   if(d.v!==v) d.v=v;
   return d;
 }
@@ -1074,26 +1088,28 @@ function loadinBlock(){
     <label class="f"><span>Load-in notes</span><textarea data-loadin="notes">${esc(L.notes||"")}</textarea></label>
   </div>`;
 }
-/* ---- install-labor calculator (Pass 4, INST0001): crew × days × rate + mileage + hotel + per-diem, INTEGER CENTS ---- */
+/* ---- install-labor calculator (Pass 4, INST0001): crew × days × rate + fuel + hotel + meals, INTEGER CENTS ---- */
+const HOTEL_NIGHTLY = 25000;   // RB reimbursement: $250/night PER CREW member (integer cents). hotel = HOTEL_NIGHTLY × nights × crew
 function laborCalc(){ const L=(S.install&&S.install.labor)||laborDefault();
   const crew=parseFloat(L.crew), days=parseFloat(L.days), miles=parseFloat(L.milesRT);
   const laborC=(isFinite(crew)&&crew>0&&isFinite(days)&&days>0&&typeof L.rate==="number"&&isFinite(L.rate))?Math.round(crew*days*L.rate):null;
   const mileC=(isFinite(miles)&&miles>0&&typeof L.mileRate==="number"&&isFinite(L.mileRate))?Math.round(miles*L.mileRate):null;
-  const hotelC=(typeof L.hotel==="number"&&isFinite(L.hotel))?Math.round(L.hotel):null;
-  const pdC=(typeof L.perdiem==="number"&&isFinite(L.perdiem))?Math.round(L.perdiem):null;
-  const totC=(laborC||0)+(mileC||0)+(hotelC||0)+(pdC||0);
-  return {laborC,mileC,hotelC,pdC,totC,any:(laborC!=null||mileC!=null||hotelC!=null||pdC!=null)}; }
+  const nights=parseInt(L.hotelNights,10), hcrew=parseInt(L.crew,10);
+  const hotelC=(L.hotelStay&&nights>0&&hcrew>0)?Math.round(HOTEL_NIGHTLY*nights*hcrew):null;
+  const mealsC=(typeof L.meals==="number"&&isFinite(L.meals))?Math.round(L.meals):null;
+  const totC=(laborC||0)+(mileC||0)+(hotelC||0)+(mealsC||0);
+  return {laborC,mileC,hotelC,mealsC,totC,any:(laborC!=null||mileC!=null||hotelC!=null||mealsC!=null)}; }
 function laborTotInner(){ const c=laborCalc();
-  if(!c.any)return "Enter crew + days (and any mileage / lodging) to compute the INST0001 labor total.";
+  if(!c.any)return "Enter crew + days (and any fuel / hotel / meals) to compute the INST0001 labor total.";
   const bits=[];
   if(c.laborC!=null)bits.push("labor "+fmtMoney(c.laborC));
-  if(c.mileC!=null)bits.push("mileage "+fmtMoney(c.mileC));
+  if(c.mileC!=null)bits.push("fuel "+fmtMoney(c.mileC));
   if(c.hotelC!=null)bits.push("hotel "+fmtMoney(c.hotelC));
-  if(c.pdC!=null)bits.push("per diem "+fmtMoney(c.pdC));
+  if(c.mealsC!=null)bits.push("meals "+fmtMoney(c.mealsC));
   return `<b>INST0001 labor (d):</b> ${bits.join(" + ")} = <b>${fmtMoney(c.totC)}</b>`; }
 function refreshLabor(){ const b=document.getElementById("labtot"); if(b)b.innerHTML=laborTotInner(); }   // TARGETED patch only - never a full render (iOS keyboard focus)
 function laborBlock(){ const L=S.install.labor||(S.install.labor=laborDefault());
-  return `<label class="f" style="margin-top:16px"><span>Install labor — INST0001 <span class="sub">(crew × days × rate + mileage + hotel + per-diem)</span></span></label>
+  return `<label class="f" style="margin-top:16px"><span>Install labor — INST0001 <span class="sub">(crew × days × rate + fuel + hotel + meals)</span></span></label>
     <div class="grid3">
       <label class="f"><span>Crew <span class="sub">(installers)</span></span><input type="number" inputmode="numeric" data-labor="crew" value="${esc(L.crew||"")}"></label>
       <label class="f"><span>Days</span><input type="number" inputmode="decimal" data-labor="days" value="${esc(L.days||"")}"></label>
@@ -1101,12 +1117,11 @@ function laborBlock(){ const L=S.install.labor||(S.install.labor=laborDefault())
     </div>
     <div class="grid3">
       <label class="f"><span>Miles <span class="sub">(round trip)</span></span><input type="number" inputmode="decimal" data-labor="milesRT" value="${esc(L.milesRT||"")}"></label>
-      <label class="f"><span>$ / mile</span><input type="text" inputmode="decimal" data-labor="mileRate" value="${L.mileRate!=null?esc(fmtMoney(L.mileRate)):""}"></label>
-      <label class="f"><span>Hotel <span class="sub">(total $)</span></span><input type="text" inputmode="decimal" data-labor="hotel" value="${L.hotel!=null?esc(fmtMoney(L.hotel)):""}"></label>
+      <label class="f"><span>$ / mile <span class="sub">(fuel)</span></span><input type="text" inputmode="decimal" data-labor="mileRate" value="${L.mileRate!=null?esc(fmtMoney(L.mileRate)):""}"></label>
+      <label class="f"><span>Meals <span class="sub">(total $)</span></span><input type="text" inputmode="decimal" data-labor="meals" value="${L.meals!=null?esc(fmtMoney(L.meals)):""}"></label>
     </div>
-    <div class="grid2">
-      <label class="f"><span>Per diem <span class="sub">(total $)</span></span><input type="text" inputmode="decimal" data-labor="perdiem" value="${L.perdiem!=null?esc(fmtMoney(L.perdiem)):""}"></label>
-    </div>
+    <div class="toggle"><span>Hotel stay? <span class="sub">($250/night per crew)</span></span><label class="sw"><input type="checkbox" data-labor="hotelStay" ${L.hotelStay?"checked":""}><span class="track"></span></label></div>
+    ${L.hotelStay?`<div class="reveal"><label class="f"><span>Nights <span class="sub">(reimbursed @ $250/night × crew)</span></span><input type="number" inputmode="numeric" data-labor="hotelNights" value="${esc(L.hotelNights||"")}"></label></div>`:""}
     <div class="derived" id="labtot">${laborTotInner()}</div>`; }
 
 /* ============ BIND ============ */
@@ -1208,10 +1223,12 @@ function bind(){
   // install
   app.querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>{S.install.responsibility=b.dataset.resp;save();render();});
   // labor calculator (Pass 4): money keys -> INTEGER CENTS via parseMoney (same pattern as hw unitPrice); count keys raw strings.
-  // Text/number inputs, so recompute is a TARGETED patch of #labtot only - never a full render (iOS keyboard focus).
-  { const LMONEY=new Set(["rate","mileRate","hotel","perdiem"]);
+  // Text/number inputs recompute via a TARGETED patch of #labtot only - never a full render (iOS keyboard focus).
+  // The hotelStay CHECKBOX is the exception: it stores inp.checked and does a full render() to reveal/hide the Nights field.
+  { const LMONEY=new Set(["rate","mileRate","meals"]);
     app.querySelectorAll("[data-labor]").forEach(inp=>{
       const handler=()=>{ if(!S.install.labor)S.install.labor=laborDefault(); const k=inp.dataset.labor;
+        if(inp.type==="checkbox"){ S.install.labor[k]=inp.checked; save(); render(); return; }
         S.install.labor[k]=LMONEY.has(k)?parseMoney(inp.value):inp.value; save(); refreshLabor(); };
       inp.oninput=handler; inp.onchange=handler;
     }); }
@@ -1339,9 +1356,9 @@ function fullSummary(){
   { const c=laborCalc(); if(c.any){ const L=S.install.labor||laborDefault();   // FULL = the itemized labor breakdown
     o+=`${"=".repeat(46)}\nINSTALL LABOR — INST0001\n`;
     if(c.laborC!=null)o+=`   crew ${L.crew} × ${L.days} day(s) × ${fmtMoney(L.rate)}/installer/day = ${fmtMoney(c.laborC)}\n`;
-    if(c.mileC!=null)o+=`   mileage ${L.milesRT} mi RT × ${fmtMoney(L.mileRate)}/mi = ${fmtMoney(c.mileC)}\n`;
-    if(c.hotelC!=null)o+=`   hotel ${fmtMoney(c.hotelC)}\n`;
-    if(c.pdC!=null)o+=`   per diem ${fmtMoney(c.pdC)}\n`;
+    if(c.mileC!=null)o+=`   fuel ${L.milesRT} mi RT × ${fmtMoney(L.mileRate)}/mi = ${fmtMoney(c.mileC)}\n`;
+    if(c.hotelC!=null)o+=`   hotel ${fmtMoney(HOTEL_NIGHTLY)}/night × ${L.hotelNights} night(s) × ${L.crew} crew = ${fmtMoney(c.hotelC)}\n`;
+    if(c.mealsC!=null)o+=`   meals ${fmtMoney(c.mealsC)}\n`;
     o+=`   TOTAL ${fmtMoney(c.totC)}\n`; } }
   return o;
 }
@@ -1500,12 +1517,13 @@ function importSurveyObject(data,status){
     const mIn=(mig.install&&typeof mig.install==="object"&&!Array.isArray(mig.install))?mig.install:{};
     out.install=Object.assign(fresh().install,mIn);
     out.install.loadin=numToStr(Object.assign(fresh().install.loadin,(mIn.loadin&&typeof mIn.loadin==="object")?mIn.loadin:{}));
-    // v9 labor: money NUMBER = already cents (our own saved shape), string = dollars -> cents; counts -> strings; bad shapes fall back to defaults
+    // labor (migrateSurvey already folded to v11 shape): money NUMBER = already cents, string = dollars -> cents; counts -> strings; bad shapes fall back to defaults
     out.install.labor=Object.assign(laborDefault(),(mIn.labor&&typeof mIn.labor==="object"&&!Array.isArray(mIn.labor))?mIn.labor:{});
     { const lb=out.install.labor;
-      ["crew","days","milesRT"].forEach(k=>{ if(typeof lb[k]!=="string")lb[k]=(lb[k]==null)?"":String(lb[k]); });
-      ["rate","mileRate","hotel","perdiem"].forEach(k=>{ lb[k]=(typeof lb[k]==="number"&&isFinite(lb[k]))?Math.round(lb[k]):parseMoney(lb[k]); });
-      if(lb.rate==null)lb.rate=120000; if(lb.mileRate==null)lb.mileRate=67; }
+      ["crew","days","milesRT","hotelNights"].forEach(k=>{ if(typeof lb[k]!=="string")lb[k]=(lb[k]==null)?"":String(lb[k]); });
+      ["rate","mileRate","meals"].forEach(k=>{ lb[k]=(typeof lb[k]==="number"&&isFinite(lb[k]))?Math.round(lb[k]):parseMoney(lb[k]); });
+      lb.hotelStay=!!lb.hotelStay; delete lb.hotel; delete lb.perdiem;
+      if(lb.rate==null)lb.rate=120000; if(lb.mileRate==null)lb.mileRate=78; }
     if(typeof out.job!=="string")out.job="";
     if(typeof out.venueFrame!=="string")out.venueFrame="";
     if(typeof out.generalNotes!=="string")out.generalNotes=(out.generalNotes==null)?"":String(out.generalNotes);
