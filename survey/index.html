@@ -209,7 +209,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=12;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="0.99";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.00";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -502,7 +502,7 @@ const dropForMount=(row,mount)=>row?((mount==="ceiling")?(row.ceilingDrop||""):(
 // which overrides the model default for a true 1:1 replacement. Non-blank observed wins; else the auto-filled t.track.overlap.
 const effOverlap=t=>{ const TR=(t&&t.track)||{}; const o=((TR.overlapObserved||"")+"").trim(); return o!==""?o:(TR.overlap||""); };
 const CORDING=["Hand line (rope)","Continuous cord loop","Sash cord"];
-const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Strut bracket on beam","Wood beam (direct)","Rigged / custom (see notes)"];
+const MOUNTS=["Ceiling - drywall","Ceiling - other","Wall","Pipe / batten","I-beam","Fascia / bracket","Unistrut - direct mount","Unistrut - threaded-rod drop","Wood beam (direct)","Rigged / custom (see notes)"];
 // internal key "manual" is a saved-data key - display label only says Walk-along
 const OPS=[["","Select operation…"],["fixed","Fixed / dead-hung"],["manual","Walk-along"],["cord","Cord / rope operated"],["motor","Motorized"],["fly","Flown (lineset)"]];
 // ADC controller strings (vault Reference/adc-track-specs.md, researched S119 - real products, nothing invented)
