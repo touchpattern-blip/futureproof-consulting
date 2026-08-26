@@ -210,11 +210,11 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.05";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.06";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
-const RB_CONFIG = { drape:{category:"Drapery Synthetic Velours", webbing:"3 in", hardwareOC:"12 in", mcSpacing:"None", labelType:"Rose Brand", labelLocation:"Bottom Hem - Offstage", onStageSide:"SR"}, track:{material:"Steel", color:"Silver", drive:"None", carrierSpacing:"12 in"} };
+const RB_CONFIG = { drape:{category:"Drapery Synthetic Velours", webbing:"3 in", hardwareOC:"12 in", mcSpacing:"None", labelType:"Rose Brand", labelLocation:"Bottom Hem - Offstage", labelLocationBackdrop:"Top Hem - Offstage", labelLocationValance:"Top Webbing - Offstage", onStageSide:"SR"}, track:{material:"Steel", color:"Silver", drive:"None", carrierSpacing:"12 in"} };
 const cfmDefault=()=>({on:false,openW:"",openH:"",peak:"",symmetric:true,stations:[]});   // per-treatment shaped/arched-top capture (Pass 2a; Arch Profiler adds peak+symmetric, NEW treatments default symmetric)
 function hwDefault(){ return {rows:[],expend:false,notes:""}; }    // per-treatment hardware materials BUNDLE (Pass 3); top-level like t.track so it survives type/op changes
 // install-labor calculator (Pass 4, INST0001). Money keys = INTEGER CENTS (rate default $1,200/installer/day, mileRate $0.78/mi fuel);
@@ -1808,6 +1808,14 @@ function salesDrapeDesc(t){ const F=t.fields||{}, C=RB_CONFIG.drape;
   const edge=F.sideFin?("Edge: "+F.sideFin):"";
   return [piece,"Drape with Vertical Seams","Material: "+fab,dims,[full,pleat,liner].filter(Boolean).join(" "),top,bot,edge].filter(Boolean).join(" / ");
 }
+// type-driven Label Location default: backdrops (cyc/scrim/drop) label up top hidden from view,
+// valances label the top webbing offstage; everything else (drawn/leg/masking/arch/other) keeps the
+// shop-standard bottom-hem-offstage default. Keeps the surveyor from hand-editing this every time.
+function labelLocDefault(t){ const fam=typeFamily(t.type), C=RB_CONFIG.drape;
+  if(fam==="backdrop") return C.labelLocationBackdrop;   // cyc / scrim / drop: label hidden up top
+  if(fam==="valance")  return C.labelLocationValance;    // top webbing offstage
+  return C.labelLocation;                                // drawn / flat(leg) / masking / arch / other: bottom hem offstage
+}
 // DRAP0001 configurator block (drawn/venetian + every other soft good), fields in Epicor screen order.
 function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
   let o="LINE "+lineNo+" - DRAP0001  ("+(typeLabel(t.type)||"soft good")+(t.label?" / "+t.label:"")+")"+(t.basis?"  ["+basisLabel(t.basis)+"]":"")+"\n";
@@ -1839,7 +1847,7 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
   o+=dlead("  SL Edge","SL same as SR"+DEFV)+"\n";
   o+=dlead("Liner",F.lined?("Full"+(F.lining?" - "+F.lining:"")):"No")+"\n";
   o+=dlead("Label Type",C.labelType+DEFV)+"\n";
-  o+=dlead("  Label Location",C.labelLocation+DEFV)+"\n";
+  o+=dlead("  Label Location",labelLocDefault(t)+DEFV)+"\n";
   o+=dlead("  Piece Name",(t.label&&t.label.trim())||projName(S))+"\n";
   o+=dlead("  On Stage Side",C.onStageSide+DEFV)+"\n";
   return o;
