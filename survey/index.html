@@ -210,7 +210,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.06";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.07";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -525,6 +525,20 @@ const LINED_ROWS=F=>[
   ["lined","Lined?","toggle",null,""],
   ...(F&&F.lined?[["lining","Lining fabric","text",null,"e.g. black commando"]]:[])
 ];
+// Per-treatment webbing size + hardware O.C. (v1.07): these were global RB_CONFIG defaults, now capturable PER PIECE so
+// one job can carry 3" webbing on some lines and 4" on others. drapBlock falls back to RB_CONFIG.drape when blank.
+const WEBBING_SIZES=["2 in","3 in","4 in","6 in"];
+const HARDWARE_OC=["6 in","8 in","10 in","12 in"];
+const WEB_OC_ROWS=[
+  ["webbing","Webbing size","datalist",WEBBING_SIZES,"default 3 in"],
+  ["hardwareOC","Hardware O.C.","datalist",HARDWARE_OC,"grommet/snap spacing; default 12 in"]
+];
+// DRAWN-only differential hook spacing: master-carrier (center/lead) end vs the far offstage end, when they differ.
+// Both blank => drapBlock emits nothing extra.
+const HOOK_DIFF_ROWS=[
+  ["hookMC","Hook spacing - master-carrier end","datalist",HARDWARE_OC,"only if it differs from the standard O.C."],
+  ["hookOff","Hook spacing - offstage end","datalist",HARDWARE_OC,"only if it differs from the standard O.C."]
+];
 function drawnFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
   ...FABRIC_SPEC(F),
@@ -533,6 +547,8 @@ function drawnFields(F){return [
   ["h","Floor to track bottom","text",null,"floor to BOTTOM of track"],
   ["w","Total width of opening","text",null,"full opening / track width"],
   ["topFin","Top finish","datalist",TOPFIN,""],
+  ...WEB_OC_ROWS,
+  ...HOOK_DIFF_ROWS,
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["draw","Draw style","select",["",...DRAW],""],
@@ -548,6 +564,7 @@ function valanceFields(F){return [
   ["h","Height (peak / ends)","text",null,"e.g. peak 6'-4\", ends 1'-8\""],
   ["w","Width (developed)","text",null,"along face / arc"],
   ["topFin","Top finish","datalist",TOPFIN,"e.g. 4\" webbing stapled"],
+  ...WEB_OC_ROWS,
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["oneSided","One-sided?","toggle",null,""],
   ...LINED_ROWS(F)
@@ -560,6 +577,7 @@ function flatFields(F){return [
   ["h","Height","text",null,""],
   ["w","Width","text",null,""],
   ["topFin","Top finish","datalist",TOPFIN,""],
+  ...WEB_OC_ROWS,
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ...LINED_ROWS(F)
@@ -571,6 +589,7 @@ function maskingFields(F){return [
   ["h","Height","text",null,"build-to-cover"],
   ["w","Width","text",null,"build-to-cover"],
   ["topFin","Top finish","datalist",TOPFIN,""],
+  ...WEB_OC_ROWS,
   ["botFin","Bottom finish","datalist",BOTFIN,""],
   ["sideFin","Side finish","datalist",SIDEFIN,""],
   ["mount","Mount","datalist",MOUNTS,"or type other"],
@@ -588,6 +607,7 @@ function backdropFields(F){return [
   ["w","Width","text",null,""],
   ["seamless","Seamless?","toggle",null,""],
   ["topFin","Top finish","datalist",["Pipe pocket","Webbing + ties","Grommets"],""],
+  ...WEB_OC_ROWS,
   ["botFin","Bottom finish","datalist",["Chain pocket","Pipe pocket","Plain hem"],""],
   ["sideFin","Side finish","datalist",["Ties","Plain","Webbing"],""],
   ...LINED_ROWS(F)
@@ -1839,8 +1859,11 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
   o+=dlead("Added Fullness %",orMissing(F.fullness))+"\n";
   o+=dlead("Pleat",orMissing(F.pleat)+((F.pleat&&/box|pinch|knife/i.test(F.pleat))?" (centers)":""))+"\n";
   o+=dlead("Top Finish",orMissing(F.topFin))+"\n";
-  o+=dlead("  webbing size",C.webbing+DEFV)+"\n";
-  o+=dlead("  hardware O.C.",C.hardwareOC+DEFV)+"\n";
+  o+=dlead("  webbing size",((F.webbing&&(""+F.webbing).trim())?F.webbing:C.webbing)+DEFV)+"\n";
+  o+=dlead("  hardware O.C.",((F.hardwareOC&&(""+F.hardwareOC).trim())?F.hardwareOC:C.hardwareOC)+DEFV)+"\n";
+  // v1.07 differential hook spacing (only when a drawn piece's MC end and offstage end differ); both blank -> no line
+  if((F.hookMC&&(""+F.hookMC).trim())||(F.hookOff&&(""+F.hookOff).trim())){
+    o+=dlead("  hook spacing (differential)","MC end "+((F.hookMC&&(""+F.hookMC).trim())||"std")+", offstage end "+((F.hookOff&&(""+F.hookOff).trim())||"std"))+"\n"; }
   o+=dlead("Master Carrier Spacing",C.mcSpacing+DEFV)+"\n";
   o+=dlead("Bottom Finish",orMissing(F.botFin))+"\n";
   o+=dlead("SR Edge Finish",orMissing(F.sideFin))+"\n";
