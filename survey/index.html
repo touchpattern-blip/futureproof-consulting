@@ -210,7 +210,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.04";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.05";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -555,6 +555,8 @@ function valanceFields(F){return [
 function flatFields(F){return [
   ["fabric","Fabric","datalist",FABRICS,"as observed"],
   ...FABRIC_SPEC(F),
+  ["pleat","Pleat style","select",["",...PLEATS],"field-observed, do not assume"],
+  ["fullness","Fullness","datalist",FULLNESS,"as observed, e.g. ~50%"],
   ["h","Height","text",null,""],
   ["w","Width","text",null,""],
   ["topFin","Top finish","datalist",TOPFIN,""],
@@ -1780,7 +1782,7 @@ function dlead(label,value,w){ w=w||30; const L=String(label);
   const V=(value==null||value==="")?"-":String(value);
   const dots=Math.max(2,w-L.length);
   return "  "+L+" "+".".repeat(dots)+" "+V; }
-const DEFV=" [default - verify]";
+const DEFV="";
 function orDefault(v,def){ return (v==null||(""+v).trim()==="")?(def+DEFV):(""+v); }
 function orMissing(v){ return (v==null||(""+v).trim()==="")?"[not captured - verify]":(""+v); }
 function basisLabel(b){ return ({new:"new",replace:"replace pre-existing"})[b]||b||""; }
@@ -1827,7 +1829,7 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
       o+=dlead("Number of Curtains",orMissing(t.qty))+"\n";
     } }
   o+=dlead("Added Fullness %",orMissing(F.fullness))+"\n";
-  o+=dlead("Pleat",orMissing(F.pleat)+"  (centers"+DEFV+")")+"\n";
+  o+=dlead("Pleat",orMissing(F.pleat)+((F.pleat&&/box|pinch|knife/i.test(F.pleat))?" (centers)":""))+"\n";
   o+=dlead("Top Finish",orMissing(F.topFin))+"\n";
   o+=dlead("  webbing size",C.webbing+DEFV)+"\n";
   o+=dlead("  hardware O.C.",C.hardwareOC+DEFV)+"\n";
@@ -1840,7 +1842,6 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
   o+=dlead("  Label Location",C.labelLocation+DEFV)+"\n";
   o+=dlead("  Piece Name",(t.label&&t.label.trim())||projName(S))+"\n";
   o+=dlead("  On Stage Side",C.onStageSide+DEFV)+"\n";
-  o+="  -> configurator auto-builds Description + Unit Price\n";
   return o;
 }
 // ADCK0001 track-kit block (trackonly, or a new track for a drawn-new run), fields in Epicor screen order.
@@ -1863,7 +1864,6 @@ function adckBlock(t,lineNo,srcNote){ const F=t.fields||{}, TR=t.track||{}, C=RB
   o+=dlead("Model Variant",orDefault(modelVariant(TR.model),"per track family"))+"\n";
   o+=dlead("  Carrier Spacing",C.carrierSpacing+DEFV)+"\n";
   o+=dlead("  Center Pipe Support","No"+DEFV)+"\n";
-  o+="  -> configurator auto-builds kit + Unit Price\n";
   return o;
 }
 function laborDescShort(c,L){ const bits=[];
@@ -1893,7 +1893,7 @@ function salesSheet(){ const m=S.meta;
   o+="Customer: "+(m.customerName||"-")+(m.customerId?"  (ID "+m.customerId+")":"")+(m.salesperson?"   .   Sales: "+m.salesperson:"")+"\n";
   if(m.customerType)o+="Customer type: "+(CUSTOMER_TYPES.find(c=>c[0]===m.customerType)||["",m.customerType])[1]+(m.pw?"   .   ** PREVAILING WAGE (verify)":"")+"\n";
   o+="Product Group: "+(pg.join(" + ")||"-")+"\n";
-  o+="Key each block into the Epicor configurator in the field order shown. Values marked [default - verify] are RB shop defaults - confirm on site.\n";
+  o+="Key each block into the Epicor configurator in the field order shown.\n";
   o+="=".repeat(62)+"\n";
   let line=0;
   S.treatments.forEach(t=>{ const fam=typeFamily(t.type);
