@@ -210,7 +210,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.07";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.08";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -849,6 +849,7 @@ function treatmentCard(t,i){
       ${(fam==="drawn"||fam==="trackonly")?trackBlock(t):""}
       ${fam==="drawn"?`<div class="derived" id="pbox_${t.id}">${panelBoxInner(t)}</div>`:""}
       ${CONFORM_FAMS.has(fam)?conformBlock(t):""}
+      ${SHEET_FAMS.has(fam)?`<div class="hwbtns"><button data-sheet="${t.id}">Drawing sheet <span class="sub">&mdash; RB 11&times;17 cut pattern, opens in a new window</span></button></div>`:""}
       ${opHtml}
       ${t.type?`<label class="f"><span>&#9888; Engineering / field notes <span class="sub">(carries to handoff)</span></span><textarea data-engnotes="${t.id}" placeholder="anything unresolved / TBD / needs engineering (pipe attach, load check, non-standard finish)">${esc(t.engNotes||"")}</textarea></label>`:""}
     </div>
@@ -1074,6 +1075,283 @@ function printConformTemplate(t,cv){
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Shaped-top template</title><style>@page{margin:0.25in}html,body{margin:0;padding:0}svg{display:block}</style></head><body>'+conformSVG(t,cv)+'</body></html>');
   w.document.close(); w.focus();
   setTimeout(function(){ try{w.print();}catch(_){}} ,300);
+}
+
+/* ============ RB DRAWING SHEET (v1.08) ============
+   On-demand RB-style 11x17 cut-pattern sheet for ONE drape-family treatment, generated from the fields already
+   captured (nothing new is stored - SCHEMA_V unchanged). Opens in a fresh window via window.open + document.write
+   (the iOS-safe pattern used by the Arch Profiler and the 1:1 template print - NEVER a blob URL).
+   Chrome is lifted verbatim from the APPROVED sheet ~/wynn-truss-build/rb-sheet-template.html (Troubadour stair
+   mask); conventions from vault Reference/rosebrand-drawing-style.md. The SPARSENESS RULE is binding: the field
+   carries ONLY the elevation + its dimensions, [PART DESCRIPTION], the view bubble, FRONT VIEW, the PRELIMINARY
+   watermark, SL/SR corner boxes and the title block. No fills, no notes box, no measurement table, no callouts.
+   Drawn detail vocabulary is limited to grommets + ties, the velcro dotted line, and the webbing band. */
+const SHEET_FAMS=new Set(["drawn","flat","valance","masking","backdrop","arch"]);   // drape-type goods only (v1 skips trackonly/hardware/venetian/other)
+const RB_LOGO_B64="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";   // rosebrand-logo.png (310x37) inlined: the tool stays single-file / fully offline
+// "12 feet - 10.00 inches" - the RB PART DESCRIPTION dimension format (2-decimal inches, height first)
+function ftInWords(ft){ if(ft==null||!isFinite(ft))return "";
+  const tot=Math.round(ft*1200)/100; let f=Math.floor((tot+1e-6)/12), i=tot-f*12;
+  if(i>=11.995){ f++; i=0; }
+  return f+" feet - "+i.toFixed(2)+" inches"; }
+// sheet date: the survey's OWN date when set, else today. Never hardcoded.
+function sheetDate(){ const iso=toISODate(S.meta.date); let d=iso?new Date(iso+"T12:00:00"):new Date();
+  if(isNaN(d.getTime()))d=new Date();
+  return (d.getMonth()+1)+"/"+d.getDate()+"/"+d.getFullYear(); }
+// PART DESCRIPTION word wrap, hanging 2-space indent (leading indent preserved, rendered as nbsp in SVG)
+function pdWrap(s,n){ const str=String(s), ind=(str.match(/^ */)||[""])[0];
+  const words=str.trim().split(/\s+/).filter(Boolean), out=[]; let cur="";
+  words.forEach(x=>{ if(!cur)cur=ind+x; else if((cur+" "+x).length<=n)cur+=" "+x; else { out.push(cur); cur="  "+x; } });
+  if(cur)out.push(cur); return out; }
+// dimension label: the surveyor's own VALUE, normalized to RB tick format (9'-9") so one sheet never mixes
+// 12'10" with 7'-10". Falls back to the raw string only when it cannot be parsed.
+function dimLbl(typed,ft){ const s=(typed==null?"":(""+typed)).trim(), p=s?parseLen(s):null;
+  if(p!=null) return fmtLen(p);
+  if(ft!=null&&isFinite(ft)) return fmtLen(ft);
+  return s; }
+// polyline helpers for the top edge (screen px). offPoly = perpendicular offset held at the same x (y shifts by k/cos)
+// so a sloped webbing band sits a true 3" inside the edge, exactly as the approved template draws it.
+function polyLen(p){ let L=0; for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]); return L; }
+function offPoly(p,k){ const n=p.length, out=[];
+  for(let i=0;i<n;i++){ const a=p[Math.max(0,i-1)], b=p[Math.min(n-1,i+1)];
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
+    out.push([p[i][0], p[i][1]+k/Math.max(Math.abs(dx)/L,0.2)]); }
+  return out; }
+function polyAt(p,s){ let acc=0;                       // point + unit direction at arc-length s along the polyline
+  for(let i=1;i<p.length;i++){ const dx=p[i][0]-p[i-1][0], dy=p[i][1]-p[i-1][1], L=Math.hypot(dx,dy)||1e-9;
+    if(acc+L>=s||i===p.length-1){ const u=Math.max(0,Math.min(1,(s-acc)/L));
+      return {x:p[i-1][0]+dx*u, y:p[i-1][1]+dy*u, dx:dx/L, dy:dy/L}; }
+    acc+=L; }
+  return {x:p[0][0], y:p[0][1], dx:1, dy:0}; }
+
+function sheetHTML(t){
+  const F=t.fields||{}, C=RB_CONFIG.drape, m=S.meta||{}, r1=n=>Math.round(n*10)/10;
+  const fam=typeFamily(t.type), idx=S.treatments.indexOf(t);
+  const lab=((t.label||"")+"").trim();
+  const piece=lab||typeLabel(t.type)||"Soft good";
+  const heading=(typeLabel(t.type)||"Soft good")+(lab?" - "+lab:"");
+  const tag="D-"+String((idx<0?0:idx)+1).padStart(2,"0");
+
+  /* ---- GEOMETRY. Default = rectangle W x H. Conform stations raise the top edge into a profile (the stair-mask /
+     arched-top case generalized): x = station pos in ft from SR, y = floor-to-top height there, closing to a level
+     bottom. Width/height fall back through the SAME precedence the Arch Profiler seed uses (fields.w/h first). ---- */
+  const sts=conformStations(t);
+  const cfmOn=!!(t.conform&&t.conform.on&&sts.length>=1);
+  let W=parseLen(archOpeningWidth(t));
+  let H=parseLen(F.h); if(H==null||!(H>0)) H=parseLen(archOpeningHeight(t));
+  if(cfmOn){ const mx=Math.max.apply(null,sts.map(s=>s.h)); if(W==null||!(W>0)) W=sts[sts.length-1].pos; H=Math.max(H||0,mx); }
+  const haveW=(W!=null&&isFinite(W)&&W>0), haveH=(H!=null&&isFinite(H)&&H>0);
+  const Wf=haveW?W:10, Hf=haveH?H:10;
+  let tops=[];
+  if(cfmOn){
+    sts.forEach(s=>{ const p=Math.max(0,Math.min(Wf,s.pos));
+      if(!tops.length||p-tops[tops.length-1][0]>1e-6) tops.push([p,s.h]); else tops[tops.length-1]=[p,s.h]; });
+    if(tops[0][0]>1e-6) tops.unshift([0,tops[0][1]]);
+    if(tops[tops.length-1][0]<Wf-1e-6) tops.push([Wf,tops[tops.length-1][1]]);
+  } else tops=[[0,Hf],[Wf,Hf]];
+  const h0=tops[0][1], h1=tops[tops.length-1][1], sloped=Math.abs(h0-h1)>1/96;
+
+  /* ---- TOP FINISH: the only construction details that get DRAWN (style doc, binding) ---- */
+  const topFin=((F.topFin||"")+"").trim();
+  const hasGrom=/gromm/i.test(topFin), hasVel=/velcro/i.test(topFin);
+  const webStr=(((F.webbing||"")+"").trim())||(/webb/i.test(topFin)?C.webbing:(hasVel?"":C.webbing));
+  const ocStr=(((F.hardwareOC||"")+"").trim())||C.hardwareOC;
+  const ties=hasGrom&&!hasVel;
+
+  // peak station worth its own dim (ends + peak ONLY - RB sheets are sparse)
+  let peakIx=-1;
+  if(cfmOn&&tops.length>2){ let b=0; for(let i=1;i<tops.length;i++) if(tops[i][1]>tops[b][1])b=i;
+    if(b>0&&b<tops.length-1&&tops[b][1]-Math.max(h0,h1)>1/24) peakIx=b; }
+
+  /* ---- FIT: ~700 x ~620 box, bottom-anchored at y=850, centred-left at x=560. Extra head-room is reserved when
+     ties (which spring UP off the edge) or a peak label need it, so nothing can reach the FRONT VIEW label. ---- */
+  const yB=850, BW=700, CX=560, BH=620-(ties?42:0)-(peakIx>=0?14:0), yTop=yB-BH;
+  const sc=Math.min(BW/Wf,BH/Hf);
+  const x0=CX-Wf*sc/2, x1=x0+Wf*sc;
+  const PX=ft=>x0+ft*sc, PY=h=>yB-h*sc;
+  const top=tops.map(p=>[PX(p[0]),PY(p[1])]);          // top edge in screen px
+  // FRONT VIEW rides just above the elevation (not a fixed y): a short wide piece sits low on the sheet and a
+  // fixed label would float half a page away. Clearance covers the tie tails and the peak label.
+  const fvY=Math.max(200,Math.min.apply(null,top.map(p=>p[1]))-(ties?46:16)-(peakIx>=0?22:0));
+  let d="M"+r1(top[0][0])+","+r1(top[0][1]);
+  for(let i=1;i<top.length;i++) d+=" L"+r1(top[i][0])+","+r1(top[i][1]);
+  d+=" L"+r1(x1)+","+r1(yB)+" L"+r1(x0)+","+r1(yB)+" Z";
+
+  /* ---- ELEVATION LINEWORK ---- */
+  let elev="";
+  const webPx=webStr?(parseInches(webStr)||0.25)*sc:0;
+  if(webPx>1.5&&!hasVel){                              // webbing band: ONE thin line a true webbing-width inside the top edge
+    const wl=offPoly(top,webPx);
+    elev+='<path class="thin" d="'+wl.map((p,i)=>(i?"L":"M")+r1(p[0])+","+r1(p[1])).join(" ")+'"/>';
+  }
+  if(hasVel){                                          // velcro reads as a DOTTED line just inside the hem (style doc)
+    const vl=offPoly(top,Math.max((parseInches(webStr||"2 in")||0.1667)*sc,10));
+    elev+='<path class="thin" stroke-dasharray="2.5 3.5" d="'+vl.map((p,i)=>(i?"L":"M")+r1(p[0])+","+r1(p[1])).join(" ")+'"/>';
+  }
+  if(ties){
+    const L=polyLen(top), spx=Math.max(10,(parseInches(ocStr)||1)*sc);
+    let ng=Math.max(2,Math.min(80,Math.floor(L/spx)||2));
+    const m0=(L-(ng-1)*spx)/2, gk=Math.max(webPx/2,4);
+    let gs="", ts="";
+    for(let i=0;i<ng;i++){
+      const e=polyAt(top,m0+i*spx);
+      const nx=e.dy, ny=-e.dx;                          // outward (away from the goods) normal
+      const gx=e.x-gk*nx, gy=e.y-gk*ny;                 // grommet sits centred in the webbing band
+      gs+='<circle cx="'+r1(gx)+'" cy="'+r1(gy)+'" r="3.5"/>';
+      // a pair of loose wavy ribbon tails springing off the edge, all streaming the same way, per-pair jitter
+      const jt=k=>{ const v=Math.sin((i+1)*12.9898+k*78.233)*43758.5453; return v-Math.floor(v); };
+      const a1=1.5-3*jt(1), a2=1.5-3*jt(2), a3=2-4*jt(3), a4=2-4*jt(4);
+      const P=(u,v)=>r1(e.x+u*e.dx+v*nx)+","+r1(e.y+u*e.dy+v*ny);
+      ts+='<path d="M'+P(-2.5,0)+" C"+P(-2.5,11+a1)+" "+P(-9.2+a2,18.6+a1)+" "+P(-20.8+a3,19.9+a4)+'"/>';
+      ts+='<path d="M'+P(2.5,0)+" C"+P(2.5,13.1+a1)+" "+P(-0.7+a2,23.9+a1)+" "+P(-10.7+a3,27.3+a4)+'"/>';
+    }
+    elev+='<g id="ties" class="tie">'+ts+'</g>';
+    elev+='<path id="outline" class="heavy" d="'+d+'"/>';
+    elev+='<g id="grommets" fill="#fff" stroke="#000" stroke-width="0.9">'+gs+'</g>';
+  } else {
+    elev+='<path id="outline" class="heavy" d="'+d+'"/>';
+  }
+
+  /* ---- DIMENSIONS (white-halo text, always clear of the linework) ---- */
+  let dims="";
+  const AR=' marker-start="url(#ahs)" marker-end="url(#ah)"';
+  if(haveH||cfmOn){                                    // height on the LEFT (SR end)
+    const yh=PY(h0);
+    dims+='<line class="dim" x1="'+r1(x0-60)+'" y1="'+yB+'" x2="'+r1(x0-60)+'" y2="'+r1(yh)+'"'+AR+'/>';
+    dims+='<g class="ext"><line x1="'+r1(x0)+'" y1="'+r1(yh)+'" x2="'+r1(x0-64)+'" y2="'+r1(yh)+'"/><line x1="'+r1(x0)+'" y1="'+yB+'" x2="'+r1(x0-64)+'" y2="'+yB+'"/></g>';
+    dims+='<text class="htxt dimtxt" text-anchor="end" x="'+r1(x0-68)+'" y="'+r1((yB+yh)/2+4)+'">'+esc(dimLbl(F.h,h0))+'</text>';
+  }
+  if(cfmOn&&sloped){                                   // opposite end (SL) only when the top actually slopes
+    const yh=PY(h1);
+    dims+='<line class="dim" x1="'+r1(x1+60)+'" y1="'+yB+'" x2="'+r1(x1+60)+'" y2="'+r1(yh)+'"'+AR+'/>';
+    dims+='<g class="ext"><line x1="'+r1(x1)+'" y1="'+r1(yh)+'" x2="'+r1(x1+64)+'" y2="'+r1(yh)+'"/><line x1="'+r1(x1)+'" y1="'+yB+'" x2="'+r1(x1+64)+'" y2="'+yB+'"/></g>';
+    dims+='<text class="htxt dimtxt" text-anchor="start" x="'+r1(x1+68)+'" y="'+r1((yB+yh)/2+4)+'">'+esc(fmtLen(h1))+'</text>';
+  }
+  if(peakIx>=0){                                       // peak: short leader ABOVE the edge, never inside the goods
+    const px=top[peakIx][0], py=top[peakIx][1];
+    dims+='<line class="ext" x1="'+r1(px)+'" y1="'+r1(py)+'" x2="'+r1(px)+'" y2="'+r1(py-40)+'"/>';
+    dims+='<text class="htxt dimtxt" text-anchor="middle" x="'+r1(px)+'" y="'+r1(py-46)+'">'+esc(fmtLen(tops[peakIx][1]))+'</text>';
+  }
+  if(haveW){                                           // width BELOW
+    dims+='<line class="dim" x1="'+r1(x0)+'" y1="'+(yB+38)+'" x2="'+r1(x1)+'" y2="'+(yB+38)+'"'+AR+'/>';
+    dims+='<g class="ext"><line x1="'+r1(x0)+'" y1="'+yB+'" x2="'+r1(x0)+'" y2="'+(yB+44)+'"/><line x1="'+r1(x1)+'" y1="'+yB+'" x2="'+r1(x1)+'" y2="'+(yB+44)+'"/></g>';
+    dims+='<text class="htxt dimtxt" text-anchor="middle" x="'+CX+'" y="'+(yB+32)+'">'+esc(dimLbl(F.w,Wf))+'</text>';
+  }
+
+  /* ---- [PART DESCRIPTION] - canonical RB order; a line whose source is blank is OMITTED, never printed empty ---- */
+  const P=[], fab=fabricStr(F), full=((F.fullness||"")+"").trim(), pleat=((F.pleat||"")+"").trim();
+  const flatCut=(fam==="flat"||fam==="masking")&&(!full||/^0\s*%?$/.test(full));
+  P.push(heading);
+  if(flatCut) P.push("Flat cut pattern"+(cfmOn?(sloped?"; sloped top":"; shaped top per stations"):""));
+  if(fab) P.push("Material: "+fab+(/muslin|scrim|leno|poplin|silk|netting|gauze/i.test(fab)?"":", Nap Down"));
+  const maxTop=Math.max.apply(null,tops.map(p=>p[1])), hasPeak=cfmOn&&(maxTop-Math.max(h0,h1)>1/24);
+  if(cfmOn&&sloped){
+    const hi=Math.max(h0,h1), lo=Math.min(h0,h1), hiS=(h0>=h1)?"SR":"SL", loS=(h0>=h1)?"SL":"SR";
+    P.push(ftInWords(hi)+" high ("+hiS+") sloping to");
+    P.push("  "+ftInWords(lo)+" high ("+loS+")"+(hasPeak?", "+ftInWords(maxTop)+" at peak":"")+(haveW?" x "+ftInWords(Wf)+" wide":""));
+  } else if(haveH||cfmOn) P.push(ftInWords(cfmOn?h0:Hf)+" high"+(hasPeak?" at ends, "+ftInWords(maxTop)+" at peak":"")+(haveW?" x "+ftInWords(Wf)+" wide":""));
+  else if(haveW) P.push(ftInWords(Wf)+" wide");
+  if(full&&!/^0\s*%?$/.test(full)) P.push("With "+full+" Added Fullness"+((pleat&&!/flat/i.test(pleat))?" via "+pleat+(/pleat|tape/i.test(pleat)?"":" pleats"):""));
+  else if(full||pleat||fam==="flat"||fam==="masking") P.push("Flat - 0% Added Fullness, no pleats");
+  P.push((F.oneSided?"One-sided. ":"")+(F.lined?("Full Liner: "+((((F.lining||"")+"").trim())||"per spec")):"Unlined."));
+  { const tb=[]; if(topFin)tb.push(topFin);
+    if(webStr&&!/webb/i.test(topFin)) tb.push(webStr+" webbing");
+    if(ocStr&&(hasGrom||/snap|tie|hook/i.test(topFin))) tb.push("hardware on "+ocStr+" centers");
+    if(tb.length) P.push("Top: "+tb.join(", ")); }
+  if((((F.hookMC||"")+"").trim())||(((F.hookOff||"")+"").trim()))
+    P.push("  Hook spacing: MC end "+((((F.hookMC||"")+"").trim())||"std")+", offstage end "+((((F.hookOff||"")+"").trim())||"std"));
+  if(((F.botFin||"")+"").trim()) P.push("Bottom: "+((F.botFin||"")+"").trim());
+  if(((F.sideFin||"")+"").trim()){ P.push("Stage Right: "+((F.sideFin||"")+"").trim()); P.push("Stage Left: SL same as SR"); }
+  if(t.basis==="replace") P.push("Replacement (1:1)"); else if(t.basis==="new") P.push("New");
+  let pd=""; let py=190;
+  P.forEach(ln=>pdWrap(ln,62).forEach(w=>{ pd+='<text x="1128" y="'+py+'">'+esc(w.replace(/^ +/,x=>" ".repeat(x.length)))+'</text>'; py+=19; }));
+
+  /* ---- SHEET ---- */
+  const dwg=((m.quote||"").trim()||"TBD").toUpperCase().replace(/[^A-Z0-9]/g,"")+"-"+(piece.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,14)||"SG");
+  let s='<svg id="sheet" viewBox="0 0 1700 1100" xmlns="http://www.w3.org/2000/svg">'
+   +'<defs>'
+   +'<marker id="ah" markerWidth="6" markerHeight="6" refX="4.6" refY="2.6" orient="auto"><path d="M0,0 L5,2.6 L0,5.2 z" fill="#000"/></marker>'
+   +'<marker id="ahs" markerWidth="6" markerHeight="6" refX="0.4" refY="2.6" orient="auto"><path d="M5,0 L0,2.6 L5,5.2 z" fill="#000"/></marker>'
+   +'<style>text{font-family:Arial,"Helvetica Neue",sans-serif; fill:#000;}'
+   +'.thin{stroke:#000; stroke-width:1; fill:none;}.med{stroke:#000; stroke-width:1.5; fill:none;}'
+   +'.heavy{stroke:#000; stroke-width:2.6; fill:none; stroke-linejoin:round;}'
+   +'.dim{stroke:#000; stroke-width:0.9; fill:none;}.ext{stroke:#000; stroke-width:0.7; fill:none;}'
+   +'.tie{stroke:#000; stroke-width:0.9; fill:none; stroke-linecap:round;}'
+   +'.tiny{font-size:8.5px; paint-order:stroke; stroke:#fff; stroke-width:2.4px; stroke-linejoin:round;}'
+   +'.det{font-size:9.5px; paint-order:stroke; stroke:#fff; stroke-width:2.6px; stroke-linejoin:round;}'
+   +'.zone{font-size:12px; font-weight:700;}'
+   +'.htxt{font-size:12px; font-weight:700; text-anchor:middle; paint-order:stroke; stroke:#fff; stroke-width:4.5px; stroke-linejoin:round;}'
+   +'.fv{font-size:13px; font-weight:700; letter-spacing:2px; text-anchor:middle; paint-order:stroke; stroke:#fff; stroke-width:3px; stroke-linejoin:round;}'
+   +'.vt{font-size:10px; font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:2.6px; stroke-linejoin:round;}'
+   +'.pd{font-size:9.5px;}.wm{fill:#d9d9d9;}</style></defs>'
+   // border + zone letters/numbers + edge arrows (verbatim from the approved template)
+   +'<rect x="14" y="14" width="1672" height="1072" fill="none" stroke="#000" stroke-width="1"/>'
+   +'<rect x="44" y="44" width="1612" height="1012" fill="none" stroke="#000" stroke-width="1.6"/>'
+   +'<g class="zone" text-anchor="middle">'
+   +'<text x="245" y="36">4</text><text x="648" y="36">3</text><text x="1051" y="36">2</text><text x="1454" y="36">1</text>'
+   +'<text x="245" y="1078">4</text><text x="648" y="1078">3</text><text x="1051" y="1078">2</text><text x="1454" y="1078">1</text>'
+   +'<text x="30" y="175">D</text><text x="30" y="428">C</text><text x="30" y="681">B</text><text x="30" y="934">A</text>'
+   +'<text x="1670" y="175">D</text><text x="1670" y="428">C</text><text x="1670" y="681">B</text><text x="1670" y="934">A</text></g>'
+   +'<g fill="#000"><path d="M842,16 L858,16 L850,30 z"/><path d="M842,1084 L858,1084 L850,1070 z"/>'
+   +'<path d="M16,542 L16,558 L30,550 z"/><path d="M1684,542 L1684,558 L1670,550 z"/></g>'
+   // PRELIMINARY watermark, BEHIND all linework (.wm class - a fill attribute loses to the defs text{fill:#000} rule)
+   +'<g id="wm" transform="translate(620,600) rotate(-28)" opacity="0.55" text-anchor="middle">'
+   +'<text class="wm" x="0" y="0" font-size="92" font-weight="700" letter-spacing="3">PRELIMINARY</text>'
+   +'<text class="wm" x="0" y="46" font-size="30" font-weight="700" letter-spacing="2">(NOT FOR CONSTRUCTION)</text></g>'
+   +'<text x="'+CX+'" y="'+r1(fvY)+'" class="fv">FRONT VIEW</text>'
+   +'<g id="elev">'+elev+'</g>'+dims
+   // view title bubble
+   +'<circle cx="'+r1(x0+63)+'" cy="928" r="12" class="thin"/>'
+   +'<text x="'+r1(x0+63)+'" y="932.5" class="vt" text-anchor="middle" font-size="12">A</text>'
+   +'<text x="'+r1(x0+83)+'" y="924" class="det" font-weight="700">'+esc(heading.toUpperCase())+' - SCHEMATIC ELEVATION</text>'
+   +'<text x="'+r1(x0+83)+'" y="940" class="tiny">SCALE: NTS    MAKE '+esc(String(t.qty||"1"))+'</text>'
+   // [PART DESCRIPTION]
+   +'<g id="partdesc"><rect x="1120" y="150" width="146" height="20" class="thin"/>'
+   +'<text x="1128" y="164" class="zone" font-size="10.5">[PART DESCRIPTION]</text><g class="pd">'+pd+'</g></g>'
+   // SL / SR corner boxes
+   +'<g class="tiny" text-anchor="middle" font-weight="700">'
+   +'<rect x="50" y="47" width="26" height="16" class="thin"/><text x="63" y="59">SL</text>'
+   +'<rect x="50" y="1036" width="26" height="16" class="thin"/><text x="63" y="1048">SR</text></g>'
+   // title block
+   +'<rect id="titleblock" x="540" y="958" width="1116" height="98" class="med"/>'
+   +'<text x="550" y="974" font-size="6.7"><tspan x="550" dy="0">THIS DRAWING REPRESENTS VISUAL</tspan>'
+   +'<tspan x="550" dy="8.6">CONCEPTS AND CONSTRUCTION</tspan><tspan x="550" dy="8.6">SUGGESTIONS ONLY. PLEASE REVIEW</tspan>'
+   +'<tspan x="550" dy="8.6">CONSTRUCTION METHODS AND</tspan><tspan x="550" dy="8.6">MATERIAL DETAILS FOR SUITABILITY.</tspan>'
+   +'<tspan x="550" dy="8.6">FINAL APPROVAL IS REQUIRED BEFORE</tspan><tspan x="550" dy="8.6">CONSTRUCTION CAN BEGIN. PLEASE</tspan>'
+   +'<tspan x="550" dy="8.6">CONTACT ROSE BRAND TO DISCUSS</tspan><tspan x="550" dy="8.6">ALTERATIONS TO THE PROJECT.</tspan></text>'
+   +'<line class="thin" x1="700" y1="958" x2="700" y2="1056"/>'
+   +'<image href="data:image/png;base64,'+RB_LOGO_B64+'" x="712" y="970" width="206" height="24.6"/>'
+   +'<text x="712" y="1014" font-size="8.5">PO BOX 1536 SECAUCUS, NJ 07096</text>'
+   +'<text x="712" y="1026" font-size="8.5">800-223-1624   ROSEBRAND.COM</text>'
+   +'<text x="712" y="1046" font-size="8" font-weight="700">PRINT ON: 11 X 17 (LEDGER PAPER)</text>'
+   +'<line class="thin" x1="1100" y1="958" x2="1100" y2="1056"/><g font-size="7">'
+   +'<text x="1106" y="968" fill="#666">CLIENT</text><text x="1240" y="968" font-weight="700">'+esc((m.customerName||"").toUpperCase())+'</text>'
+   +'<line class="thin" x1="1100" y1="974" x2="1540" y2="974"/>'
+   +'<text x="1106" y="986" fill="#666">PROJECT</text><text x="1240" y="986" font-weight="700">'+esc(piece.toUpperCase())+'</text>'
+   +'<line class="thin" x1="1100" y1="992" x2="1540" y2="992"/>'
+   +'<text x="1106" y="1004" fill="#666">SUB-LOCATION</text><text x="1240" y="1004" font-weight="700">'+esc(((m.venue||m.address||"")+"").toUpperCase())+'</text>'
+   +'<line class="thin" x1="1100" y1="1010" x2="1540" y2="1010"/><text x="1106" y="1024" fill="#666">TITLE</text>'
+   +'<text x="1320" y="1026" font-size="10" font-weight="700" text-anchor="middle">'+esc(piece.toUpperCase())+' CUT PATTERN</text>'
+   +'<line class="thin" x1="1100" y1="1032" x2="1540" y2="1032"/>'
+   +'<text x="1106" y="1042">SIZE B</text><text x="1170" y="1042">DWG NO  '+esc(dwg)+'</text><text x="1430" y="1042">REV  A</text>'
+   +'<line class="thin" x1="1160" y1="1032" x2="1160" y2="1044"/><line class="thin" x1="1410" y1="1032" x2="1410" y2="1044"/>'
+   +'<line class="thin" x1="1100" y1="1044" x2="1540" y2="1044"/>'
+   +'<text x="1120" y="1053" font-size="6.5">SCALE NTS &#183; DIMENSIONED &#183; DRAWN J. RAPPA &#183; '+esc(sheetDate())+'</text></g>'
+   +'<line class="thin" x1="1540" y1="958" x2="1540" y2="1056"/>'
+   +'<text x="1598" y="1018" font-size="26" font-weight="700" text-anchor="middle">'+esc(tag)+'</text>'
+   +'</svg>';
+
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>'+esc(piece)+' - RB Drawing Sheet</title>'
+   +'<style>*{box-sizing:border-box;margin:0;padding:0}'
+   +'html,body{background:#525659;font-family:Arial,"Helvetica Neue",sans-serif;color:#000}'
+   +'.bar{position:sticky;top:0;z-index:5;background:#1b1e21;color:#e6e9ec;padding:9px 14px;display:flex;gap:12px;align-items:center;font-size:13px}'
+   +'.bar button{font:inherit;font-weight:700;padding:7px 16px;border:0;border-radius:7px;background:#f0b429;color:#1b1e21;cursor:pointer}'
+   +'.sheet{width:17in;height:11in;margin:18px auto;background:#fff;box-shadow:0 6px 28px rgba(0,0,0,.5)}'
+   +'svg{width:100%;height:100%;display:block}'
+   +'@media(max-width:1660px){.sheet{width:98vw;height:calc(98vw*11/17);margin:12px auto}}'
+   +'@media print{html,body{background:#fff}.bar{display:none}.sheet{width:17in;height:11in;margin:0;box-shadow:none}@page{size:17in 11in;margin:0}}'
+   +'</style></head><body><div class="bar"><button onclick="window.print()">Print</button>'
+   +'<span>'+esc(piece)+' &middot; 11 x 17 landscape &middot; PRELIMINARY</span></div>'
+   +'<div class="sheet">'+s+'</div></body></html>';
 }
 
 /* ================= ARCH PROFILER (v1.03) =================
@@ -1694,6 +1972,10 @@ function bind(){
   app.querySelectorAll("[data-archopen]").forEach(b=>b.onclick=()=>{ const t=T(b.dataset.archopen); if(!t)return;
     const w=window.open("","_blank"); if(!w){ alert("Allow popups to open the Arch Profiler."); return; }
     w.document.write(archToolHTML(seedFromConform(t))); w.document.close(); w.focus(); });
+  // RB drawing sheet (v1.08): generated on demand from the treatment's own fields, same iOS-safe new-window pattern
+  app.querySelectorAll("[data-sheet]").forEach(b=>b.onclick=()=>{ const t=T(b.dataset.sheet); if(!t)return;
+    const w=window.open("","_blank"); if(!w){ alert("Allow popups to open the drawing sheet."); return; }
+    w.document.write(sheetHTML(t)); w.document.close(); w.focus(); });
   // treatments
   const add=document.getElementById("addTreat"); if(add)add.onclick=()=>{S.treatments.push({id:uid(),label:"",type:"",basis:"",qty:"1",fields:{},operation:"",opFields:{},track:{model:"",overlap:"",drop:"",lead:"",mount:"suspended"},conform:cfmDefault(),engNotes:""});save();render();};
   app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.treatments=S.treatments.filter(t=>t.id!==b.dataset.del);save();render();});
