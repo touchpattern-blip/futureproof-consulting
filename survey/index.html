@@ -192,6 +192,7 @@
       <div id="outchips" class="outchips" style="display:none"></div>
       <div class="copybar">
         <button id="copybtn" class="primary">Copy</button>
+        <button id="emailbtn">Email</button>
         <button id="printbtn">Print / PDF</button>
       </div>
     </div>
@@ -209,7 +210,7 @@ function pid(){ return "p"+Math.random().toString(36).slice(2,7)+Date.now().toSt
 function loadIndex(){ try{return JSON.parse(localStorage.getItem(PKEY));}catch(e){return null;} }
 function saveIndex(){ localStorage.setItem(PKEY,JSON.stringify(IDX)); }
 const SCHEMA_V=13;   // survey schema version; each build pass bumps it, migrateSurvey folds forward cumulatively
-const APP_VERSION="1.03";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
+const APP_VERSION="1.04";   // human-facing beta version shown in the header ("beta X.XX"); bump every release. Distinct from SCHEMA_V (data-shape only).
 // RB-specific defaults for the Sales / Epicor Entry sheet. Config LAYER (generic-engine firewall): the handoff logic reads
 // these for its [default - verify] values instead of hardcoding Rose Brand's shop conventions. Piece name defaults to the
 // treatment label; Layout + Model Variant derive from draw style / track family (see adckBlock), so they are not stored here.
@@ -748,13 +749,26 @@ function panelBoxInner(t){
 }
 function trackBad(t){ if(typeFamily(t.type)!=="drawn")return false; const F=t.fields||{}, TR=t.track||{};
   return /Bi-part/i.test(F.draw||"")&&!(parseInches(TR.overlap)>0); }
-function refreshDerived(t){ const box=document.getElementById("pbox_"+t.id); if(!box)return; box.innerHTML=panelBoxInner(t); const card=box.closest(".treat"); if(card)card.classList.toggle("badcfg",trackBad(t)); }
+function refreshDerived(t){ const box=document.getElementById("pbox_"+t.id); if(box){ box.innerHTML=panelBoxInner(t); const card=box.closest(".treat"); if(card)card.classList.toggle("badcfg",trackBad(t)); }
+  const pd=document.getElementById("perdrape_"+t.id); if(pd)pd.value=perDrapeVal(t); }   // F2: keep the read-only per-drape field in sync (width/overlap/track patches; draw-style change re-renders it in/out)
 const TRACK_OPS=new Set(["manual","cord","motor"]);   // operations that ride a track
 // T1: drawn-card mirror of the unified center overlap. Reads/writes the SAME t.track.overlap the track block edits
 // (no new data field); explicit data-ovw attr; handler patches the derived box + track-block twin, never a full render.
 function ovwField(t){ const tr=t.track||{};
   return `<label class="f"><span>Overlap width <span class="sub">(TOTAL center bypass; bare number = inches; auto-fills from track model)</span></span>
       <input type="text" data-ovw="${t.id}" value="${esc(tr.overlap||"")}"></label>`; }
+// F2: derived per-drape width for BI-PART draw (read-only, never stored). W=parseLen(F.w) is FEET; parseInches(overlap)
+// returns FEET too (bare number = inches -> feet), so W/2+O/2 is unit-consistent = (span+overlap)/2 in feet -> fmtLen ft-in.
+// Same formula as panelBoxInner / drapeMathText / drapBlock (all four AGREE). Blank/guard states mirror the biBlank rule.
+function perDrapeVal(t){ const F=(t&&t.fields)||{};
+  if(!/Bi-part/i.test(F.draw||"")) return "";
+  const O=parseInches(effOverlap(t)); if(!(O>0)) return "set overlap";
+  const W=parseLen(F.w); if(W==null||!(W>0)) return "enter width";
+  return fmtLen(W/2+O/2); }
+// visible ONLY when draw = Bi-part; styled as a derived/computed field (muted dashed, "(auto)" sub-label), read-only input.
+function perDrapeField(t){ const F=(t&&t.fields)||{}; if(!/Bi-part/i.test(F.draw||"")) return "";
+  return `<label class="f"><span>Each drape width (&times;2) <span class="sub">(auto &mdash; &frac12; span + &frac12; overlap)</span></span>
+      <input type="text" readonly tabindex="-1" data-perdrape="${t.id}" id="perdrape_${t.id}" value="${esc(perDrapeVal(t))}" style="background:#f7f9fb;color:#2a2e33;font-weight:700;border-style:dashed;"></label>`; }
 // ONE unified track selector (input + datalist = dropdown with type-your-own). Explicit data-track attrs, never the _op suffix scheme.
 function trackBlock(t){
   const tr=t.track||{}; const dl="tkdl_"+t.id; const isDrawn=typeFamily(t.type)==="drawn";
@@ -785,7 +799,7 @@ function treatmentCard(t,i){
   if(fam && FAMILY_FIELDS[fam]){
     const fs=FAMILY_FIELDS[fam](t.fields||{});
     // 2-col grid for compact fields
-    fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)+((fam==="drawn"&&f[0]==="w")?ovwField(t):"")).join("")+`</div>`;
+    fieldsHtml=`<div class="grid2">`+fs.map(f=> (f[2]==="textarea"||f[2]==="toggle")? `</div>${field(f,t.fields[f[0]],t.id)}<div class="grid2">` : field(f,t.fields[f[0]],t.id)+((fam==="drawn"&&f[0]==="w")?ovwField(t):"")+((fam==="drawn"&&f[0]==="draw")?perDrapeField(t):"")).join("")+`</div>`;
   }
   let opHtml="";
   if(showOp){
@@ -1798,8 +1812,20 @@ function drapBlock(t,lineNo){ const F=t.fields||{}, C=RB_CONFIG.drape;
   o+=dlead("Category",orDefault(F.category,C.category))+"\n";
   o+=dlead("Fabric (+nap)",orMissing(fabricStr(F)))+"\n";
   o+=dlead("Height (ft-in)",orMissing(F.h))+"\n";
-  o+=dlead("Width (ft-in)",orMissing(F.w))+"\n";
-  o+=dlead("Number of Curtains",orMissing(t.qty))+"\n";
+  // F2b: BI-PART draws are keyed PER DRAPE (Epicor DRAP0001 wants each panel's width + a panel count). per-drape = (span+overlap)/2,
+  // qty = 2x. Same unit-consistent math as perDrapeVal/panelBoxInner/drapeMathText. One-way / guillotine / unset keep total width + t.qty.
+  { const draw=F.draw||"", isBi=/Bi-part/i.test(draw), ovStr=effOverlap(t), O=parseInches(ovStr), W=parseLen(F.w), qty1=parseInt(t.qty)||1;
+    if(isBi&&O>0&&W!=null&&W>0){
+      o+=dlead("Width (ft-in)",fmtLen(W/2+O/2))+"\n";
+      o+=dlead("Number of Curtains",String(2*qty1))+"\n";
+      o+="  (bi-part: per-drape = 1/2 of "+(F.w||"?")+" total span + 1/2 of "+ovStr+" overlap; qty "+(2*qty1)+" = 2 x "+qty1+" pairs)\n";
+    } else if(isBi){   // bi-part but overlap not set: NEVER emit a halved-with-zero-overlap number
+      o+=dlead("Width (ft-in)",orMissing(F.w))+"\n";
+      o+="  ** overlap not set - per-drape width blocked; confirm center overlap before keying\n";
+    } else {
+      o+=dlead("Width (ft-in)",orMissing(F.w))+"\n";
+      o+=dlead("Number of Curtains",orMissing(t.qty))+"\n";
+    } }
   o+=dlead("Added Fullness %",orMissing(F.fullness))+"\n";
   o+=dlead("Pleat",orMissing(F.pleat)+"  (centers"+DEFV+")")+"\n";
   o+=dlead("Top Finish",orMissing(F.topFin))+"\n";
@@ -1986,6 +2012,39 @@ document.getElementById("printbtn").onclick=()=>{
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>RB Site Survey Handoff</title><style>@page{margin:0.5in;}html,body{margin:0;padding:0;}body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11pt;line-height:1.45;color:#000;}pre{white-space:pre-wrap;margin:0;}</style></head><body><pre>'+escd+'</pre></body></html>');
   w.document.close(); w.focus();
   setTimeout(function(){ w.print(); w.onafterprint=function(){ w.close(); }; }, 250);
+};
+/* ---- Email the ACTIVE handoff sheet (F1) ----
+   Offline, no server: builds a mailto: (native mail app = Outlook mobile, the only RB-sanctioned channel) AND copies the FULL
+   sheet to the clipboard as the safety net for mail clients that truncate long bodies. To: left empty (Gio picks recipient).
+   mailto body is capped (~1800 chars, many clients drop longer) - over that we truncate the body + point to the clipboard,
+   but the clipboard always holds the WHOLE sheet. mailto cannot attach; the Print/PDF path stays separate. */
+function emailCopySafe(txt){
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ const p=navigator.clipboard.writeText(txt); if(p&&p.catch)p.catch(()=>emailCopyFallback(txt)); return; } }catch(e){}
+  emailCopyFallback(txt);
+}
+function emailCopyFallback(txt){
+  try{ const ta=document.createElement("textarea"); ta.value=txt; ta.setAttribute("readonly","");
+    ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.opacity="0"; document.body.appendChild(ta);
+    ta.focus(); ta.select(); try{ document.execCommand("copy"); }catch(e){} document.body.removeChild(ta); }catch(e){}
+}
+document.getElementById("emailbtn").onclick=()=>{
+  const isSales=(CURTAB==="sales");
+  const sheet=isSales?salesSheet():installerSheet();
+  const sheetName=isSales?"Sales / Epicor Entry":"Installer Field Sheet";
+  const m=S.meta||{};
+  const who=(m.customerName&&m.customerName.trim())||(m.venue&&m.venue.trim())||(m.quote&&("Quote "+m.quote.trim()))||"";
+  const subject=["Rose Brand Site Survey",sheetName,who,(m.date||"")].filter(Boolean).join(" - ");
+  emailCopySafe(sheet);   // full sheet to clipboard ALWAYS (the safety net)
+  const LIMIT=1800; let body=sheet;
+  if(encodeURIComponent(body).length>LIMIT){
+    const note="\n\n...[full sheet copied to clipboard - paste here]";
+    let lo=0, hi=body.length;   // largest prefix whose encoded (prefix+note) still fits
+    while(lo<hi){ const mid=Math.ceil((lo+hi)/2); if(encodeURIComponent(body.slice(0,mid)+note).length<=LIMIT)lo=mid; else hi=mid-1; }
+    body=body.slice(0,lo)+note;
+  }
+  const mailto="mailto:?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  const a=document.createElement("a"); a.href=mailto; a.style.display="none"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  const b=document.getElementById("emailbtn"); const o0=b.textContent; b.textContent="Email drafted · copied"; setTimeout(()=>{b.textContent=o0;},3000);
 };
 /* ---- Saved Surveys manager ---- */
 function jobLabel(j){ const f=JOB_TYPES.find(x=>x[0]===j); return f?f[1]:""; }
