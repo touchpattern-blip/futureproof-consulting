@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Quaternary — System Map</title>
+<style>
+  :root{
+    --bg:#0c0e11; --panel:#14171d; --panel2:#191d24; --line:#2a2f38;
+    --ink:#d8dce3; --dim:#8b93a1; --faint:#5a616e;
+    --copper:#da7756; --green:#7fb069; --blue:#6a9fd8; --amber:#d8a656; --violet:#a58fd8;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,"Helvetica Neue",sans-serif;margin:0;padding:28px 24px 60px}
+  h1{font-weight:600;font-size:21px;margin:0 0 2px}
+  .sub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+  .board{position:relative;width:1560px;margin:0 auto}
+  svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+  .lane{position:relative;z-index:1;display:grid;gap:14px;margin-bottom:16px}
+  .row-machines{grid-template-columns:1fr 1fr 1.35fr}
+  .row-top{grid-template-columns:1.1fr 2fr .9fr}
+  .row-store{grid-template-columns:1fr 1fr 1fr}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .card h2{font-size:14px;margin:0 0 2px;letter-spacing:.02em}
+  .card h2 .heb{color:var(--faint);font-weight:400;font-size:12px;margin-left:6px}
+  .addr{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-bottom:8px}
+  .role{color:var(--copper);font-size:11.5px;margin-bottom:8px}
+  ul{list-style:none;margin:0;padding:0;font-size:12px}
+  li{padding:2.5px 0 2.5px 14px;position:relative;color:var(--ink)}
+  li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:2px;background:var(--faint)}
+  li.svc::before{background:var(--blue)}
+  li.job::before{background:var(--amber)}
+  li.guard::before{background:var(--green)}
+  li.mem::before{background:var(--violet)}
+  li .t{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:5px}
+  li .p{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+  .g{border-color:#3a4432}
+  .flowbar{position:relative;z-index:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 15px;margin-bottom:16px;font-size:12px}
+  .flowbar b{color:var(--copper);font-weight:600}
+  .flow{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:6px}
+  .flow span{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .flow span em{color:var(--ink);font-style:normal}
+  .drives{display:flex;gap:10px;margin-top:8px}
+  .drive{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#101318}
+  .drive h3{margin:0;font-size:12px;font-family:var(--mono)}
+  .drive p{margin:3px 0 0;font-size:10.5px;color:var(--dim);line-height:1.5}
+  .drive.backup{border-color:#4a3b32;background:#151210}
+  .drive.backup h3{color:var(--copper)}
+  .legend{position:relative;z-index:1;display:flex;gap:22px;color:var(--dim);font-size:11px;margin-top:4px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .k{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .net{position:relative;z-index:1;border:1px dashed #3a4td048;border:1px dashed #3a4048;border-radius:10px;padding:10px 15px;margin-bottom:16px;font-size:12px;color:var(--dim)}
+  .net b{color:var(--ink);font-weight:600}
+  .net .mono{font-family:var(--mono);font-size:10.5px}
+  .redun{border:1px solid #4a3b32;background:#171310;border-radius:10px;padding:12px 15px;position:relative;z-index:1}
+  .redun h2{color:var(--copper);font-size:13.5px;margin:0 0 6px}
+  table{border-collapse:collapse;width:100%;font-size:11.5px}
+  td,th{text-align:left;padding:3.5px 10px 3.5px 0;color:var(--ink);vertical-align:top}
+  th{color:var(--faint);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+  td.m{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+  td.ok{color:var(--green)}
+  td.open{color:var(--amber)}
+</style>
+</head>
+<body>
+<h1>The Quaternary</h1>
+<div class="sub">System map — machines, processes, network, and where every byte gets its copies. Drawn 2026-09-05, from live state. Companion: the <a href="/whitepaper.html" style="color:#da7756">Sovereign AI Stack whitepaper</a> and the <a href="mindmap.html" style="color:#da7756">system mindmap</a>.</div>
+
+<div class="board">
+
+  <!-- ══════════ TOP: OPERATOR + NETWORK ══════════ -->
+  <div class="lane row-top">
+    <div class="card">
+      <h2>Gio <span class="heb">the operator · Middle Pillar</span></h2>
+      <div class="role">decides · captures · fires the laser</div>
+      <ul>
+        <li>iPhone + iPad <span class="t">Immich app → Forge · Telegram → Ori</span></li>
+        <li>Voice notes <span class="t">→ Ori whisper → captures</span></li>
+        <li>Hex dictation on Meridian <span class="t">hold ⌥</span></li>
+        <li>Approves: purchases · publishes · representations</li>
+      </ul>
+    </div>
+    <div class="card net" style="margin-bottom:0">
+      <b>Network</b> — UCG Ultra gateway <span class="mono">192.168.1.1</span> · wifi <span class="mono">SpectrumSetup-39</span> (U6 Pro) · AdGuard DNS on Ori <span class="mono">:53</span><br>
+      <span class="mono">Meridian wifi · Ori wifi (static .130) · Forge ETHERNET 1Gbps (.237, wifi retired S158)</span><br>
+      Tailscale mesh rides over everything → same names work away from home · gateway traffic rules kill phone-home: <span class="mono">AiDot plugs ×3 · Araknis/OvrC · guest-device rules</span>
+    </div>
+    <div class="card">
+      <h2>Away access</h2>
+      <ul>
+        <li class="svc">ssh ori <span class="t">LAN probe 1s → tailnet, DIRECT not DERP</span></li>
+        <li class="svc">ssh forge-ts <span class="t">WSL over tailnet</span></li>
+        <li class="svc">client tools <span class="t">tunneled, PIN-gated</span></li>
+        <li class="svc">Immich <span class="t">tailnet address</span></li>
+        <li>ControlMaster mux <span class="t">2.7s → 0.17s per cmd</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ══════════ MACHINES ══════════ -->
+  <div class="lane row-machines">
+
+    <div class="card">
+      <h2>Meridian <span class="heb">MacBook Pro · Hod · curator</span></h2>
+      <div class="addr">travels with Gio · M4 Pro</div>
+      <div class="role">chronicle · memory · deep work · this conversation</div>
+      <ul>
+        <li class="mem">Memory stack <span class="t">Honcho→Ori · MemPalace · Vault+QMD · auto-memory</span></li>
+        <li class="mem">Session bus + registry <span class="t">15 concurrent sessions see each other</span></li>
+        <li class="guard">claim-check <span class="t">Stop hook — no unverified state-claims ship</span></li>
+        <li class="guard">nag-guard <span class="t">15 min — Apple update nag, display layer</span></li>
+        <li class="guard">healthcheck <span class="t">session start, immune system</span></li>
+        <li class="job">restic home backup <span class="t">21:15 → Forge E: · 74.9 GiB · 3 snaps</span></li>
+        <li class="job">4AM chain <span class="t">QMD reindex · sync agents · consolidation</span></li>
+        <li class="job">weekly review = governor <span class="t">Mon 06:30 · intent-vs-actual</span></li>
+        <li class="job">memory-autocommit <span class="t">30 min → Ori bare mirrors</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Ori <span class="heb">MacBook Air · Netzach · captor</span></h2>
+      <div class="addr">192.168.1.130 · tailnet · always on</div>
+      <div class="role">the nervous system — capture · watch · relay</div>
+      <ul>
+        <li class="svc">Telegram bot <span class="t">Claude session · house control · eBay ops</span></li>
+        <li class="svc">Home Assistant <span class="t">:8123 · Matter · Hue · LIFX · Nest</span></li>
+        <li class="svc">AdGuard DNS <span class="t">:53 whole-house</span></li>
+        <li class="svc">Syncthing <span class="t">captures ⇄ Meridian</span></li>
+        <li class="svc">Kiosk app <span class="t">:8090 → household tablet</span></li>
+        <li class="guard">plug-verdict <span class="t">02:50 · 11 clean nights</span></li>
+        <li class="guard">forge-down-watch <span class="t">10 min · WSL-wedge vs host-dead</span></li>
+        <li class="guard">forge-power-guard <span class="t">4 min · restores in 3s</span></li>
+        <li class="guard">selfcheck + auth canary <span class="t">10 min heartbeat</span></li>
+        <li class="job">eBay autoprint + watchers <span class="t">autonomous fulfilment</span></li>
+        <li class="job">janitor <span class="t">04:20 · staleness sweep</span></li>
+        <li class="mem">memory-repos <span class="t">bare mirrors: vault · automemory · mempalace-dump</span></li>
+        <li class="job">ori-config → GitHub <span class="t">03:00 · only offsite copy</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Forge <span class="heb">Win10 + WSL2 · Yesod · foundry &amp; vault</span></h2>
+      <div class="addr">192.168.1.237 wired · tailnet (WSL) · RTX 3060 Ti 8GB</div>
+      <div class="role">GPU inference · photo engine · the backup vault</div>
+      <ul>
+        <li class="svc">Immich <span class="t">:2283 · 35,754 assets · faces + CLIP, all local</span></li>
+        <li class="svc">llama-server <span class="t">:8080 Qwen3.5-9B in-VRAM 37.9 tok/s</span></li>
+        <li class="svc">embeddings <span class="t">:8081 · Open WebUI :8088</span></li>
+        <li class="job">ForgeBackup <span class="t">daily · archive → E: · clone ALL repos → F: · verify both</span></li>
+        <li class="job">icloudpd <span class="t">iCloud → D:\Archive\icloud · 177 GB pulled</span></li>
+        <li class="job">mirror-pull <span class="t">hourly ← Ori memory repos</span></li>
+        <li class="guard">WSL watchdog + host-mem guard <span class="t">boot · 5 min</span></li>
+        <li class="guard">nightly canaries via Ori <span class="t">no ICMP — never ping-diagnose</span></li>
+      </ul>
+      <div class="drives">
+        <div class="drive"><h3>C: SSD 500G</h3><p>Windows · WSL vhdx<br>models · Immich DB</p></div>
+        <div class="drive"><h3>D: 4TB X5PRO</h3><p>Archive mirror · iCloud pull · old Android dumps</p></div>
+        <div class="drive backup"><h3>E: BACKUP-A 4TB</h3><p>restic-archive · restic-meridian<br>qualified by full-surface write</p></div>
+        <div class="drive backup"><h3>F: BACKUP-B 4TB</h3><p>byte-mirror of E: ·<br>independently hash-verified</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ DATA FLOWS ══════════ -->
+  <div class="flowbar">
+    <b>The flows</b> — how a byte moves from the world into redundancy
+    <div class="flow">
+      <span>phones/iPad <em>→ Immich app →</em> Forge WSL library</span>
+      <span>iCloud <em>→ icloudpd →</em> D:\Archive\icloud <em>→ Immich external lib</em></span>
+      <span>Facebook export <em>→</em> C:\Forge\Archive\facebook <em>→ Immich</em></span>
+      <span>Telegram / voice <em>→ Ori →</em> Syncthing <em>→</em> ~/captures</span>
+      <span>chronicle <em>→</em> Vault + MemPalace + Honcho <em>→ git mirrors →</em> Ori <em>→ hourly pull →</em> Forge</span>
+      <span>Meridian home <em>→ restic 21:15 →</em> E: <em>→ robocopy →</em> F:</span>
+      <span>C:\Forge\Archive + D:\Archive\icloud <em>→ restic daily →</em> E: <em>→</em> F:</span>
+      <span>WSL Immich library + pg dump <em>→ fence job (S158, building) →</em> E: + F:</span>
+    </div>
+  </div>
+
+  <!-- ══════════ REDUNDANCY LEDGER ══════════ -->
+  <div class="redun">
+    <h2>Redundancy ledger — every irreplaceable byte and where its copies live</h2>
+    <table>
+      <tr><th>Data</th><th>Live copy</th><th>Copy 2</th><th>Copy 3</th><th>State</th></tr>
+      <tr><td>Meridian home (identity · projects · keys · 74.9 GiB)</td><td class="m">Meridian SSD</td><td class="m">E:\restic-meridian</td><td class="m">F: clone</td><td class="ok">nightly · restore-drilled</td></tr>
+      <tr><td>Photo archive (C:\Forge\Archive incl Facebook)</td><td class="m">C: + D:\Archive mirror</td><td class="m">E:\restic-archive</td><td class="m">F: clone</td><td class="ok">daily · verified</td></tr>
+      <tr><td>iCloud pull (177 GB)</td><td class="m">D:\Archive\icloud</td><td class="m">E:\restic-archive</td><td class="m">F: clone</td><td class="ok">fenced S213</td></tr>
+      <tr><td>Memory stack (vault · automemory · MemPalace)</td><td class="m">Meridian</td><td class="m">Ori bare repos + restic</td><td class="m">Forge hourly pull</td><td class="ok">3-2-1 since S73</td></tr>
+      <tr><td>Immich managed uploads + Postgres (phone/iPad)</td><td class="m">WSL vhdx</td><td class="m">E:\immich-uploads</td><td class="m">F:\immich-uploads</td><td class="open">fence building tonight</td></tr>
+      <tr><td>Old Android dumps (D: root)</td><td class="m">D: only</td><td class="m">—</td><td class="m">—</td><td class="open">census running · then fence</td></tr>
+      <tr><td>Ori config + identity files</td><td class="m">Ori</td><td class="m">GitHub (private)</td><td class="m">Meridian restic</td><td class="ok">nightly 03:00</td></tr>
+      <tr><td>Captures (Telegram · voice · backrooms)</td><td class="m">Ori</td><td class="m">Meridian (Syncthing)</td><td class="m">E:/F: via home backup</td><td class="ok">continuous</td></tr>
+    </table>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--blue)"></i>always-on service</span>
+    <span><i style="background:var(--amber)"></i>scheduled job</span>
+    <span><i style="background:var(--green)"></i>guard / watcher — every one alerts, none are decorative</span>
+    <span><i style="background:var(--violet)"></i>memory layer</span>
+    <span class="k">deliberately absent by Gio's call: offsite copy · UPS</span>
+  </div>
+
+</div>
+</body>
+</html>

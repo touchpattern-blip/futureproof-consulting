@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Quaternary — a local-first system, mapped</title>
+<style>
+  :root{
+    --bg:#0b0d10; --ink:#dde1e8; --dim:#98a0ae; --faint:#5c6370;
+    --copper:#da7756; --green:#7fb069; --blue:#6a9fd8; --amber:#d8a656;
+    --violet:#a58fd8; --rose:#c98a9a;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  body{background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,"Helvetica Neue",sans-serif;margin:0;padding:30px 10px 50px}
+  .frame{width:1620px;margin:0 auto}
+  h1{font-weight:600;font-size:22px;margin:0;text-align:center}
+  .sub{color:var(--dim);font-size:13px;text-align:center;margin:4px 0 6px}
+  .thesis{color:var(--copper);font-size:13.5px;text-align:center;font-style:italic;margin-bottom:10px}
+  svg{display:block;margin:0 auto}
+  text{font-family:-apple-system,"Helvetica Neue",sans-serif}
+  .root-t{font-size:17px;font-weight:600;fill:var(--ink)}
+  .root-s{font-size:11px;fill:var(--dim)}
+  .b-t{font-size:14.5px;font-weight:600}
+  .b-s{font-size:10.5px;fill:var(--dim)}
+  .leaf{font-size:12px;fill:var(--ink)}
+  .leaf-d{font-size:10.5px;fill:var(--dim)}
+  .apho{font-size:11px;font-style:italic}
+  .wire{fill:none;stroke-width:1.6;opacity:.55}
+  .foot{color:var(--faint);font-size:11px;text-align:center;margin-top:8px}
+  .foot b{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="frame">
+<h1>The Quaternary</h1>
+<div class="sub">one human, three machines, and the habits that keep a life's data sovereign</div>
+<div class="thesis">"Cloud intelligence is borrowed brilliance. Never let it become foundation."</div>
+
+<svg width="1620" height="1010" viewBox="0 0 1620 1010">
+
+  <!-- wires: root edge to each branch title -->
+  <path class="wire" stroke="#da7756" d="M700,505 C620,505 600,60 490,52"/>
+  <path class="wire" stroke="#6a9fd8" d="M700,505 C630,505 610,280 490,276"/>
+  <path class="wire" stroke="#a58fd8" d="M700,505 C630,505 610,498 490,500"/>
+  <path class="wire" stroke="#c98a9a" d="M700,505 C620,505 600,780 490,785"/>
+  <path class="wire" stroke="#7fb069" d="M920,505 C1000,505 1020,60 1130,52"/>
+  <path class="wire" stroke="#d8a656" d="M920,505 C990,505 1010,280 1130,276"/>
+  <path class="wire" stroke="#da7756" d="M920,505 C990,505 1010,530 1130,537"/>
+  <path class="wire" stroke="#6a9fd8" d="M920,505 C1000,505 1020,760 1130,761"/>
+
+  <!-- ROOT -->
+  <g>
+    <rect x="700" y="462" width="220" height="86" rx="14" fill="#181c23" stroke="#3a4048"/>
+    <text class="root-t" x="810" y="497" text-anchor="middle">THE OPERATOR</text>
+    <text class="root-s" x="810" y="516" text-anchor="middle">one human, holding the middle</text>
+    <text class="root-s" x="810" y="532" text-anchor="middle" fill="#da7756">decides &#183; approves &#183; fires the laser</text>
+  </g>
+
+  <!-- LEFT 1: THE THESIS -->
+  <g>
+    <text class="b-t" x="475" y="52" text-anchor="end" fill="#da7756">THE THESIS</text>
+    <text class="b-s" x="475" y="68" text-anchor="end">why local-first</text>
+    <text class="leaf" x="475" y="94" text-anchor="end">Your data lives on disks you own</text>
+    <text class="leaf-d" x="475" y="109" text-anchor="end">no third-party storage without explicit consent</text>
+    <text class="leaf" x="475" y="131" text-anchor="end">Centralized is revocable</text>
+    <text class="leaf-d" x="475" y="146" text-anchor="end">a frontier model was switched off worldwide in one evening. lesson kept.</text>
+    <text class="leaf" x="475" y="168" text-anchor="end">Cloud reasoning, local everything else</text>
+    <text class="leaf-d" x="475" y="183" text-anchor="end">the frontier model is hired help; memory, photos, home, voice stay home</text>
+    <text class="leaf" x="475" y="205" text-anchor="end">Freedom scales with recoverability</text>
+    <text class="leaf-d" x="475" y="220" text-anchor="end">you can only move fast on ground you can restore</text>
+  </g>
+
+  <!-- LEFT 2: THE FOUR ROLES -->
+  <g>
+    <text class="b-t" x="475" y="276" text-anchor="end" fill="#6a9fd8">THE FOUR ROLES</text>
+    <text class="b-s" x="475" y="292" text-anchor="end">map them to any hardware you have</text>
+    <text class="leaf" x="475" y="318" text-anchor="end">Operator &#8212; the human</text>
+    <text class="leaf-d" x="475" y="333" text-anchor="end">intent, taste, final say. never automated.</text>
+    <text class="leaf" x="475" y="355" text-anchor="end">Curator &#8212; a laptop (here: "Meridian")</text>
+    <text class="leaf-d" x="475" y="370" text-anchor="end">deep work, chronicle, the conversation. travels with you.</text>
+    <text class="leaf" x="475" y="392" text-anchor="end">Captor &#8212; an always-on box (here: "Ori")</text>
+    <text class="leaf-d" x="475" y="407" text-anchor="end">captures, watches, relays. an old laptop is plenty.</text>
+    <text class="leaf" x="475" y="429" text-anchor="end">Foundry &#8212; a GPU box (here: "Forge")</text>
+    <text class="leaf-d" x="475" y="444" text-anchor="end">local models, photo AI, the storage vault. a 2010 tower with one good GPU.</text>
+  </g>
+
+  <!-- LEFT 3: THE MEMORY LAYERS -->
+  <g>
+    <text class="b-t" x="475" y="500" text-anchor="end" fill="#a58fd8">THE MEMORY LAYERS</text>
+    <text class="b-s" x="475" y="516" text-anchor="end">an exocortex in five registers</text>
+    <text class="leaf" x="475" y="542" text-anchor="end">Reasoning memory &#8212; conclusions, patterns</text>
+    <text class="leaf-d" x="475" y="557" text-anchor="end">self-hosted; what was learned, not what was said</text>
+    <text class="leaf" x="475" y="579" text-anchor="end">Verbatim memory &#8212; the exact words</text>
+    <text class="leaf-d" x="475" y="594" text-anchor="end">diary, drawers, a knowledge graph with time-validity</text>
+    <text class="leaf" x="475" y="616" text-anchor="end">Knowledge vault &#8212; the life, linked</text>
+    <text class="leaf-d" x="475" y="631" text-anchor="end">plain markdown + local semantic search; people, eras, projects, themes</text>
+    <text class="leaf" x="475" y="653" text-anchor="end">Working facts &#8212; what the agent must not forget</text>
+    <text class="leaf-d" x="475" y="668" text-anchor="end">plain files: feedback rules, device quirks, references. git-mirrored.</text>
+    <text class="leaf" x="475" y="690" text-anchor="end">Session continuity &#8212; many minds, one thread</text>
+    <text class="leaf-d" x="475" y="705" text-anchor="end">a bus between live sessions, a close ritual, a handoff for the next one</text>
+    <text class="apho" x="475" y="729" text-anchor="end" fill="#a58fd8">"memory tells you where to look, not what is currently true"</text>
+  </g>
+
+  <!-- LEFT 4: THE HUMAN CONTRACT -->
+  <g>
+    <text class="b-t" x="475" y="785" text-anchor="end" fill="#c98a9a">THE HUMAN CONTRACT</text>
+    <text class="b-s" x="475" y="801" text-anchor="end">how the agent shows up</text>
+    <text class="leaf" x="475" y="827" text-anchor="end">Operator-grade peer, not a retail assistant</text>
+    <text class="leaf-d" x="475" y="842" text-anchor="end">no pandering, no hedging, no managing the human's energy</text>
+    <text class="leaf" x="475" y="864" text-anchor="end">Confidence is labeled, always</text>
+    <text class="leaf-d" x="475" y="879" text-anchor="end">[verified] vs [inferred ~X%] vs [unknown]. enforced by a hook, not a vibe.</text>
+    <text class="leaf" x="475" y="901" text-anchor="end">Wide latitude, hard lines</text>
+    <text class="leaf-d" x="475" y="916" text-anchor="end">acts freely toward stated goals; public-facing moves need the human</text>
+  </g>
+
+  <!-- RIGHT 1: THE DOCTRINE -->
+  <g>
+    <text class="b-t" x="1145" y="52" fill="#7fb069">THE DOCTRINE</text>
+    <text class="b-s" x="1145" y="68">habits that keep it alive</text>
+    <text class="leaf" x="1145" y="94">Resume, don't restart</text>
+    <text class="leaf-d" x="1145" y="109">search memory before touching anything; the history already exists</text>
+    <text class="leaf" x="1145" y="131">Verify, then act</text>
+    <text class="leaf-d" x="1145" y="146">answer from the system, not from your model of it. looking is cheap.</text>
+    <text class="leaf" x="1145" y="168">The smallest proportionate fix</text>
+    <text class="leaf-d" x="1145" y="183">diagnose the verified cause, then ship the least that cures it</text>
+    <text class="leaf" x="1145" y="205">Path of least resistance, like water</text>
+    <text class="leaf-d" x="1145" y="220">the most direct tool, the existing pipeline, the boring choice</text>
+  </g>
+
+  <!-- RIGHT 2: LOOPS & VERIFIERS -->
+  <g>
+    <text class="b-t" x="1145" y="276" fill="#d8a656">LOOPS &amp; VERIFIERS</text>
+    <text class="b-s" x="1145" y="292">the immune system</text>
+    <text class="leaf" x="1145" y="318">"A rule without a verifier is a prayer"</text>
+    <text class="leaf-d" x="1145" y="333">every rule that holds has a machine behind it: hooks, canaries, evals</text>
+    <text class="leaf" x="1145" y="355">Guards must alert, or they are decor</text>
+    <text class="leaf-d" x="1145" y="370">every watcher pushes to the human's pocket; silence means healthy</text>
+    <text class="leaf" x="1145" y="392">Retry loops with fresh context</text>
+    <text class="leaf-d" x="1145" y="407">generate &#8594; verify &#8594; retry until pass, or fail LOUD</text>
+    <text class="leaf" x="1145" y="429">Rituals get evals</text>
+    <text class="leaf-d" x="1145" y="444">the session close is scored PASS/FAIL by a script, every time</text>
+    <text class="leaf" x="1145" y="466">Long work goes to background agents</text>
+    <text class="leaf-d" x="1145" y="481">the human never watches a progress bar; agents finish, verify, report</text>
+  </g>
+
+  <!-- RIGHT 3: REDUNDANCY -->
+  <g>
+    <text class="b-t" x="1145" y="537" fill="#da7756">REDUNDANCY</text>
+    <text class="b-s" x="1145" y="553">the resurrection discipline</text>
+    <text class="leaf" x="1145" y="579">Three copies of everything irreplaceable</text>
+    <text class="leaf-d" x="1145" y="594">live on the laptop &#183; warm on the always-on box &#183; cold on paired drives</text>
+    <text class="leaf" x="1145" y="616">"A backup never restored from is a hypothesis"</text>
+    <text class="leaf-d" x="1145" y="631">restore drills are part of the build, not an afterthought</text>
+    <text class="leaf" x="1145" y="653">The agent itself is backed up</text>
+    <text class="leaf-d" x="1145" y="668">identity, skills, memory, keys &#8212; a written resurrection protocol rebuilds it</text>
+    <text class="leaf" x="1145" y="690">Qualify your disks before trusting them</text>
+    <text class="leaf-d" x="1145" y="705">a full-surface write beats a health report; donated 2013 drives earned their place</text>
+  </g>
+
+  <!-- RIGHT 4: THE PERIMETER -->
+  <g>
+    <text class="b-t" x="1145" y="761" fill="#6a9fd8">THE PERIMETER</text>
+    <text class="b-s" x="1145" y="777">what stays home vs what is borrowed</text>
+    <text class="leaf" x="1145" y="803">Stays home</text>
+    <text class="leaf-d" x="1145" y="818">photos + faces + search &#183; home control &#183; DNS &#183; voice-to-text &#183; memory &#183; the chronicle</text>
+    <text class="leaf" x="1145" y="840">Borrowed, eyes open</text>
+    <text class="leaf-d" x="1145" y="855">frontier-model reasoning. what enters its context transits; secrets ride as pointers.</text>
+    <text class="leaf" x="1145" y="877">The exit is always owned</text>
+    <text class="leaf-d" x="1145" y="892">local models stand ready; losing the cloud loses brilliance, never the foundation</text>
+    <text class="leaf" x="1145" y="914">Chatty devices get walled</text>
+    <text class="leaf-d" x="1145" y="929">phone-home firmware is blocked at the gateway; control stays on the LAN</text>
+  </g>
+
+</svg>
+
+<div class="foot">
+  Built and lived since April 2026 · the worked example behind the <a href="/whitepaper.html" style="color:#da7756;text-decoration:none">local-first thesis</a> · <a href="system-map.html" style="color:#da7756;text-decoration:none">ops-level map</a> ·
+  <b>every aphorism on this page was paid for with a real incident</b>
+</div>
+</div>
+</body>
+</html>
