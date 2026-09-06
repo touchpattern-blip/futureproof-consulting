@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>Why your token bill doesn't seem logical — and how a local-first setup changes the math</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14171d; --line:#2a2f38; --ink:#dde1e8; --dim:#98a0ae;
+    --faint:#5c6370; --copper:#da7756; --green:#7fb069; --amber:#d8a656; --blue:#6a9fd8;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  body{background:var(--bg);color:var(--ink);font:15.5px/1.65 -apple-system,"Helvetica Neue",sans-serif;margin:0;padding:60px 24px 80px}
+  .page{max-width:760px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;line-height:1.25;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:14px;margin-bottom:36px}
+  h2{font-size:19px;font-weight:600;margin:42px 0 10px;color:var(--copper)}
+  h3{font-size:15.5px;font-weight:600;margin:26px 0 6px}
+  p{margin:10px 0;color:var(--ink)}
+  .d{color:var(--dim)}
+  code{font-family:var(--mono);font-size:13px;background:#171b22;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:18px 0}
+  .box.key{border-color:#4a3b32}
+  .box.key b{color:var(--copper)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th{text-align:left;color:var(--faint);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;padding:6px 12px 6px 0;border-bottom:1px solid var(--line)}
+  td{padding:7px 12px 7px 0;border-bottom:1px solid #1d2129;vertical-align:top}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--dim);white-space:nowrap}
+  td.hot{color:var(--amber)}
+  td.cool{color:var(--green)}
+  .foot{color:var(--faint);font-size:12.5px;margin-top:48px;border-top:1px solid var(--line);padding-top:16px}
+  .foot a{color:var(--dim)}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:5px 0}
+  .aside{font-size:13px;color:var(--faint);font-style:italic}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Why your token bill doesn't seem logical</h1>
+<div class="sub">The billing physics of agentic AI, and how a local-first setup changes the math. Companion to <a href="index.html" style="color:var(--copper)">the Quaternary</a>.</div>
+
+<div class="box key">
+<b>The one-sentence answer:</b> an agent's bill scales with <b>context size × number of steps</b>, not with the amount of work you asked for — and cloud agent platforms grow both silently, while a flat-rate, local-first setup caps one and shrinks the other.
+</div>
+
+<h2>1. The mental model everyone starts with, and why it's wrong</h2>
+<p>Intuition says: "I sent a few prompts and got a few answers. Small bill." That model is right for a chat window and catastrophically wrong for an agent.</p>
+<p>Every time an agent takes a step — runs a command, reads a file, calls a tool — the platform sends the model <span class="d">the entire conversation so far</span>: your instructions, every file it has read, every tool result, every previous thought. The model is stateless; the only way it "remembers" the session is by being re-fed all of it, every single step. On metered billing, <b>you pay for that re-feed every time.</b></p>
+<p>So a session that <i>feels</i> like "one request" is actually:</p>
+<div class="box">
+<span style="font-family:var(--mono);font-size:13px">
+step 1: &nbsp;30,000 tokens in &nbsp;→ small answer out<br>
+step 2: &nbsp;34,000 in (everything again + new results)<br>
+step 3: &nbsp;41,000 in<br>
+&nbsp;&nbsp;...<br>
+step 60: 160,000 in<br>
+<b style="color:var(--amber)">total input billed: ~5,000,000 tokens — for one afternoon's task</b>
+</span>
+</div>
+<p class="d">Output tokens (the text the model writes) are usually a rounding error next to this. The bill is dominated by input re-reads, which is why it "doesn't seem logical": the costly thing is invisible.</p>
+
+<h2>2. The three multipliers cloud agent platforms add</h2>
+<h3>Context stuffing</h3>
+<p>Repo-connected tools (GitHub integrations, cowork platforms) helpfully pre-load context: file trees, diffs, open issues, prior threads. Convenient — and every one of those tokens rides along on <i>every subsequent step</i>. A 40k-token preamble on a 50-step session is 2M tokens of input before you've asked for anything.</p>
+<h3>Long-lived threads</h3>
+<p>Continuing yesterday's conversation feels natural. On metered billing, it means yesterday's whole transcript is now the entry fee for every new step today. Threads that never reset are compound interest against you.</p>
+<h3>Loops you don't see</h3>
+<p>Agents retry, re-read, and self-correct. A flaky test that takes four attempts bills four contexts. CI-triggered agents can run with nobody watching. None of this is malicious — it's just that <b>metered billing turns every inefficiency directly into money.</b></p>
+
+<div class="box">
+<b>Illustrative arithmetic</b> <span class="aside">(representative public API rates; check current pricing)</span>
+<table>
+<tr><th>Scenario</th><th>Shape</th><th>Input billed</th><th>Rough cost @ $3/M in, $15/M out</th></tr>
+<tr><td>Chat-window question</td><td class="m">3 turns, 5k ctx</td><td class="m">~20k</td><td class="cool">~$0.10</td></tr>
+<tr><td>One agentic coding session</td><td class="m">60 steps, ctx 30k→160k</td><td class="m">~5M</td><td class="hot">~$16</td></tr>
+<tr><td>Daily driver, 20 sessions/mo</td><td class="m">same shape</td><td class="m">~100M</td><td class="hot">~$320/mo</td></tr>
+<tr><td>Same + repo pre-load + never-reset threads</td><td class="m">2-3× context</td><td class="m">~250M</td><td class="hot">~$800+/mo</td></tr>
+</table>
+<span class="d">Prompt caching, when a platform uses it well, discounts re-read context substantially — but caches expire in minutes, partial-match, and vanish every time the front of the context changes. It softens the curve; it does not change its shape.</span>
+</div>
+
+<h2>3. What the flat-rate + local-first setup does differently</h2>
+<p>Our system runs on the same frontier models. The bill is different for four architectural reasons, in order of impact:</p>
+
+<h3>a. Flat-rate subscription for the interactive loop</h3>
+<p>The conversational agent runs under a monthly plan (Claude Code on a Max subscription), not per-token API billing. The re-feed physics still exist — but they burn against a <b>flat monthly price with usage limits</b>, not an open meter. Heavy month, light month: same bill. For anyone using an agent as a daily driver, this alone is usually the difference between $100-200/mo fixed and a metered bill that swings into four figures.</p>
+<p class="aside">Honest caveat: flat plans have ceilings too. We've hit monthly limits mid-task and had agents die on them. The answer is the same discipline below, not pretending limits away.</p>
+
+<h3>b. The nervous system runs on zero tokens</h3>
+<p>Most of what our system does per day never touches a model:</p>
+<ul>
+<li>Memory recall is a <b>local keyword index</b> (BM25 search over notes) injected as a few hundred tokens — not an LLM call, and not a giant history dragged into context.</li>
+<li>Watchers, health checks, backup verification, notification guards — <b>shell scripts and cron</b>. They alert a phone directly. Zero tokens, ever.</li>
+<li>Status checks that platforms would do with an agent ("did the backup run?") are <code>grep</code> against a log file.</li>
+</ul>
+<p class="d">Rule of thumb: the model is reserved for judgment. Anything mechanical — polling, diffing, counting, verifying, formatting — is code, because code costs nothing per run.</p>
+
+<h3>c. Context discipline: pointers, not payloads</h3>
+<ul>
+<li><b>Memory lives in files, not in the conversation.</b> The agent is told <i>where things are</i> ("the device quirks are in this note") and fetches only what the task needs. Nothing rides along "just in case."</li>
+<li><b>Sessions reset deliberately.</b> A close ritual saves conclusions to disk, then the context is cleared. Tomorrow starts at 10k tokens, not 400k.</li>
+<li><b>Long work is delegated to fresh sub-agents</b> with a scoped brief — a 2k-token instruction instead of a fork of the whole conversation. They finish, verify, and return a summary, not a transcript.</li>
+<li><b>Compaction</b> squeezes long threads into summaries instead of letting them compound.</li>
+</ul>
+
+<h3>d. Local models for the background tier</h3>
+<p>A $250 used GPU in a 2010 tower runs a 9B-parameter model entirely in VRAM. It handles verification passes, memory consolidation, and semantic checks — the high-volume, low-difficulty calls that would otherwise leak money continuously. Marginal cost per call: electricity.</p>
+
+<h2>4. What Pedro can actually do, in order of payoff</h2>
+<ul>
+<li><b>1. Match the billing model to the usage.</b> Daily-driver agentic use on a meter is the wrong instrument. A flat plan (or a hard monthly budget cap if staying on API) converts an unbounded risk into a fixed cost.</li>
+<li><b>2. Kill the long-lived thread habit.</b> Finish a task, extract what mattered into a file, start fresh. This is the single biggest metered-bill lever that costs nothing.</li>
+<li><b>3. Audit what gets pre-loaded.</b> If the platform stuffs the repo into context, scope it: one directory, one diff, one issue. Every preamble token is billed once per step, not once.</li>
+<li><b>4. Move the mechanical steps out of the loop.</b> Tests, linting, log-watching, retries — run them in CI/scripts and hand the agent <i>results</i>, not the job of babysitting them.</li>
+<li><b>5. Use the smallest model that survives the task.</b> Frontier models for judgment, small/cheap ones for classification and glue. Tiering is often a 10× cost difference at identical outcomes.</li>
+<li><b>6. Read the usage dashboard weekly.</b> Whatever the platform, it will show that a handful of sessions consumed most of the spend. Fix the shape of those sessions specifically.</li>
+</ul>
+
+<div class="box key">
+<b>The deeper point</b> — this is the local-first thesis in economic form. Cloud intelligence is worth paying for: it is genuinely brilliant. But intelligence-per-dollar collapses when architecture makes the model do work a shell script could do, and remember things a file could hold. Rent the brilliance. Own the plumbing.
+</div>
+
+<div class="foot">
+Part of <a href="index.html">the Quaternary</a> · companion to <a href="/whitepaper.html">The Sovereign AI Stack</a> · Futureproof AV, 2026 · figures are illustrative, not quotes — check current provider pricing
+</div>
+
+</div>
+</body>
+</html>
