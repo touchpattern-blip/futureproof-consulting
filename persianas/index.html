@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Persianas, Performance Room. Amanda + Tyler</title>
+<style>
+  :root{
+    --bg:#101418; --panel:#151a20; --line:#242b33;
+    --gold:#c9a227; --gray:#8a94a0; --text:#d8dde3; --dim:#5c6672;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:0 24px}
+  header{padding:110px 0 70px; border-bottom:1px solid var(--line)}
+  .kicker{color:var(--gold); font-size:13px; letter-spacing:.22em; text-transform:uppercase; margin:0 0 22px}
+  h1{font-size:44px; line-height:1.12; font-weight:600; margin:0 0 10px; letter-spacing:-.01em}
+  h1 .sub{color:var(--gray); font-weight:400}
+  .meta{color:var(--gray); font-size:15px; margin-top:26px; line-height:1.9}
+  .meta b{color:var(--text); font-weight:500}
+  section{padding:78px 0 10px}
+  h2{font-size:15px; color:var(--gold); letter-spacing:.2em; text-transform:uppercase; font-weight:600; margin:0 0 34px}
+  h2 .n{color:var(--dim); margin-right:14px; font-weight:400}
+  h3{font-size:19px; font-weight:600; margin:44px 0 12px; color:var(--text)}
+  p{margin:0 0 18px; max-width:72ch; color:var(--text)}
+  p.g{color:var(--gray)}
+  .facts{display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); margin:36px 0}
+  .facts div{background:var(--panel); padding:20px 22px}
+  .facts .v{font-size:22px; color:var(--text); font-weight:600; letter-spacing:-.01em}
+  .facts .k{font-size:12.5px; color:var(--gray); letter-spacing:.06em; text-transform:uppercase; margin-top:5px}
+  .elevs{display:grid; grid-template-columns:1fr 1fr; gap:28px; margin:44px 0 20px}
+  .elevs figure{margin:0}
+  .elevs img{width:100%; height:auto; display:block; border:1px solid var(--line); background:var(--bg)}
+  figcaption{font-size:13.5px; color:var(--gray); margin-top:12px; line-height:1.55}
+  figcaption b{color:var(--text); font-weight:500}
+  .gallery{display:grid; grid-template-columns:1fr 1fr; gap:28px; margin:40px 0 8px}
+  .gallery figure{margin:0}
+  .gallery img{width:100%; height:auto; display:block; border:1px solid var(--line); aspect-ratio:3/2; object-fit:cover}
+  .gallery .wide{grid-column:1 / -1}
+  .gallery .wide img{aspect-ratio:auto}
+  .refphoto{margin:40px 0 8px}
+  .refphoto img{width:100%; height:auto; display:block; border:1px solid var(--line)}
+  .viewer{position:relative; margin:34px 0 10px; border:1px solid var(--line); background:#0c0f13}
+  .viewer iframe{display:block; width:100%; height:70vh; border:0; pointer-events:none}
+  .viewer.active iframe{pointer-events:auto}
+  .viewer .hint{
+    position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:flex-end;
+    padding:16px 18px; cursor:pointer; font-size:13px; color:var(--gray);
+  }
+  .viewer .hint span{background:rgba(16,20,24,.85); border:1px solid var(--line); padding:7px 14px; border-radius:3px}
+  .viewer.active .hint{display:none}
+  .vlinks{font-size:13.5px; color:var(--gray); margin:10px 0 40px}
+  .vlinks a{color:var(--gold); text-decoration:none}
+  .vlinks a:hover{text-decoration:underline}
+  .sheet{display:block; background:#fff; border:1px solid var(--line); margin:30px 0 8px; padding:10px}
+  .sheet img{width:100%; height:auto; display:block}
+  .sheetcap{font-size:13.5px; color:var(--gray); margin:10px 0 34px}
+  .sheetcap a{color:var(--gold); text-decoration:none}
+  .sheetcap a:hover{text-decoration:underline}
+  table{width:100%; border-collapse:collapse; margin:26px 0 40px; font-size:14.5px}
+  th{color:var(--gray); font-weight:500; font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; text-align:left; padding:10px 14px 10px 0; border-bottom:1px solid var(--gray)}
+  td{padding:10px 14px 10px 0; border-bottom:1px solid var(--line); vertical-align:top; color:var(--text)}
+  td.num, th.num{text-align:right; padding-right:0; font-variant-numeric:tabular-nums}
+  td.num:not(:last-child), th.num:not(:last-child){padding-right:26px}
+  tr.subtotal td{color:var(--gold); font-weight:600; border-bottom:none; padding-top:14px}
+  tr.rec td{background:rgba(201,162,39,.08); color:var(--text)}
+  tr.rec td:first-child{border-left:2px solid var(--gold); padding-left:12px}
+  .note{font-size:13px; color:var(--gray); margin-top:-28px; margin-bottom:40px}
+  .total{
+    border:1px solid var(--gold); padding:34px 38px; margin:54px 0 30px;
+    display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px;
+  }
+  .total .lbl{color:var(--gray); font-size:14px; letter-spacing:.14em; text-transform:uppercase}
+  .total .amt{font-size:40px; font-weight:600; color:var(--gold); letter-spacing:-.01em; font-variant-numeric:tabular-nums}
+  .foot-note{
+    font-size:13px; color:var(--gray); line-height:1.75; border-left:2px solid var(--line);
+    padding:6px 0 6px 22px; margin:36px 0 10px; max-width:78ch;
+  }
+  .foot-note li{margin-bottom:8px}
+  details{border:1px solid var(--line); margin:30px 0; background:var(--panel)}
+  summary{cursor:pointer; padding:20px 24px; color:var(--text); font-weight:500; font-size:15px; list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary:before{content:"+"; color:var(--gold); margin-right:14px; font-weight:400}
+  details[open] summary:before{content:"\2013"}
+  details .inner{padding:4px 24px 26px; border-top:1px solid var(--line)}
+  details table{margin-top:20px}
+  footer{border-top:1px solid var(--line); margin-top:90px; padding:54px 0 80px; color:var(--gray); font-size:14.5px; line-height:2}
+  footer a{color:var(--gold); text-decoration:none}
+  footer a:hover{text-decoration:underline}
+  footer .brand{color:var(--text); font-weight:600; font-size:16px}
+  @media (max-width:720px){
+    h1{font-size:32px}
+    header{padding:70px 0 50px}
+    .elevs,.gallery{grid-template-columns:1fr}
+    .viewer iframe{height:60vh}
+    .total .amt{font-size:30px}
+    .tablewrap{overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="kicker">Design + Build Proposal</p>
+    <h1>Cuban Persianas in Black Walnut<br>
+    <span class="sub">Two arched windows, performance room</span></h1>
+    <div class="meta">
+      Prepared for <b>Amanda + Tyler</b><br>
+      <b>Futureproof AV</b> &middot; Gio Ray<br>
+      September 28, 2026
+    </div>
+  </div>
+</header>
+
+<section id="windows">
+  <div class="wrap">
+    <h2><span class="n">01</span>The Windows</h2>
+    <p>Two tall arched windows light the performance room. Each is 54 inches wide with jambs
+    that run straight up from the floor, capped by a true semicircle of 27 inch radius.
+    The apex sits at 9 feet 7 inches above the floor, which puts the spring line, where the
+    curve begins, at exactly 88 inches.</p>
+    <p class="g">The geometry is unusually clean. Because the arc is a true semicircle, it
+    leaves the jambs vertically at the spring line, so straight work runs floor to 88 inches
+    and the curved work above meets it on a clean horizontal line, with no scribing against
+    the jambs. The whole design follows from that one fact.</p>
+    <div class="facts">
+      <div><div class="v">2</div><div class="k">windows, treated as a pair</div></div>
+      <div><div class="v">54&quot;</div><div class="k">clear width each</div></div>
+      <div><div class="v">R 27&quot;</div><div class="k">true semicircle arch</div></div>
+      <div><div class="v">88&quot;</div><div class="k">spring line above floor</div></div>
+      <div><div class="v">115&quot;</div><div class="k">apex height (9'7&quot;)</div></div>
+    </div>
+    <div class="elevs">
+      <figure>
+        <img src="blinds-elevation-fullarch.svg" alt="Concept elevation, full-arch leaves with center split to the apex">
+        <figcaption><b>Proposed: full-arch leaves.</b> Two full-height leaves per window meet
+        on the centerline all the way to the apex. The louvers continue through the curve.</figcaption>
+      </figure>
+      <figure>
+        <img src="blinds-elevation.svg" alt="Concept elevation, panels below the spring with a fixed arch fan above">
+        <figcaption><b>Alternate: split at the spring.</b> Operable panels fill the rectangle;
+        the semicircle above becomes a fixed decorative fan, the traditional Cuban move.</figcaption>
+      </figure>
+    </div>
+    <p class="g" style="font-size:13.5px">Window 2 is assumed identical to window 1 and will be
+    field-verified before final frame sizing.</p>
+  </div>
+</section>
+
+<section id="design">
+  <div class="wrap">
+    <h2><span class="n">02</span>The Design</h2>
+
+    <h3 style="margin-top:0">Full-arch leaves, louvered to the apex</h3>
+    <p>Each window gets two full-height hinged leaves that meet on the centerline and run all
+    the way to the apex. Each leaf carries a quarter-arch top: the outer stile rises straight
+    to the spring line, then a segmented walnut ring sweeps to the apex, while the center
+    stile runs straight and full height so the pair closes against itself with a beaded
+    astragal. The louvers do not stop at the curve. Twelve arch slats per leaf continue
+    through it, each one progressively shorter, its curve-side end profiled concave to a
+    24-1/2 inch radius so it nests the ring at a uniform gap through the full tilt range.</p>
+    <p>Fifty slats per leaf, 200 across the project. A mid-rail divides each leaf into two
+    louver banks that tilt independently, so the lower half can close for privacy while the
+    upper half and the arch stay open to the light, or the entire window can shut down at once.</p>
+    <p>The frame is face-mounted: it sits on the interior wall, proud of the opening and tight
+    against it, 2 inches deep with a 2-1/2 inch face. The window has essentially no sill, so
+    the frame legs land directly on the floor and the curved head reproduces the window's arc
+    exactly. Face-mounting is what lets an arch-top leaf swing; a leaf hinged inside the
+    reveal would strike the arch soffit the moment it moved.</p>
+
+    <h3>The tilt mechanism</h3>
+    <p>The louvers are driven by a hidden system: each slat carries a pivot pin on its
+    centerline and a second drive pin at a 3/8 inch offset, the crank arm. A slotted aluminum
+    strip rides captive in a groove in the center stile, offset forward of the pivot line so
+    it clears the pivot pins, and slides about 5/8 inch to swing every slat together. Because
+    the crank arm is identical on every slat, slat length is irrelevant: the 22 inch slats at
+    the bottom and the short slats in the arch rotate in perfect unison. Working range is
+    plus or minus 60 degrees, and the slats seal by overlap at about 56 degrees, so the
+    mechanism never over-travels. Nothing is visible on the face of the shutter.</p>
+    <p class="g">A traditional visible tilt rod with brass screw eyes, the system in the
+    reference photo below, is available as an alternate. It reads correct for the Cuban
+    style and costs about the same; the choice is purely aesthetic.</p>
+
+    <h3>Black walnut</h3>
+    <p>The material is solid American black walnut throughout, selected sapwood-free from a
+    single batch so the color holds across 200 visible slats. Walnut is the right species for
+    this build: dimensionally stable, stiff enough for 2-1/2 inch by 5/16 inch slats, and it
+    machines and finishes cleanly. Slat stock is rift-sawn for straightness. Frames and rails
+    come from 6/4 stock, the floor-standing legs from 10/4, and the arch rings are built up
+    brick-fashion from staggered segments so the face grain follows the curve.</p>
+    <p>One honest expectation to set: walnut lightens in sunlight, the opposite of most
+    species. These leaves will live in direct sun, so the finish is a matte hardwax oil with
+    a UV protection package (Osmo UV-Protection over Polyx), which is repairable in place
+    with no film to peel. Even so, the color will mellow toward honey over the years; a
+    refresh coat on the sun side every year or two keeps it even. Steamed versus air-dried
+    stock changes the depth of the color, and that call is made from physical samples before
+    the lumber order.</p>
+
+    <div class="gallery">
+      <figure>
+        <img src="img/walnut-grain-closeup.jpg" alt="Black walnut grain closeup" loading="lazy">
+        <figcaption><b>Black walnut at close range.</b> The chocolate-brown figure the
+        200 slats will carry. Stock is selected from one batch so this color holds
+        across the whole run.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/walnut-board-planed.jpg" alt="Planed solid walnut board with cathedral grain" loading="lazy">
+        <figcaption><b>Planed solid walnut.</b> Cathedral figure like this lands in the
+        wider frame members; slat stock is rift-sawn straighter grain.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/dark-persianas-rome.jpg" alt="Dark wooden louvered persiane on an ochre facade in Rome" loading="lazy">
+        <figcaption><b>The working tradition.</b> Dark wooden persiane in Rome: banked
+        louvers doing daily light duty, the same family of shutter this design
+        descends from.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/wood-shutters-interior.jpg" alt="Interior window with open natural-wood louvered shutters" loading="lazy">
+        <figcaption><b>The form, indoors.</b> Full-height louvered leaves in solid wood.
+        This room runs lighter than walnut; the grain photos above set the color for
+        this project.</figcaption>
+      </figure>
+      <figure class="wide">
+        <img src="img/black-walnut-cross-section.jpg" alt="Black walnut trunk cross-section showing dark heartwood and cream sapwood" loading="lazy">
+        <figcaption><b>Juglans nigra in cross-section.</b> Dark heartwood against cream
+        sapwood. The cream band is why the lumber order specifies sapwood-free: one
+        pale slat in a field of 200 would read as a mistake.</figcaption>
+      </figure>
+    </div>
+
+    <p class="g">A fixed sunburst arch fan, the look in the clients' own reference photo, is
+    offered as a decorative alternate and priced separately in section 06 below.</p>
+  </div>
+</section>
+
+<section id="models">
+  <div class="wrap">
+    <h2><span class="n">03</span>Interactive Models</h2>
+    <p class="g">Both models are built from the same dimensioned solid as the shop drawings.
+    Click a model to interact: drag to orbit, scroll to zoom.</p>
+
+    <div class="viewer" id="v1">
+      <iframe src="PERSIANAS-3D.html" title="Persianas 3D model" loading="lazy"></iframe>
+      <div class="hint"><span>click to interact</span></div>
+    </div>
+    <p class="vlinks">One full window at final dimensions; the slider tilts all 100 louvers,
+    arch slats included. &nbsp;<a href="PERSIANAS-3D.html" target="_blank" rel="noopener">Open full screen &rarr;</a></p>
+
+    <div class="viewer" id="v2">
+      <iframe src="TILT-MECH-3D.html" title="Hidden tilt strip working model" loading="lazy"></iframe>
+      <div class="hint"><span>click to interact</span></div>
+    </div>
+    <p class="vlinks">Sectioned working model of the hidden tilt strip: pivot pins, offset
+    drive pins, and the sliding aluminum strip, cycling through the full tilt range.
+    &nbsp;<a href="TILT-MECH-3D.html" target="_blank" rel="noopener">Open full screen &rarr;</a></p>
+  </div>
+</section>
+
+<section id="drawings">
+  <div class="wrap">
+    <h2><span class="n">04</span>Shop Drawings</h2>
+    <p class="g">Five sheets govern the build. Click any sheet to open it full size.</p>
+
+    <a class="sheet" href="sheets/sheet-1.svg" target="_blank" rel="noopener">
+      <img src="sheets/sheet-1.svg" alt="Sheet 1, front elevation" loading="lazy"></a>
+    <p class="sheetcap">Sheet 1 &middot; Front elevation, one window: frame, leaves, slat
+    fields, and governing dimensions. <a href="sheets/sheet-1.svg" target="_blank" rel="noopener">Open &rarr;</a></p>
+
+    <a class="sheet" href="sheets/sheet-2.svg" target="_blank" rel="noopener">
+      <img src="sheets/sheet-2.svg" alt="Sheet 2, leaf construction" loading="lazy"></a>
+    <p class="sheetcap">Sheet 2 &middot; Leaf construction: stiles, rails, quarter-ring rail,
+    joinery, and section. <a href="sheets/sheet-2.svg" target="_blank" rel="noopener">Open &rarr;</a></p>
+
+    <a class="sheet" href="sheets/sheet-3.svg" target="_blank" rel="noopener">
+      <img src="sheets/sheet-3.svg" alt="Sheet 3, bricklaid ring construction" loading="lazy"></a>
+    <p class="sheetcap">Sheet 3 &middot; Bricklaid rings: staggered segment layup and template
+    routing for the leaf and frame-head arcs. <a href="sheets/sheet-3.svg" target="_blank" rel="noopener">Open &rarr;</a></p>
+
+    <a class="sheet" href="sheets/sheet-4.svg" target="_blank" rel="noopener">
+      <img src="sheets/sheet-4.svg" alt="Sheet 4, slat schedule" loading="lazy"></a>
+    <p class="sheetcap">Sheet 4 &middot; Slat schedule: the 152 straight slats and the full
+    cutting schedule for the 48 arc-profiled arch slats. <a href="sheets/sheet-4.svg" target="_blank" rel="noopener">Open &rarr;</a></p>
+
+    <a class="sheet" href="sheets/sheet-5.svg" target="_blank" rel="noopener">
+      <img src="sheets/sheet-5.svg" alt="Sheet 5, tilt mechanism" loading="lazy"></a>
+    <p class="sheetcap">Sheet 5 &middot; Tilt systems: the hidden strip (primary) and the
+    visible rod alternate, with pin geometry and travel. <a href="sheets/sheet-5.svg" target="_blank" rel="noopener">Open &rarr;</a></p>
+  </div>
+</section>
+
+<section id="investment">
+  <div class="wrap">
+    <h2><span class="n">05</span>Investment</h2>
+    <p class="g">Materials are priced from 2026 Los Angeles retail estimates with a 15 percent
+    buffer for price drift and waste beyond the stated yield factors, plus California sales
+    tax. Labor is an honest first-build takeoff for a custom shop, one skilled builder.
+    All figures below are estimates until lumber is priced on the day of purchase.</p>
+
+    <h3>Materials: lumber</h3>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Item</th><th class="num">Buy qty</th><th class="num">$/bd ft</th><th class="num">Ext</th><th>Basis</th></tr>
+      <tr><td>Black walnut 4/4 (slats, rift, sapwood-free)</td><td class="num">52 bd ft</td><td class="num">$13.00</td><td class="num">$673.91</td><td>net 23.6 bf x 2.2 yield</td></tr>
+      <tr><td>Black walnut 4/4 (ring segments, leaf + head)</td><td class="num">31 bd ft</td><td class="num">$13.00</td><td class="num">$400.12</td><td>net 15.4 bf x 2.0 yield</td></tr>
+      <tr><td>Black walnut 6/4 (stiles + rails)</td><td class="num">31 bd ft</td><td class="num">$14.00</td><td class="num">$432.83</td><td>net 20.6 bf x 1.5 yield</td></tr>
+      <tr><td>Black walnut 10/4 (frame legs)</td><td class="num">18 bd ft</td><td class="num">$16.00</td><td class="num">$293.33</td><td>net 12.2 bf x 1.5 yield</td></tr>
+      <tr><td>Black walnut 4/4 (astragal, rods, tips)</td><td class="num">4 bd ft</td><td class="num">$13.00</td><td class="num">$56.74</td><td>net 2.9 bf x 1.5 yield</td></tr>
+      <tr class="subtotal"><td>Lumber subtotal</td><td></td><td></td><td class="num">$1,856.93</td><td></td></tr>
+    </table>
+    </div>
+
+    <h3>Materials: hardware, finish, consumables</h3>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Item</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Ext</th><th>Note</th></tr>
+      <tr><td>Ball-bearing butt hinges 3-1/2&quot; ORB</td><td class="num">16</td><td class="num">$13.00</td><td class="num">$208.00</td><td>4 per leaf, face-mount frame; quality tier</td></tr>
+      <tr><td>Hidden tilt strips, slotted aluminum + pins</td><td class="num">4</td><td class="num">$30.00</td><td class="num">$120.00</td><td>PRIMARY tilt system; ~50 stations per 88&quot;+ leaf</td></tr>
+      <tr><td>Hardwood dowel 1/4&quot; (pivot pins, cut to 2&quot;)</td><td class="num">~420 pins</td><td class="num">$0.06</td><td class="num">$25.00</td><td>incl. spares</td></tr>
+      <tr><td>Brass screw eyes #212 (rod-system option pool)</td><td class="num">1 box 100</td><td class="num">$12.00</td><td class="num">$12.00</td><td>only if visible-rod alternate chosen; full need ~400 = +$36</td></tr>
+      <tr><td>Flat-end steel screws (tension slats)</td><td class="num">16 + spares</td><td class="num">$0.30</td><td class="num">$6.00</td><td>1 slat per bank, through-frame</td></tr>
+      <tr><td>Rare-earth magnet catches + strikes</td><td class="num">8</td><td class="num">$4.00</td><td class="num">$32.00</td><td>top + bottom per leaf</td></tr>
+      <tr><td>Loose-tenon stock / Dominos 10mm</td><td class="num">~60</td><td class="num">$0.35</td><td class="num">$21.00</td><td>rails, ring joints</td></tr>
+      <tr><td>Titebond III + epoxy (ring bricklay)</td><td class="num">1 + 1</td><td class="num">$25.00</td><td class="num">$45.00</td><td></td></tr>
+      <tr><td>Frame mounting screws, anchors + shims</td><td class="num">lot</td><td class="num">$35.00</td><td class="num">$35.00</td><td>into studs/framing at legs + head</td></tr>
+      <tr><td>Osmo Polyx base x2 + UV-Protection Oil x2</td><td class="num">4 x 750ml</td><td class="num">$48.75</td><td class="num">$195.00</td><td>~500 sq ft coated surface, 2-3 coats; UV mandatory</td></tr>
+      <tr><td>Template/jig stock: MDF, hardboard, ply</td><td class="num">lot</td><td class="num">$100.00</td><td class="num">$100.00</td><td>trammel ring templates, slat-end template, pin drill jigs</td></tr>
+      <tr><td>Abrasives, tack cloth, brushes</td><td class="num">lot</td><td class="num">$85.00</td><td class="num">$85.00</td><td>200 slats eat sandpaper</td></tr>
+      <tr><td>Lumber delivery allowance</td><td class="num">1</td><td class="num">$75.00</td><td class="num">$75.00</td><td>12-ft boards to the shop</td></tr>
+      <tr class="subtotal"><td>Hardware subtotal</td><td></td><td></td><td class="num">$959.00</td><td></td></tr>
+    </table>
+    </div>
+
+    <h3>Materials total</h3>
+    <table style="max-width:460px">
+      <tr><td>Materials subtotal</td><td class="num">$2,815.93</td></tr>
+      <tr><td>Padding 15%</td><td class="num">$422.39</td></tr>
+      <tr><td>Padded subtotal</td><td class="num">$3,238.32</td></tr>
+      <tr><td>CA sales tax @ 9.50%</td><td class="num">$307.64</td></tr>
+      <tr class="subtotal"><td>Materials total (estimate)</td><td class="num">$3,545.96</td></tr>
+    </table>
+
+    <h3>Labor: phase takeoff</h3>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Phase</th><th class="num">Hours</th></tr>
+      <tr><td>Lumber selection, procurement, milling (134 bf; resaw + thickness 200 slats rift)</td><td class="num">24</td></tr>
+      <tr><td>Templates + jigs (trammel ring templates, slat-end arc template, pin drill jigs, story sticks)</td><td class="num">7</td></tr>
+      <tr><td>Test article: one 27 x 24 louver bank, evaluate + adjust</td><td class="num">5</td></tr>
+      <tr><td>Bricklaid rings x6 (48 segments, staggered glue-ups, template-rout both faces, spring joints)</td><td class="num">16</td></tr>
+      <tr><td>Leaf joinery x4 (M+T, tilt-strip grooves, ~100 jigged pin holes per leaf, glue-up square)</td><td class="num">36</td></tr>
+      <tr><td>Arch slats: template-rout + fit 48 C-slats to their bays</td><td class="num">12</td></tr>
+      <tr><td>Slat assembly: 200 slats pinned, tension slats, tilt strips + drive pins</td><td class="num">14</td></tr>
+      <tr><td>Face-mount frames x2 (legs + head rings, joinery, assembly)</td><td class="num">8</td></tr>
+      <tr><td>Sanding + finish, 2-3 coats hardwax oil (~500 sq ft, slats dominate)</td><td class="num">22</td></tr>
+      <tr><td>Bench-hang: hinges, astragal, magnets, fit leaves to frames</td><td class="num">7</td></tr>
+      <tr><td>Site install: anchor frames plumb, hang + adjust leaves</td><td class="num">10</td></tr>
+      <tr><td>Project management, supplier runs, client comms</td><td class="num">5</td></tr>
+      <tr class="subtotal"><td>Total hours</td><td class="num">166</td></tr>
+    </table>
+    </div>
+
+    <h3>Labor: rate basis</h3>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Rate basis</th><th class="num">$/hr</th><th class="num">Labor total</th></tr>
+      <tr><td>Journeyman / side-shop</td><td class="num">$85</td><td class="num">$14,110.00</td></tr>
+      <tr class="rec"><td>Custom shop (recommended)</td><td class="num">$100</td><td class="num">$16,600.00</td></tr>
+      <tr><td>Specialty shutter shop</td><td class="num">$125</td><td class="num">$20,750.00</td></tr>
+    </table>
+    </div>
+    <p class="note">Hours are an honest first-build takeoff including jig development a
+    factory would amortize. Envelope: $11,993.50 low to $23,862.50 high.</p>
+
+    <div class="total">
+      <span class="lbl">Project total, materials + recommended labor (estimate)</span>
+      <span class="amt">$20,145.96</span>
+    </div>
+
+    <p class="g">For scale: factory-made custom arch-top hardwood shutters run roughly $150
+    to $250+ per square foot installed, which is $13,000 to $21,000+ for this roughly 86
+    square foot scope. This proposal lands at the top of that band, which is where it
+    belongs: not a factory product, but hand-built solid walnut at furniture grade, one-off,
+    with the louvers running through the arch.</p>
+
+    <div class="foot-note">
+      <b style="color:var(--text)">Assumptions (verify before quoting)</b>
+      <ul style="margin:10px 0 0; padding-left:18px">
+        <li>Tax at 9.50% = LA County base rate. Several cities are 10.25% -- confirm the SITE city and correct.</li>
+        <li>Walnut at $13-16/bd ft by thickness; call House of Hardwood / Anderson / Bohnhoff for the day's price and sapwood-free availability.</li>
+        <li>Yield factors: slats 2.2x (rift, defect-free), rings 2.0x (angle waste), frames/legs 1.5x.</li>
+        <li>Hidden-strip tilt priced as primary; visible-rod alternate swaps $120 of strips for ~$48 of screw eyes + rod stock -- roughly cost-neutral.</li>
+        <li>Window 2 assumed identical to window 1 (field-verify).</li>
+        <li>Prices are 2026 retail estimates (LA suppliers), to be verified at purchase; the 15% padding is the buffer for price drift and waste beyond the stated yield factors. Materials figures cover materials only -- labor, delivery beyond the stated allowance, and shop time are carried in the labor takeoff.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="sunburst">
+  <div class="wrap">
+    <h2><span class="n">06</span>Alternate: The Sunburst Arch</h2>
+    <p>A second version of the arch, for consideration alongside the primary design. In this
+    version the semicircular top of each window is filled by a fixed decorative fan: 13
+    tapered walnut rays radiating from a half-round hub, the hub centered at the spring line
+    on the window centerline, rays landing on the outer arc at roughly 6-1/2 inch spacing,
+    the whole fan set inside the same bricklaid half-ring. The leaves below are built as in
+    the primary design, topped with a flat rail at the spring line instead of the
+    quarter-arch.</p>
+    <div class="elevs">
+      <figure>
+        <img src="blinds-elevation.svg" alt="Concept elevation, sunburst fan over operable panels">
+        <figcaption><b>Sunburst version, concept elevation.</b> Operable louvered leaves to
+        the spring line, fixed 13-ray fan in the semicircle.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/reference-sunburst-visible-rod.png" alt="Client reference photo: white shutters with sunburst arch fan and visible tilt rods">
+        <figcaption><b>Client reference photo.</b> The look that started the conversation:
+        sunburst fan in the arch, traditional visible tilt rods on the panels. Both elements
+        are available; the visible rod is the tilt alternate described in section 02.</figcaption>
+      </figure>
+    </div>
+    <p>The honest constraint, stated plainly: a sunburst is fixed and cannot close. Its
+    wedge rays do not rotate against each other, so the arch always passes light. Full
+    light control at the arch comes only from the primary design's operable arch louvers.
+    If the sunburst look and full blackout are both wanted, a concealed movable blackout
+    arch cellular shade mounts behind the fan; it is a commercial custom item, estimated at
+    $500 to $700 per window installed, to be verified before ordering.</p>
+
+    <h3>Price difference (estimates)</h3>
+    <div class="tablewrap">
+    <table style="max-width:640px">
+      <tr><th>Item</th><th class="num">Amount</th></tr>
+      <tr><td>Sunburst build: ~12 hrs per window (rays, hub, fitting, finish)</td><td class="num">24 hrs both</td></tr>
+      <tr><td>Credit for arch louvers omitted</td><td class="num">~ -16 hrs both</td></tr>
+      <tr><td>Net labor: +8 hrs @ $100</td><td class="num">+$800</td></tr>
+      <tr><td>Additional walnut + padding/tax, both windows</td><td class="num">~ +$240</td></tr>
+      <tr class="subtotal"><td>Net alternate price over the base proposal, both windows (estimate; excludes the optional blackout shade)</td><td class="num">~ +$1,040</td></tr>
+    </table>
+    </div>
+    <p class="g">This is a build-time decision: the sunburst version tops the leaves with a
+    flat rail at the spring line and fills the arch with the fixed fan, so the two versions
+    differ in leaf construction and cannot be swapped later without rebuilding the leaf
+    tops.</p>
+  </div>
+</section>
+
+<section id="sources">
+  <div class="wrap">
+    <h2><span class="n">07</span>Sources</h2>
+
+    <h3 style="margin-top:0">Lumber, Los Angeles</h3>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Supplier</th><th>Area</th><th>Role on this project</th><th>Contact</th></tr>
+      <tr><td>House of Hardwood</td><td>2414 S. Wellesley Ave, West LA (90064)</td>
+        <td>Primary for the FAS 4/4 slat and ring stock. Hand-selected black walnut boards
+        and wide planks; grain-matched, sapwood-free selection matters most here.</td>
+        <td>310-479-4196, Mon-Fri 7:30-4</td></tr>
+      <tr><td>Bohnhoff Lumber Co</td><td>3411 E. 26th St, Vernon</td>
+        <td>Primary for the 6/4 and 10/4 frame stock, and the volume and price check.
+        Southern California's largest hardwood yard; allows hand-picking through pallets;
+        delivers.</td>
+        <td>(323) 263-9361, weekdays 8:30-3</td></tr>
+      <tr><td>Angel City Lumber</td><td>251 S. Anderson St, Boyle Heights</td>
+        <td>Urban sawmill milling fallen Los Angeles trees; carries California black
+        walnut slabs. A different species than Eastern black walnut, with wilder figure
+        and slab-based availability. Worth a visit for feature stock, the sunburst rays
+        and hubs or the astragal, with a story attached: wood from LA's own street trees.
+        Not the volume source.</td>
+        <td>angelcitylumber.com, Mon-Sat 9-5</td></tr>
+      <tr><td>Anderson Plywood</td><td>4020 Sepulveda Blvd, Culver City</td>
+        <td>Sheet goods: A-grade walnut plywood in 1/4&quot; and 1/2&quot;, and the MDF
+        and ply for templates and jigs.</td>
+        <td>(310) 397-8229</td></tr>
+    </table>
+    </div>
+    <p class="g" style="font-size:13.5px">Walnut inventory and pricing move constantly;
+    call for the day's price and availability before the material order.</p>
+
+    <h3>Image credits</h3>
+    <ul style="color:var(--gray); font-size:13.5px; line-height:1.9; padding-left:18px">
+      <li>Walnut grain closeup: Ale.G.2001, CC BY-SA 4.0, via
+        <a style="color:var(--gold); text-decoration:none" href="https://commons.wikimedia.org/wiki/File:Noce_canaletto.jpg">Wikimedia Commons</a></li>
+      <li>Planed walnut board: Philipp Zinger, CC BY-SA 4.0, via
+        <a style="color:var(--gold); text-decoration:none" href="https://commons.wikimedia.org/wiki/File:Nussbaum_Holz.JPG">Wikimedia Commons</a></li>
+      <li>Dark persiane, Rome: Dietmar Rabich, "Rome (Italy), Windows -- 2013 -- 3520",
+        CC BY-SA 4.0, via
+        <a style="color:var(--gold); text-decoration:none" href="https://commons.wikimedia.org/wiki/File:Rome_(Italy),_Windows_--_2013_--_3520.jpg">Wikimedia Commons</a></li>
+      <li>Interior wood shutters: Dennis G. Jarvis, CC BY-SA 2.0, via
+        <a style="color:var(--gold); text-decoration:none" href="https://commons.wikimedia.org/wiki/File:Room_at_Stilt_House.jpg">Wikimedia Commons</a></li>
+      <li>Black walnut cross-section: Roger Culos / Museum de Toulouse, CC BY-SA 3.0, via
+        <a style="color:var(--gold); text-decoration:none" href="https://commons.wikimedia.org/wiki/File:Juglans_nigra_MHNT.BOT.2018.6.22.jpg">Wikimedia Commons</a></li>
+      <li>Sunburst reference photo: client-supplied.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="appendix">
+  <div class="wrap">
+    <h2><span class="n">08</span>Appendix</h2>
+    <details>
+      <summary>Cut list, hardware, and order of operations</summary>
+      <div class="inner">
+        <div class="tablewrap">
+        <table>
+          <tr><th>Part</th><th class="num">Qty</th><th>Final dims (T x W x L)</th><th>Stock</th><th>Notes</th></tr>
+          <tr><td>Outer stile</td><td class="num">4</td><td>1-1/4&quot; x 2&quot; x 87-1/2&quot;</td><td>6/4 walnut</td><td>floor to spring</td></tr>
+          <tr><td>Center stile</td><td class="num">4</td><td>1-1/4&quot; x 2&quot; x 114-3/8&quot;</td><td>6/4 walnut</td><td>full height to apex; groove for hidden tilt strip</td></tr>
+          <tr><td>Bottom rail</td><td class="num">4</td><td>1-1/4&quot; x 4-1/2&quot; x 25-5/16&quot;</td><td>6/4 walnut</td><td>incl 1-1/4 tenons both ends</td></tr>
+          <tr><td>Mid rail</td><td class="num">4</td><td>1-1/4&quot; x 3&quot; x 25-5/16&quot;</td><td>6/4 walnut</td><td>CL at 44&quot; AFF, site-adjustable</td></tr>
+          <tr><td>Leaf ring segment 30 deg</td><td class="num">20</td><td>5/8 x 3.92 x 14.48 blank</td><td>4/4 walnut</td><td>12 L1 + 8 L2; grain follows arc</td></tr>
+          <tr><td>Leaf ring segment 15 deg</td><td class="num">8</td><td>5/8 x 3.23 x 7.55 blank</td><td>4/4 walnut</td><td>L2 ends</td></tr>
+          <tr><td>Head ring segment 45 deg</td><td class="num">16</td><td>7/8 x 4.3 x 23.0 blank</td><td>8/4 walnut resawn</td><td>frame head, 2 layers x 4 x 2 windows</td></tr>
+          <tr><td>Frame leg</td><td class="num">4</td><td>2&quot; x 2-1/2&quot; x 88&quot;</td><td>10/4 walnut (or 8/4 + packer)</td><td>face-mount, lands on floor</td></tr>
+          <tr><td>Straight slat</td><td class="num">152</td><td>5/16&quot; x 2-1/2&quot; x 22-11/16&quot;</td><td>4/4 walnut resawn, RIFT grain</td><td>eased edges, pin holes both ends</td></tr>
+          <tr><td>Arch slat (Sheet 4)</td><td class="num">48</td><td>per schedule</td><td>4/4 walnut resawn, RIFT grain</td><td>cut 1/4 long, fit to bay</td></tr>
+          <tr><td>Tip infill</td><td class="num">4</td><td>~1-1/4 x 3 x 4 shaped</td><td>offcut</td><td>solid above top slat, scribed to ring</td></tr>
+          <tr><td>Astragal</td><td class="num">2</td><td>3/8 x 1-3/4 x 114-3/8&quot;</td><td>4/4 walnut</td><td>on LEFT leaf each window</td></tr>
+        </table>
+        </div>
+        <div class="tablewrap">
+        <table>
+          <tr><th>Hardware item</th><th class="num">Qty</th><th>Note</th></tr>
+          <tr><td>Ball-bearing butt hinge 3-1/2&quot;, oil-rubbed</td><td class="num">4 per leaf = 16</td><td>face-mount frame legs</td></tr>
+          <tr><td>Hardwood dowel pivot pins 1/4&quot; x 2&quot;</td><td class="num">2 per slat + spares (~420)</td><td>glued 1&quot; into slat end, rides in stile/ring hole</td></tr>
+          <tr><td>Brass screw eyes, small (#214/#212)</td><td class="num">2 per slat (~400)</td><td>1 in slat front + 1 in rod, interlocked eye-in-eye; visible-rod alternate only</td></tr>
+          <tr><td>Flat-end steel screws (tension louvers)</td><td class="num">16 (2 per bank x 8 banks)</td><td>through-frame into 1 slat per bank; tighten to stiffen</td></tr>
+          <tr><td>Tilt rods: walnut 5/8 x 7/16</td><td class="num">2 per leaf = 8</td><td>rod line 2-3/4&quot; from center stile; trim top after C12 link; alternate only</td></tr>
+          <tr><td>Rare-earth magnet catch + strike</td><td class="num">2 per leaf = 8</td><td>top + bottom</td></tr>
+          <tr><td>Astragal stock: walnut 3/8 x 1-3/4</td><td class="num">2 pcs @ 115&quot;</td><td>one leaf per pair</td></tr>
+          <tr><td>Finish: hardwax oil w/ UV package (Osmo UV-Protection system)</td><td class="num">~1 L</td><td>walnut lightens in sun; UV inhibitor mandatory</td></tr>
+          <tr><td>Hidden aluminum tilt strip (primary)</td><td class="num">4</td><td>grooved center stile; see Sheet 5 system A</td></tr>
+        </table>
+        </div>
+        <h3 style="font-size:16px">Lumber summary</h3>
+        <p class="g" style="font-size:14px">~42 bd ft net, buy ~90-95 bd ft FAS black walnut
+        (sapwood-free, one batch/flitch; RIFT/straight-grain boards reserved for slat stock).
+        6/4 frames, 4/4 slats + rings, 10/4 legs.</p>
+        <h3 style="font-size:16px">Order of operations</h3>
+        <ol style="color:var(--gray); font-size:14px; line-height:1.9; padding-left:20px; margin-top:8px">
+          <li>Mill frames + test article bank (27 x 24): validate pitch, tilt, pins, finish</li>
+          <li>Field-verify window 2 + wall flatness before final frame sizing</li>
+          <li>Bricklay + rout all rings (Sheet 3)</li>
+          <li>Leaf frames: mortise, groove tilt-strip, drill pin lines, dry-fit, glue</li>
+          <li>Slats: straight run, then C-slats fitted per bay (Sheet 4)</li>
+          <li>Hang leaves in frames on the bench; fit astragal + catches; finish; install</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand">Futureproof AV</div>
+    Gio Ray &middot; Los Angeles<br>
+    <a href="mailto:futureproofav@gmail.com?subject=Persianas%20Proposal">futureproofav@gmail.com</a>
+    &middot; <a href="https://futureproofav.com">futureproofav.com</a><br>
+    <span style="color:var(--dim); font-size:13px">Design + build proposal, September 2026.
+    Figures are estimates as noted; final quote follows field verification of window 2 and
+    day-of-purchase lumber pricing.</span>
+  </div>
+</footer>
+
+<script>
+  for (const v of document.querySelectorAll('.viewer')){
+    v.addEventListener('click', () => v.classList.add('active'));
+  }
+  document.addEventListener('click', (e) => {
+    for (const v of document.querySelectorAll('.viewer.active')){
+      if (!v.contains(e.target)) v.classList.remove('active');
+    }
+  });
+</script>
+
+</body>
+</html>

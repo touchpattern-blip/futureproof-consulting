@@ -1,0 +1,50 @@
+IMAGE SOURCES -- persianas proposal page
+Downloaded 2026-09-28 from Wikimedia Commons (1280px renditions). All licenses
+permit commercial use with attribution (CC BY-SA) or are as noted.
+
+----------------------------------------------------------------------
+wood-shutters-interior.jpg  (1280x850)
+  Content: interior window flanked by open natural-wood louvered shutters,
+           warm wood-paneled room (stilt house)
+  Source page: https://commons.wikimedia.org/wiki/File:Room_at_Stilt_House.jpg
+  Direct file: https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Room_at_Stilt_House.jpg/1280px-Room_at_Stilt_House.jpg
+  License: CC BY-SA 2.0
+  Attribution: Dennis G. Jarvis, via Wikimedia Commons
+
+----------------------------------------------------------------------
+dark-persianas-rome.jpg  (1280x853)
+  Content: dark-brown wooden louvered persiane on an ochre facade, Rome
+  Source page: https://commons.wikimedia.org/wiki/File:Rome_(Italy),_Windows_--_2013_--_3520.jpg
+  Direct file: https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Rome_%28Italy%29%2C_Windows_--_2013_--_3520.jpg/1280px-Rome_%28Italy%29%2C_Windows_--_2013_--_3520.jpg
+  License: CC BY-SA 4.0
+  Attribution: Dietmar Rabich / Wikimedia Commons / "Rome (Italy), Windows -- 2013 -- 3520" / CC BY-SA 4.0
+
+----------------------------------------------------------------------
+walnut-grain-closeup.jpg  (1280x1280)
+  Content: closeup of canaletto (black) walnut grain, deep chocolate-brown figure
+  Source page: https://commons.wikimedia.org/wiki/File:Noce_canaletto.jpg
+  Direct file: https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Noce_canaletto.jpg/1280px-Noce_canaletto.jpg
+  License: CC BY-SA 4.0
+  Attribution: Ale.G.2001, via Wikimedia Commons
+
+----------------------------------------------------------------------
+walnut-board-planed.jpg  (1280x652)
+  Content: planed solid walnut board, warm cathedral grain
+  Source page: https://commons.wikimedia.org/wiki/File:Nussbaum_Holz.JPG
+  Direct file: https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Nussbaum_Holz.JPG/1280px-Nussbaum_Holz.JPG
+  License: CC BY-SA 4.0
+  Attribution: Philipp Zinger, via Wikimedia Commons
+
+----------------------------------------------------------------------
+black-walnut-cross-section.jpg  (1280x1012)
+  Content: Juglans nigra (black walnut) trunk cross-section, museum specimen;
+           chocolate heartwood vs cream sapwood, white background, 1 cm scale
+  Source page: https://commons.wikimedia.org/wiki/File:Juglans_nigra_MHNT.BOT.2018.6.22.jpg
+  Direct file: https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Juglans_nigra_MHNT.BOT.2018.6.22.jpg/1280px-Juglans_nigra_MHNT.BOT.2018.6.22.jpg
+  License: CC BY-SA 3.0
+  Attribution: Roger Culos / Museum de Toulouse, via Wikimedia Commons
+
+----------------------------------------------------------------------
+reference-sunburst-visible-rod.png
+  CLIENT-SUPPLIED reference image. Not a stock/licensed asset; do not reuse
+  outside this proposal.

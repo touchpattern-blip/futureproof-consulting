@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Hidden tilt strip, working model</title>
+<style>body{margin:0;background:#101418;color:#d8dde3;
+font:14px -apple-system,sans-serif;overflow:hidden}
+#hud{position:fixed;top:14px;left:18px;z-index:2;max-width:430px}
+#hud h1{font-size:19px;color:#c9a227;margin:0 0 4px}
+#hud p{color:#8a94a0;margin:4px 0;font-size:13px;line-height:1.45}
+#hud b{color:#d8dde3}
+#ctl{position:fixed;bottom:18px;left:18px;z-index:2;color:#8a94a0}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;
+margin-right:5px;vertical-align:-1px}</style></head><body>
+<div id="hud"><h1>Hidden Tilt Strip &middot; working model</h1>
+<p><span class="sw" style="background:#4e3a28"></span><b>center stile</b>
+-- SECTIONED at the groove plane: solid behind the strip, ghosted in front. The strip rides in the JOINT between the stile and the slat ends<br>
+<span class="sw" style="background:#8a6a48"></span><b>slat stubs</b> --
+pivot on the <b>PIVOT PIN</b> (1/4", on the slat centerline)<br>
+<span class="sw" style="background:#3c4148"></span><b>DRIVE PIN</b> (3/16")
+at a <b>3/8" offset</b> from the pivot = the crank arm<br>
+<span class="sw" style="background:#b8bec6"></span><b>aluminum strip</b>
+(1/8" x 3/4", slotted) -- captive in a groove OFFSET FORWARD of the pivot line, so the bar CLEARS the pivot pins; slides UP/DOWN only</p>
+<p>Working range <b>&plusmn;60&deg;</b> -- the slats SEAL by overlap at ~56&deg;, so the pins
+never over-travel. Strip moves <b>~5/8"</b> across that range. The open-edge
+<b>notches</b> absorb the drive pin's sideways swing; in the DRIVE direction the slot is a
+CLOSE FIT on the pin -- that contact is what moves the strip. Same crank
+arm on every slat = every slat length rotates identically.</p>
+<p>drag orbit &middot; scroll zoom</p></div>
+<div id="ctl">louver angle:
+<input type="range" id="ang" min="-60" max="60" value="30">
+<span id="av">30</span>&deg; &nbsp;
+<label><input type="checkbox" id="auto" checked> auto-cycle</label></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const E = 0.375;                 // crank offset, inches
+const STATIONS = [2.5, 4.5625, 6.625, 8.6875];   // 2-1/16 pitch
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x101418);
+const cam = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, .05, 500);
+const ren = new THREE.WebGLRenderer({antialias:true});
+ren.setSize(innerWidth, innerHeight); document.body.appendChild(ren.domElement);
+const M = (c, r=0.6, m=0.05) =>
+  new THREE.MeshStandardMaterial({color:c, roughness:r, metalness:m});
+const stileM = M(0x4e3a28);
+const ghostM = new THREE.MeshStandardMaterial({color:0x4e3a28,
+  roughness:0.6, transparent:true, opacity:0.13, depthWrite:false});
+const slatM = M(0x8a6a48),
+      stripM = new THREE.MeshStandardMaterial({color:0xd6dce4,
+        roughness:0.3, metalness:0.85, emissive:0x4a525c}),
+      pinM = M(0x6a7482, 0.35, 0.7),
+      grooveM = M(0x241b12),
+      slotM = M(0x14171b, 0.4, 0.6);
+function box(m, sx, sy, sz, x, y, z, parent){
+  const b = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), m);
+  b.position.set(x, y, z); (parent||scene).add(b); return b; }
+function cyl(m, r, len, x, y, z, parent){
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 24), m);
+  c.rotation.z = Math.PI/2; c.position.set(x, y, z);
+  (parent||scene).add(c); return c; }
+// stile SECTIONED at the groove plane: solid walnut BEHIND the strip,
+// faint ghost in front, so the joint is exposed to open air
+box(stileM, 2, 11, 0.795, 1.01, 5.5, -0.2275);        // solid back half
+box(ghostM, 2, 11, 0.455, 1.01, 5.5, 0.3975);         // ghosted front half
+// groove back wall remnant on the exposed face
+box(grooveM, 0.05, 10.6, 0.53, 0.155, 5.5, 0.435);
+// strip: real comb -- full runs between stations, bridges above open notches
+const stripG = new THREE.Group(); scene.add(stripG);
+const spans = [[0.4, STATIONS[0]-0.12]];
+for (let i=0;i<STATIONS.length-1;i++)
+  spans.push([STATIONS[i]+0.12, STATIONS[i+1]-0.12]);
+spans.push([STATIONS[STATIONS.length-1]+0.12, 10.6]);
+for (const [y0,y1] of spans)
+  box(stripM, 0.125, y1-y0, 0.53, 0.07, (y0+y1)/2, 0.435, stripG);
+for (const st of STATIONS)   // slot: CLOSE fit in y (drive),
+  box(stripM, 0.125, 0.24, 0.2, 0.07, st, 0.6, stripG);   // open along z (swing)
+// slats: group origin at the pivot axis (x=0-ish, y=station, z=0)
+const slats = [];
+for (const s of STATIONS){
+  const g = new THREE.Group(); g.position.set(-0.10, s, 0); scene.add(g);
+  box(slatM, 2.6, 2.5, 0.3125, -1.4, 0, 0, g);          // slat stub
+  cyl(pinM, 0.14, 1.6, 0.45, 0, 0, g);                  // pivot pin -> stile
+  cyl(pinM, 0.11, 0.45, 0.12, E, 0, g);                 // drive pin stops IN the slot
+  slats.push(g);
+  const collar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.21, 0.21, 0.12, 24), slotM);
+  collar.rotation.z = Math.PI/2; collar.position.set(0.04, s, 0);
+  scene.add(collar);
+}
+// floor shadow-ish plane + lights
+scene.add(new THREE.AmbientLight(0xffffff, .5));
+const key = new THREE.DirectionalLight(0xfff2d0, .95);
+key.position.set(-25, 30, 35); scene.add(key);
+const rim = new THREE.DirectionalLight(0x88aaff, .35);
+rim.position.set(20, 10, -25); scene.add(rim);
+let R=14, phi=1.35, th=5.5, cy=5.5, drag=false, px=0, py=0;
+function place(){ cam.position.set(R*Math.sin(phi)*Math.sin(th),
+  cy + R*Math.cos(phi), R*Math.sin(phi)*Math.cos(th));
+  cam.lookAt(-0.5, cy, 0.25); }
+addEventListener('pointerdown', e=>{ if(e.target.closest('#ctl'))return;
+  drag=true; px=e.clientX; py=e.clientY; });
+addEventListener('pointerup', ()=>drag=false);
+addEventListener('pointermove', e=>{ if(!drag) return;
+  th -= (e.clientX-px)*.008;
+  phi = Math.min(2.7, Math.max(.15, phi-(e.clientY-py)*.006));
+  px=e.clientX; py=e.clientY; });
+addEventListener('wheel', e=>{ R=Math.min(80, Math.max(4,
+  R*(1+e.deltaY*.001))); });
+addEventListener('resize', ()=>{ cam.aspect=innerWidth/innerHeight;
+  cam.updateProjectionMatrix(); ren.setSize(innerWidth, innerHeight); });
+const angEl = document.getElementById('ang'),
+      avEl = document.getElementById('av'),
+      autoEl = document.getElementById('auto');
+function setAngle(a){
+  avEl.textContent = Math.round(a);
+  for (const g of slats) g.rotation.x = (90 - a) * Math.PI/180;
+  stripG.position.y = E * Math.sin(a * Math.PI/180);   // travel = 2E total
+}
+angEl.addEventListener('input', e=>{ autoEl.checked=false;
+  setAngle(+e.target.value); });
+let t = 0;
+(function loop(){ requestAnimationFrame(loop);
+  if (autoEl.checked){ t += 0.012;
+    const a = 60 * Math.sin(t); angEl.value = a; setAngle(a); }
+  place(); ren.render(scene, cam); })();
+setAngle(30);
+</script></body></html>
