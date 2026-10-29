@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RB Schedule: full-year update</title>
+<style>
+body{font:16px/1.55 -apple-system,Segoe UI,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px 18px 60px;color:#111;background:#fff}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
+.sub{color:#555;margin:0 0 20px}ol{padding-left:22px}li{margin:8px 0}code,kbd{background:#f2f2f2;padding:1px 5px;border-radius:3px;font-size:14px}
+.note{background:#fff8e1;border-left:4px solid #e0a800;padding:10px 14px;margin:14px 0}.ok{background:#eef7ee;border-left:4px solid #3a8a3a;padding:10px 14px;margin:14px 0}
+</style></head><body>
+<h1>RB Schedule: keep the whole year + full details</h1>
+<p class="sub">Two small changes to the calendar sync you already have. About 10 minutes. Nothing new to install.</p>
+
+<div class="ok"><b>What this fixes:</b> today the calendar only keeps last week forward, and the published feed hides the details. After this, the calendar keeps every job of the year with its <b>order number, your hours, and notes</b>. That covers Concur order numbers, survey-tool job info, and hours checks.</div>
+
+<h2>Part 1: Update the script</h2>
+<ol>
+<li>Open the schedule workbook (SharePoint <b>RBW Installations</b>) in <b>Excel for the web</b>.</li>
+<li>Click the <b>Automate</b> tab, then <b>All Scripts</b>, then <b>RB Schedule Sync</b>, then <b>Edit</b>.</li>
+<li>Click inside the code and press <kbd>Ctrl</kbd>+<kbd>A</kbd>, then <kbd>Delete</kbd>.</li>
+<li>In a new tab open <b>futureproofav.com/rb-schedule.txt</b>, press <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+<li>Back in the script editor, <kbd>Ctrl</kbd>+<kbd>V</kbd>, then <b>Save script</b>.</li>
+<li>Click <b>Run</b> once. It should finish with no red error. (The only change: it now keeps rows from <b>Jan 1</b> instead of from last week.)</li>
+</ol>
+
+<h2>Part 2: Let the published calendar show details</h2>
+<ol>
+<li>Go to <b>outlook.office.com</b>, then the <b>gear</b> (Settings), then <b>Calendar</b>, then <b>Shared calendars</b>.</li>
+<li>Under <b>Publish a calendar</b>, choose <b>RB Schedule</b>.</li>
+<li>Set the permission to <b>Can view all details</b>, then click <b>Publish</b> (or change it if it already shows a lower level like "Can view when I'm busy" or "titles and locations").</li>
+<li>Look at the <b>ICS</b> link it shows.
+  <div class="note"><b>If the ICS link changed:</b> copy it and paste it into <b>drop.hyperchrist.com</b> (PIN 47732) with the label <code>rb-schedule-link</code>. Meridian will re-subscribe the Mac and your iPhone follows via iCloud. If the link is the same as before, nothing else to do.</div></li>
+</ol>
+
+<h2>Part 3: Run it once and check</h2>
+<ol>
+<li>Go to <b>make.powerautomate.com</b>, then <b>My flows</b>, then <b>RB Schedule to Calendar</b>, then <b>Run</b>, then <b>Run flow</b>. Wait for the green check (a minute or two; it now creates more events).</li>
+<li>Open the <b>RB Schedule</b> calendar in Outlook: jobs back to January should be there, and opening one should show <b>Order:</b>, <b>Gio hrs:</b>, and <b>Notes:</b>.</li>
+</ol>
+
+<div class="ok"><b>Done.</b> From then on it refreshes daily on its own. It still only carries your own assigned jobs (rows with hours in your column), the same data already on your calendar.</div>
+</body></html>

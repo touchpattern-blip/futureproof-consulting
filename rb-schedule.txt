@@ -1,6 +1,6 @@
 // RB Schedule -> Calendar feed. Save this in Excel as:  RB Schedule Sync
 // Returns Gio's whole assigned schedule (every row with hours in the Gio column),
-// from the current week back through all future dates, as calendar-ready events.
+// for the whole year (Jan 1 forward, past + future), as calendar-ready events.
 // NOTE: YEAR is fixed to the sheet name below; update both when the 2027 tab arrives.
 
 interface Ev {
@@ -49,9 +49,8 @@ function main(workbook: ExcelScript.Workbook): Ev[] {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
   }
 
-  // Keep the current week back plus everything forward; drop older rows.
-  const now = new Date();
-  const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
+  // Keep the whole year (Jan 1 forward) so past jobs stay on the calendar as a record.
+  const cutoff = new Date(Date.UTC(YEAR, 0, 1));
 
   const seen: { [k: string]: boolean } = {};
   const out: Ev[] = [];
@@ -67,7 +66,7 @@ function main(workbook: ExcelScript.Workbook): Ev[] {
     const mo = Number(m[1]), da = Number(m[2]);
     const emo = m[3] ? Number(m[3]) : mo, eda = m[4] ? Number(m[4]) : da;
     const dStart = isoDate(mo, da), dEnd = isoDate(emo, eda);
-    if (new Date(dEnd + "T00:00:00Z") < cutoff) continue;   // drop old rows
+    if (new Date(dEnd + "T00:00:00Z") < cutoff) continue;   // drop rows before Jan 1
 
     const multiDay = dStart !== dEnd;
     let title = a.replace(dateRe, "").replace(/^[-\s\/]+/, "").trim();
